@@ -70,6 +70,8 @@ let appl(g,f) =
   match g with
   | Fail -> Fail
   | Vide x -> Vide(f x)
+  | Appl(g,h) -> Appl(g,fun x -> f (h x))
+  | Seq(g1,g2,h) -> Seq(g1,g2,fun x y -> f (h x y))
   | _ -> Appl(g,f)
 
 let alt(g1,g2) =
@@ -77,6 +79,13 @@ let alt(g1,g2) =
   | Fail, _ -> g2
   | _, Fail -> g1
   | _ -> Alt(g1,g2)
+
+let lr(g1,s) =
+  match (g1,s) with
+  | Fail, _ -> Fail
+  | _, Fail -> g1
+  | _, Vide _ -> assert false
+  | _ -> Lr(g1,s)
 
 let seq : type a b c. a grammar * b grammar * (a -> b -> c) -> c grammar =
   fun (g1,g2,f) ->
@@ -120,7 +129,7 @@ let rec remove_empty : type a. a grammar -> a option * a grammar =
        match x with
        | None -> (None, g)
        | Some x ->
-          (Some x, alt(Lr(g1,s),Lr(seq(Vide x,s,fun x f -> f x),s)))
+          (Some x, alt(lr(g1,s),lr(seq(Vide x,s,fun x f -> f x),s)))
      end
   | Appl(g1,f) ->
      begin
@@ -167,18 +176,29 @@ let fixpoint : type a. (a grammar -> a grammar) -> a grammar = fun g ->
          (alt(g1,g2), alt(s1,s2))
       | Ref (_,T,_) -> (Fail, Vide(fun x -> x))
       | Ref (_,_,_) -> (g, Fail)
-      (* fixpoint have been computed before, Ref(_,T,_) can not occur inside,
-         except if the user uses Ref himself. So this is correct. *)
-      | Lr(_,_)    -> (g, Fail) (* FIXME *)
+      | Lr(g,s)   ->
+         begin
+           let (x,g) = remove_empty g in
+           let (g,s1) = elim_left_rec g in
+           match x with
+           | None -> (lr(g,s),lr(s1,appl(s,fun f g a -> f (g a))))
+           | Some x ->
+              let (s0,s2) = elim_left_rec s in
+              let g1 = alt(alt(Vide x,lr(seq(Vide x,s0,fun x f -> f x),s)),lr(g,s)) in
+              let s3 = alt(lr(s1,appl(s,fun f g a -> f (g a))),
+                           lr(appl(s2,fun f a -> f a x),appl(s,fun f g a -> f (g a)))) in
+              (g1,s3)
+         end
       | Appl(g1,f) ->
          let (g1,s) = elim_left_rec g1 in
          (appl(g1,f), appl(s,fun g a -> f (g a)))
    in
    let (g, s) = elim_left_rec (g r) in
    let (_, s) = remove_empty s in
-   let r = Lr(g, s) in
+   let r = lr(g, s) in
    ptr := r;
    r
+
 
 (* compilation of a grammar to combinator *)
 let use_info = true
