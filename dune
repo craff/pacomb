@@ -1,0 +1,14 @@
+(library
+  (name grammar)
+  (modules :standard \ test calc)
+  (private_modules container))
+
+(executable
+  (name test)
+  (modules test)
+  (libraries unix grammar))
+
+(executable
+  (name calc)
+  (modules calc)
+  (libraries unix grammar))
