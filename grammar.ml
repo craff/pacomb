@@ -156,39 +156,32 @@ let fixpoint : type a. (a grammar -> a grammar) -> a grammar = fun g ->
       | Vide _ -> (g, Fail)
       | Term _ -> (g, Fail)
       | Seq(g1,g2,f) ->
-         begin
-           let (x1,g1) = remove_empty g1 in
-           let (g1, s1) = elim_left_rec g1 in
-           match x1 with
-           | None ->
-              let s = seq(s1,g2,fun g y a -> f (g a) y) in
-              (seq(g1,g2,f), s)
-           | Some x1 ->
-              let (g2',s2) = elim_left_rec g2 in
-              let g = alt(appl(g2',fun y -> f x1 y),seq(g1,g2,f)) in
-              let s = alt(appl(s2,fun y a -> f x1 (y a)),
-                          seq(s1,g2,fun g y a -> f (g a) y)) in
-              (g,s)
-         end
+         let (g1, s1) = elim_left_rec g1 in
+         if accept_empty g1 then
+           begin
+             let (_,s2) = elim_left_rec g2 in
+             if s2 <> Fail then failwith "unsupported"
+           end;
+         if s1 = Fail then
+           (g, Fail)
+         else
+           (seq(g1,g2,f),
+            seq(s1,g2,fun g y a -> f (g a) y))
       | Alt(g1,g2) ->
          let (g1, s1) = elim_left_rec g1 in
          let (g2, s2) = elim_left_rec g2 in
          (alt(g1,g2), alt(s1,s2))
       | Ref (_,T,_) -> (Fail, Vide(fun x -> x))
       | Ref (_,_,_) -> (g, Fail)
-      | Lr(g,s)   ->
-         begin
-           let (x,g) = remove_empty g in
-           let (g,s1) = elim_left_rec g in
-           match x with
-           | None -> (lr(g,s),lr(s1,appl(s,fun f g a -> f (g a))))
-           | Some x ->
-              let (s0,s2) = elim_left_rec s in
-              let g1 = alt(alt(Vide x,lr(seq(Vide x,s0,fun x f -> f x),s)),lr(g,s)) in
-              let s3 = alt(lr(s1,appl(s,fun f g a -> f (g a))),
-                           lr(appl(s2,fun f a -> f a x),appl(s,fun f g a -> f (g a)))) in
-              (g1,s3)
-         end
+      | Lr(g1,s)   ->
+         let (g1,s1) = elim_left_rec g1 in
+         if accept_empty g then
+           begin
+             let (_,s2) = elim_left_rec s in
+             if s2 <> Fail then failwith "unsupported";
+           end;
+         if s1 = Fail then (g, Fail)
+         else (lr(g1,s),lr(s1,appl(s,fun f g a -> f (g a))))
       | Appl(g1,f) ->
          let (g1,s) = elim_left_rec g1 in
          (appl(g1,f), appl(s,fun g a -> f (g a)))
