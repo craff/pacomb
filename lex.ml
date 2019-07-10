@@ -21,7 +21,7 @@ let charset : Charset.t -> string terminal =
     let rec fn s n =
       let (c,s',n') = Input.read s n in
       if Charset.mem cs c then (Buffer.add_char b c; fn s' n')
-      else (Buffer.contents b,s,n)
+      else if Buffer.length b = 0 then raise NoParse else (Buffer.contents b,s,n)
     in
     fn s n
 
