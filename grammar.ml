@@ -99,46 +99,41 @@ let seq : type a b c. a grammar * b grammar * (a -> b -> c) -> c grammar =
 
 let choose o1 o2 = match o1 with None -> o2 | Some _ -> o1
 
-let rec remove_empty : type a. a grammar -> a option * a grammar =
+let rec remove_empty : type a. a grammar -> a grammar * a grammar =
   fun g -> match g with
-  | Fail -> (None, Fail)
-  | Vide x -> (Some x, Fail)
-  | Term(_) -> (None, g)
+  | Fail -> (Fail, Fail)
+  | Vide x -> (Vide x, Fail)
+  | Term(_) -> (Fail, g)
   | Alt(g1,g2) ->
      let (x1,g1) = remove_empty g1 in
      let (x2,g2) = remove_empty g2 in
-     (choose x1 x2, alt(g1, g2))
+     (alt(x1, x2), alt(g1, g2))
   | Seq(g1,g2,f) ->
      begin
        let (x1,g1) = remove_empty g1 in
        match x1 with
-       | None -> (None, g)
-       | Some x1 ->
+       | Fail -> (Fail, g)
+       | x1 ->
           let (x2,g2') = remove_empty g2 in
           match x2 with
-          | None -> (None, g)
-          | Some x2 ->
-             let x = try Some(f x1 x2) with NoParse -> None in
-             (* FIXME: avoid choose below and try all? *)
-             (x, alt(appl(g2',fun y -> f x1 y), seq(g1,g2,f)))
+          | Fail -> (Fail, g)
+          | x2 ->
+             (seq(x1,x2,f), alt(seq(x1,g2',f), seq(g1,g2,f)))
      end
-  | Ref(_,_,_) -> (None, g)
+  | Ref(_,_,_) -> (Fail, g)
   | Lr(g1,s) ->
      begin
        let (x,g1) = remove_empty g1 in
        match x with
-       | None -> (None, g)
-       | Some x ->
-          (Some x, alt(lr(g1,s),lr(seq(Vide x,s,fun x f -> f x),s)))
+       | Fail -> (Fail, g)
+       | x -> (x, alt(lr(g1,s),lr(seq(x,s,fun x f -> f x),s)))
      end
   | Appl(g1,f) ->
      begin
        let (x,g1) = remove_empty g1 in
        match x with
-       | None -> (None, g)
-       | Some x ->
-          let x = try Some(f x) with NoParse -> None in
-          (x, appl(g1,f))
+       | Fail -> (Fail, g)
+       | x -> (appl(x,f), appl(g1,f))
      end
 
 (* construction of recursive grammar *)
