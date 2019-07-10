@@ -6,11 +6,11 @@ type 'a comb_memo = { mutable c : 'a comb
                     ; mutable ready : bool
                     ; mutable ae : bool option }
 
-let cref : 'a comb_memo -> 'a comb = fun m s n -> m.c s n
+let cref : 'a comb_memo -> 'a comb = fun m -> { c = fun s n -> m.c.c s n }
 
 let init_memo =
   let cassert : type a .a comb =
-    fun _b _s _n -> { cc = fun _k -> assert false }
+    { c = fun _b _s _n _k -> assert false }
   in
   fun () -> { c = cassert; ready = false; ae = None }
 

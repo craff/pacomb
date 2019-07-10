@@ -3,48 +3,48 @@ open Lex
 (* type of parsing combinator with continuation.
    continuation are necessary for correct semantics of
    alternative *)
-type 'a cc = { cc : 'b. ('a -> buf -> int -> 'b) -> 'b } [@@unboxed]
-type 'a comb = blank -> buf -> int -> 'a cc
+type 'a env = buf -> int -> 'a
+type 'a comb = { c : 'b. blank -> (('a -> 'b) env -> 'b) env } [@@unboxed]
 
 let give_up () = raise NoParse
 
 (* the usual combinator *)
 let cfail : ('a) comb =
-  fun _b _s _n -> { cc = fun _k -> raise NoParse }
+  { c = fun _b _s _n _k -> raise NoParse }
 let cempty : 'a -> 'a comb =
-  fun x _b s n -> { cc = fun k -> k x s n }
+  fun x -> { c = fun _b s n k -> k s n x }
 let cterm : 'a terminal -> 'a comb =
-  fun t b s n ->
-  { cc = fun k ->
-         let (x,s,n) = t s n in
-         let (s,n) = b s n in
-         k x s n
+  fun t ->
+  { c = fun b s n k ->
+        let (x,s,n) = t s n in
+        let (s,n) = b s n in
+        k s n x
     }
 let cseq : 'a comb -> 'b comb -> ('a -> 'b -> 'c) -> 'c comb =
-  fun g1 g2 f b s n ->
-    { cc = fun k -> (g1 b s n).cc
-             (fun x s n -> (g2 b s n).cc
-                (fun y s n -> k (f x y) s n)) }
+  fun g1 g2 f ->
+    { c = fun b s n k -> g1.c b s n
+             (fun s n x -> g2.c b s n
+                (fun s n y -> k s n (f x y))) }
 
 let calt : 'a comb -> 'a comb -> 'a comb =
-  fun g1 g2 b s n -> { cc = fun k -> try (g1 b s n).cc k with NoParse -> (g2 b s n).cc k }
+  fun g1 g2 -> { c = fun b s n k -> try g1.c b s n k with NoParse -> g2.c b s n k }
 
 let capp : 'a comb -> ('a -> 'b) -> 'b comb =
-  fun g1 f b s n -> { cc = fun k -> (g1 b s n).cc (fun x s n -> k (f x) s n) }
+  fun g1 f -> { c = fun b s n k -> g1.c b s n (fun s n x -> k s n (f x)) }
 
 let clr : 'a comb -> ('a -> 'a) comb -> 'a comb =
-  fun g0 gf b s n -> { cc = fun k ->
-    let rec clr x s n =
-      try k x s n
-      with NoParse -> (gf b s n).cc (fun f s n -> clr (f x) s n)
+  fun g0 gf -> { c = fun b s n k ->
+    let rec clr s n x =
+      try k s n x
+      with NoParse -> gf.c b s n (fun s n f -> clr s n (f x))
     in
-    (g0 b s n).cc clr}
+    g0.c b s n clr}
 
 exception ParseError of pos
 
 let parse_buffer : type a. a comb -> blank -> buf -> a = fun g b s ->
   let g = cseq g (cterm (eof ())) (fun x _ -> x) in
-  try (g b s 0).cc (fun x _s _n -> x)
+  try g.c b s 0 (fun _s _n x -> x)
   with NoParse ->
     let (l,c,c8) = Input.last_pos s in
     let pos = { name = Input.filename s; line = l; col = c
