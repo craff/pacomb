@@ -6,6 +6,8 @@ open Lex
 type 'a cc = { cc : 'b. ('a -> buf -> int -> 'b) -> 'b } [@@unboxed]
 type 'a comb = blank -> buf -> int -> 'a cc
 
+let give_up () = raise NoParse
+
 (* the usual combinator *)
 let cfail : ('a) comb =
   fun _b _s _n -> { cc = fun _k -> raise NoParse }
