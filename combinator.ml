@@ -38,9 +38,17 @@ let clr : 'a comb -> ('a -> 'a) comb -> 'a comb =
     in
     (g0 b s n).cc clr}
 
+exception ParseError of pos
+
 let parse_buffer : type a. a comb -> blank -> buf -> a = fun g b s ->
   let g = cseq g (cterm (eof ())) (fun x _ -> x) in
-  (g b s 0).cc (fun x _s _n -> x)
+  try (g b s 0).cc (fun x _s _n -> x)
+  with NoParse ->
+    let (l,c,c8) = Input.last_pos s in
+    let pos = { name = Input.filename s; line = l; col = c
+                ; utf8_col = c8; phantom = false }
+    in
+    raise (ParseError pos)
 
 let parse_string : type a. a comb -> blank -> string -> a = fun g b s ->
   let s = Input.from_string s in

@@ -48,3 +48,30 @@ let blank_charset : Charset.t -> blank =
       if Charset.mem cs c then fn s' n' else (s,n)
     in
     fn s n
+
+type pos = { name : string
+           ; line  : int
+           ; col   : int
+           ; utf8_col : int
+           ; phantom : bool }
+
+let max_pos p1 p2 =
+  if p1.line > p2.line then p1
+  else if p1.line < p2.line then p2
+  else if p1.col < p2.col then p2
+  else p1
+
+let phantom = { name = "";
+                  line = 0;
+                  col  = 0;
+                  utf8_col = 0;
+                  phantom = true }
+
+let get_pos : buf -> int -> pos = fun b n ->
+  let open Input in
+  { name = filename b;
+    line = line_num b;
+    col = n;
+    utf8_col = utf8_col_num b n;
+    phantom = false
+  }

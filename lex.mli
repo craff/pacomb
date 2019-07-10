@@ -19,3 +19,15 @@ val charset : Charset.t -> string terminal
 val blank_charset : Charset.t -> blank
 
 val noblank : blank
+
+type pos = { name : string
+           ; line  : int
+           ; col   : int
+           ; utf8_col : int
+           ; phantom : bool }
+
+val phantom : pos
+
+val max_pos : pos -> pos -> pos
+
+val get_pos : buf -> int -> pos

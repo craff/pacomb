@@ -79,6 +79,7 @@ val from_string : ?filename:string -> string -> buffer
     is used to reference the origin of the data in error messages. *)
 val from_fun : ('a -> unit) -> string -> ('a -> string) -> 'a -> buffer
 
+val last_pos : buffer -> (int * int * int)
 (** {2 Creating buffers with a custom preprocessor} *)
 
 (** Exception that can be raised by a preprocessor in case of error. The
