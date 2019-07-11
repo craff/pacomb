@@ -1,14 +1,12 @@
-(test
+(executable
   (name test)
   (modules test)
-  (libraries unix grammar)
-  (action (run ./test.exe)))
+  (libraries unix grammar))
 
-(test
+(executable
   (name calc)
   (modules calc)
-  (libraries unix grammar)
-  (action (run -- ./big_expr.exe 4 4 4 | ./calc.exe )))
+  (libraries unix grammar))
 
 (executable
   (name big_expr)
