@@ -43,8 +43,13 @@ let test6 = plus (star (char_a)) (term(Lex.char ',' ()))
 let test6 = compile test6
 
 let star_pos g =
+  let gseq = seq in
   let open Lex in
-  fixpoint (fun r -> rpos(lpos(alt(seq(r, g, fun (_,x,_) y lpos rpos -> (lpos.col,x+y,rpos.col)), empty (fun lpos rpos -> (lpos.col,0,rpos.col))))))
+  fixpoint
+    (fun r -> rpos(lpos(alt(gseq(r, g,
+                                 fun (_,x,_) y lpos rpos ->
+                                 (lpos.col,x+y,rpos.col)),
+                            empty (fun lpos rpos -> (lpos.col,0,rpos.col))))))
 
 let test7 = seq (plus (star_pos (char_a)) (term(Lex.char ',' ())), char_b, fun x _ -> x)
 

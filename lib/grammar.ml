@@ -95,7 +95,9 @@ let fail () = mkg ~name:"FAIL" EFail Fail
 
 let empty(x) = mkg ~name:"EMPTY" (Empty x) Fail
 
-let term(x) = mkg ~name:x.Lex.n EFail (Term x)
+let term(x) =
+  if accept_empty x then invalid_arg "term: empty terminals";
+  mkg ~name:x.Lex.n EFail (Term x)
 
 let get g = if g.recursive then Rest g else g.g
 

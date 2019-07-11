@@ -2,7 +2,11 @@
 open Grammar
 open Combinator
 
-let int = appl(term(Lex.charset (Charset.range '0' '9')),int_of_string)
+let int = appl(term(
+                   Lex.plus (Lex.charset (Charset.range '0' '9'))
+                            (fun () -> Buffer.create 16)
+                            (fun b c -> Buffer.add_char b c; b)),
+               (fun b -> int_of_string (Buffer.contents b)))
 let plus = term(Lex.char '+' ())
 let moins = term(Lex.char '-' ())
 let mul = term(Lex.char '*' ())
