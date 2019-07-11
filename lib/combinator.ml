@@ -1,6 +1,8 @@
 open Lex
 
-(* type of parsing combinator with continuation.
+(** Combinator library *)
+
+(* type xof parsing combinator with continuation.
    continuation are necessary for correct semantics of
    alternative *)
 type env = { b : blank; s0 : buf; n0: int; s : buf; n : int }
@@ -11,7 +13,7 @@ let give_up () = raise NoParse
 let test cs e =
   let (c,_,_) = Input.read e.s e.n in Charset.mem cs c
 
-(* the usual combinator *)
+(* the usual combinators *)
 let cfail : ('a) comb =
   { c = fun _e _k -> raise NoParse }
 
@@ -26,6 +28,26 @@ let cterm : 'a fterm -> 'a comb =
           let (s,n) = e.b s0 n0 in
           k { e with s0; n0; s; n } x }
 
+let cseq : 'a comb -> 'b comb -> ('a -> 'b -> 'c) -> 'c comb =
+  fun g1 g2 f ->
+    { c = fun e k -> g1.c e
+             (fun e x -> g2.c e
+                (fun e y -> k e (f x y))) }
+
+let calt : ?cs1:Charset.t -> ?cs2:Charset.t -> 'a comb -> 'a comb -> 'a comb =
+  fun ?(cs1=Charset.full) ?(cs2=Charset.full) g1 g2 ->
+    { c = fun e k ->
+          match test cs1 e, test cs2 e with
+          | false, false -> raise NoParse
+          | true, false  -> g1.c e k
+          | false, true  -> g2.c e k
+          | true, true   ->
+             try g1.c e k with NoParse -> g2.c e k
+    }
+
+let capp : 'a comb -> ('a -> 'b) -> 'b comb =
+  fun g1 f -> { c = fun e k -> g1.c e (fun e x -> k e (f x)) }
+
 let clpos : (pos -> 'a) comb -> 'a comb =
   fun g ->
     { c = fun e k ->
@@ -39,32 +61,10 @@ let crpos : (pos -> 'a) comb -> 'a comb =
           g.c e (fun e f -> let pos = get_pos e.s0 e.n0 in
                             k e (f pos)) }
 
-let cseq : 'a comb -> 'b comb -> ('a -> 'b -> 'c) -> 'c comb =
-  fun g1 g2 f ->
-    { c = fun e k -> g1.c e
-             (fun e x -> g2.c e
-                (fun e y -> k e (f x y))) }
-
-let c = ref 0
-
-let calt : Charset.t -> 'a comb -> Charset.t -> 'a comb -> 'a comb =
-  fun ch1 g1 ch2 g2 ->
-    { c = fun e k ->
-          match test ch1 e, test ch2 e with
-          | false, false -> raise NoParse
-          | true, false  -> g1.c e k
-          | false, true  -> g2.c e k
-          | true, true   ->
-             try g1.c e k with NoParse -> g2.c e k
-    }
-
-let capp : 'a comb -> ('a -> 'b) -> 'b comb =
-  fun g1 f -> { c = fun e k -> g1.c e (fun e x -> k e (f x)) }
-
-let clr : 'a comb -> Charset.t -> ('a -> 'a) comb -> 'a comb =
-  fun g0 cs gf -> { c = fun e k ->
+let clr : ?cs2:Charset.t -> 'a comb -> ('a -> 'a) comb -> 'a comb =
+  fun ?(cs2=Charset.full) g0 gf -> { c = fun e k ->
     let rec clr e x =
-      if test cs e then
+      if test cs2 e then
         try k e x
         with NoParse ->  gf.c e (fun e f -> clr e (f x))
       else k e x
@@ -92,3 +92,5 @@ let parse_string : type a. a comb -> blank -> string -> a = fun g b s ->
 let parse_channel : type a. a comb -> blank -> in_channel -> a = fun g b s ->
   let s = Input.from_channel s in
   parse_buffer g b s
+
+let cref : 'a comb ref -> 'a comb = fun ptr -> { c = fun e k -> !ptr.c e k }

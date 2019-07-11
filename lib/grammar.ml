@@ -1,17 +1,6 @@
 open Combinator
 open Lex
 
-(* a cell for compilation of recursive grammar, see compile below *)
-type 'a comb_memo = { mutable c : 'a comb
-                    ; mutable ready : bool
-                    ; mutable ae : bool option }
-
-let cref : 'a comb ref -> 'a comb = fun ptr -> { c = fun e k -> !ptr.c e k }
-
-let init_memo =
-  let cassert : type a .a comb = { c = fun _e _k -> assert false } in
-  fun () -> { c = cassert; ready = false; ae = None }
-
 (* extensible type of key used for elimination of left recursion,
    see elim_left_rec below *)
 type _ ty =  ..
@@ -311,11 +300,11 @@ let rec compile_ne : type a. a ne_grammar -> a comb = fun g ->
   match g with
   | Fail -> cfail
   | Term(c) -> cterm c.f
-  | Alt(g1,g2) -> calt (first_charset g1) (compile_ne g1)
-                       (first_charset g2) (compile_ne g2)
+  | Alt(g1,g2) -> calt ~cs1:(first_charset g1) ~cs2:(first_charset g2)
+                       (compile_ne g1) (compile_ne g2)
   | Seq(g1,g2,f) -> cseq (compile_ne g1) (compile g2) f
   | Appl(g1,f) -> capp (compile_ne g1) f
-  | Lr(g,s) -> clr (compile_ne g) (first_charset s) (compile_ne s)
+  | Lr(g,s) -> clr ~cs2:(first_charset s) (compile_ne g) (compile_ne s)
   | Rest g -> compile ~restrict:true g
   | LPos(g) -> clpos (compile_ne g)
   | RPos(g) -> crpos (compile_ne g)
@@ -337,9 +326,9 @@ and compile : type a. ?restrict:bool -> a grammar -> a comb =
   match g.e with
   | Empty x when not restrict ->
      let e = cempty x in
-     if g.g = Fail then e else calt Charset.full e (first_charset g.g) cg
+     if g.g = Fail then e else calt ~cs2:(first_charset g.g) e cg
   | EPos  x when not restrict ->
      let e = clpos (cempty x) in
-     if g.g = Fail then e else calt Charset.full e (first_charset g.g) cg
+     if g.g = Fail then e else calt ~cs2:(first_charset g.g) e cg
   | _ ->
      if g.g = Fail then cfail else cg
