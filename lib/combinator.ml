@@ -3,55 +3,58 @@ open Lex
 (* type of parsing combinator with continuation.
    continuation are necessary for correct semantics of
    alternative *)
-type 'a env = buf -> int -> buf -> int -> 'a
-type 'a comb = { c : 'b. blank -> (('a -> 'b) env -> 'b) env } [@@unboxed]
+type env = { b : blank; s0 : buf; n0: int; s : buf; n : int }
+type 'a comb = { c : 'b. env -> (env -> 'a -> 'b) -> 'b } [@@unboxed]
 
 let give_up () = raise NoParse
 
-let test cs s n =
-  let (c,_,_) = Input.read s n in Charset.mem cs c
+let test cs e =
+  let (c,_,_) = Input.read e.s e.n in Charset.mem cs c
 
 (* the usual combinator *)
 let cfail : ('a) comb =
-  { c = fun _b _s0 _n0 _s _n _k -> raise NoParse }
+  { c = fun _e _k -> raise NoParse }
 let cempty : 'a -> 'a comb =
-  fun x -> { c = fun _b s0 n0 s n k -> k s0 n0 s n x }
+  fun x -> { c = fun e k -> k e x }
 let cterm : 'a fterm -> 'a comb =
   fun t ->
-  { c = fun b _s0 _n0 s n k ->
-        let (x,s0,n0) = t s n in
-        let (s,n) = b s0 n0 in
-        k s0 n0 s n x
+  { c = fun e k ->
+        (*Printf.printf "\r %d    %!" e.n;*)
+        let (x,s0,n0) = t e.s e.n in
+        let (s,n) = e.b s0 n0 in
+        k { e with s0; n0; s; n } x
     }
 let cseq : 'a comb -> 'b comb -> ('a -> 'b -> 'c) -> 'c comb =
   fun g1 g2 f ->
-    { c = fun b s0 n0 s n k -> g1.c b s0 n0 s n
-             (fun s0 n0 s n x -> g2.c b s0 n0 s n
-                (fun s0 n0 s n y -> k s0 n0 s n (f x y))) }
+    { c = fun e k -> g1.c e
+             (fun e x -> g2.c e
+                (fun e y -> k e (f x y))) }
+
+let c = ref 0
 
 let calt : Charset.t -> 'a comb -> Charset.t -> 'a comb -> 'a comb =
   fun ch1 g1 ch2 g2 ->
-    { c = fun b s0 n0 s n k ->
-          match test ch1 s n, test ch2 s n with
+    { c = fun e k ->
+          match test ch1 e, test ch2 e with
           | false, false -> raise NoParse
-          | true, false  -> g1.c b s0 n0 s n k
-          | false, true  -> g2.c b s0 n0 s n k
+          | true, false  -> g1.c e k
+          | false, true  -> g2.c e k
           | true, true   ->
-             try g1.c b s0 n0 s n k with NoParse -> g2.c b s0 n0 s n k
+             try g1.c e k with NoParse -> g2.c e k
     }
 
 let capp : 'a comb -> ('a -> 'b) -> 'b comb =
-  fun g1 f -> { c = fun b s0 n0 s n k -> g1.c b s0 n0 s n (fun s0 n0 s n x -> k s0 n0 s n (f x)) }
+  fun g1 f -> { c = fun e k -> g1.c e (fun e x -> k e (f x)) }
 
 let clr : 'a comb -> Charset.t -> ('a -> 'a) comb -> 'a comb =
-  fun g0 cs gf -> { c = fun b s0 n0 s n k ->
-    let rec clr s0 n0 s n x =
-      if test cs s n then
-        try gf.c b s0 n0 s n (fun s0 n0 s n f -> clr s0 n0 s n (f x))
-        with NoParse -> k s0 n0 s n x
-      else k s0 n0 s n x
+  fun g0 cs gf -> { c = fun e k ->
+    let rec clr e x =
+      if test cs e then
+        try k e x
+        with NoParse ->  gf.c e (fun e f -> clr e (f x))
+      else k e x
     in
-    g0.c b s0 n0 s n clr}
+    g0.c e clr}
 
 exception ParseError of pos
 
@@ -59,7 +62,7 @@ let parse_buffer : type a. a comb -> blank -> buf -> a = fun g b s0 ->
   let g = cseq g (cterm (eof ()).f) (fun x _ -> x) in
   try
     let (s,n) = b s0 0 in
-    g.c b s0 0 s n (fun _s0 _n0 _s _n x -> x)
+    g.c { b; s0; n0=0; s; n} (fun _e x -> x)
   with NoParse ->
     let (l,c,c8) = Input.last_pos s0 in
     let pos = { name = Input.filename s0; line = l; col = c

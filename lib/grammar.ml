@@ -6,12 +6,10 @@ type 'a comb_memo = { mutable c : 'a comb
                     ; mutable ready : bool
                     ; mutable ae : bool option }
 
-let cref : 'a comb ref -> 'a comb = fun ptr -> { c = fun s0 n0 s n -> !ptr.c s0 n0 s n }
+let cref : 'a comb ref -> 'a comb = fun ptr -> { c = fun e k -> !ptr.c e k }
 
 let init_memo =
-  let cassert : type a .a comb =
-    { c = fun _b _s0 _n0 _s _n _k -> assert false }
-  in
+  let cassert : type a .a comb = { c = fun _e _k -> assert false } in
   fun () -> { c = cassert; ready = false; ae = None }
 
 (* extensible type of key used for elimination of left recursion,
@@ -231,7 +229,8 @@ and compile : type a. ?restrict:bool -> a grammar -> a comb =
   in
   match g.e with
   | Some x when not restrict ->
-     if g.g = Fail then cempty x else calt (first_charset g.g) cg
-                                           Charset.full (cempty x)
+     if g.g = Fail then cempty x else calt Charset.full (cempty x)
+                                           (first_charset g.g) cg
+
   | _ ->
      if g.g = Fail then cfail else cg
