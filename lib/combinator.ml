@@ -14,16 +14,31 @@ let test cs e =
 (* the usual combinator *)
 let cfail : ('a) comb =
   { c = fun _e _k -> raise NoParse }
+
 let cempty : 'a -> 'a comb =
   fun x -> { c = fun e k -> k e x }
+
 let cterm : 'a fterm -> 'a comb =
   fun t ->
-  { c = fun e k ->
-        (*Printf.printf "\r %d    %!" e.n;*)
-        let (x,s0,n0) = t e.s e.n in
-        let (s,n) = e.b s0 n0 in
-        k { e with s0; n0; s; n } x
-    }
+    { c = fun e k ->
+          (*Printf.printf "\r %d    %!" e.n;*)
+          let (x,s0,n0) = t e.s e.n in
+          let (s,n) = e.b s0 n0 in
+          k { e with s0; n0; s; n } x }
+
+let clpos : (pos -> 'a) comb -> 'a comb =
+  fun g ->
+    { c = fun e k ->
+          let pos = get_pos e.s e.n in
+          g.c e (fun e f -> k e (f pos)) }
+
+
+let crpos : (pos -> 'a) comb -> 'a comb =
+  fun g ->
+    { c = fun e k ->
+          g.c e (fun e f -> let pos = get_pos e.s0 e.n0 in
+                            k e (f pos)) }
+
 let cseq : 'a comb -> 'b comb -> ('a -> 'b -> 'c) -> 'c comb =
   fun g1 g2 f ->
     { c = fun e k -> g1.c e

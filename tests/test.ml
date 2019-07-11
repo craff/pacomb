@@ -39,9 +39,16 @@ let plus g sep =
   let g' = appl(g,fun x -> [x]) in
   fixpoint (fun r -> alt(seq(seq(g, sep, fun x _ -> x), r, (fun x y -> x::y)), g'))
 
-
 let test6 = plus (star (char_a)) (term(Lex.char ',' ()))
 let test6 = compile test6
+
+let star_pos g =
+  let open Lex in
+  fixpoint (fun r -> rpos(lpos(alt(seq(r, g, fun (_,x,_) y lpos rpos -> (lpos.col,x+y,rpos.col)), empty (fun lpos rpos -> (lpos.col,0,rpos.col))))))
+
+let test7 = seq (plus (star_pos (char_a)) (term(Lex.char ',' ())), char_b, fun x _ -> x)
+
+let test7 = compile test7
 
 let p0 = assert (parse_string test0 "a" = 1)
 let p0b = assert (parse_string test0 "b" = 1)
@@ -62,6 +69,9 @@ let p5b = assert (parse_string test5 "" = 0)
 let p5c = assert (parse_string test5 "ababa" = 5)
 let p6 = assert (parse_string test6 "a" = [1])
 let p6b = assert (parse_string test6 "a,aa,aaa,aa,a," = [1;2;3;2;1;0])
+let p7 = assert (parse_string test7 "b" = [(0,0,0)])
+let p7b = assert (parse_string test7 "ab" = [(0,1,1)])
+let p7c = assert (parse_string test7 "a,aa,aaab" = [(0,1,1);(2,2,4);(5,3,8)])
 
 let nas p =
   let rec fn p =

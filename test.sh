@@ -1,7 +1,9 @@
 #!/bin/bash
 
-dune build calc.exe test.exe
+cd tests
 
-time _build/default/calc.exe < big_expr
+dune build calc.exe test.exe big_expr.exe
 
-time _build/default/test.exe
+time dune exec -- ./big_expr.exe 5 4 4 | time dune exec ./calc.exe
+
+time dune exec ./test.exe
