@@ -1,6 +1,5 @@
 open Grammar
-open Grammar__Combinator
-module Lex = Grammar__Lex
+open Combinator
 
 let parse_string c = parse_string c Lex.noblank
 

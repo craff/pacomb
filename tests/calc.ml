@@ -1,8 +1,6 @@
 
 open Grammar
-open Grammar__Combinator
-module Lex = Grammar__Lex
-module Charset = Grammar__Charset
+open Combinator
 
 let int = appl(term(Lex.charset (Charset.range '0' '9')),int_of_string)
 let plus = term(Lex.char '+' ())
