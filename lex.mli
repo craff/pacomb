@@ -4,7 +4,8 @@ type buf = Input.buffer
 type blank = buf -> int -> buf * int
 
 (** same as blank with a value returned *)
-type 'a terminal = buf -> int -> 'a * buf * int
+type 'a fterm = buf -> int -> 'a * buf * int
+type 'a terminal = { n : string; f : 'a fterm; c : Charset.t }
 
 exception NoParse
 

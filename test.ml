@@ -2,43 +2,52 @@ open Grammar
 open Grammar__Combinator
 module Lex = Grammar__Lex
 
-let char_a = Lex.char 'a' 1
-let char_b = Lex.char 'b' 1
+let parse_string c = parse_string c Lex.noblank
 
-let test1 = fixpoint (fun r -> alt(Vide 0, seq(Term(char_a), r, (+))))
+let char_a = term(Lex.char 'a' 1)
+let char_b = term(Lex.char 'b' 1)
+
+let na n = String.make n 'a'
+
+let test0 = alt(char_a,char_b)
+let test0 = compile test0
+
+let test0b = seq(char_a,char_b,(+))
+let test0b = compile test0b
+
+let test1 = fixpoint (fun r -> alt(empty 0, seq(char_a, r, (+))))
 let test1 = compile test1
 
-let test2 = fixpoint (fun r -> alt(Vide 0,
-                                  alt(seq(Term(char_a), r, (+)),
-                                      seq(Term(char_b), r, (+)))))
+let test2 = fixpoint (fun r -> alt(empty 0,
+                                  alt(seq(char_a, r, (+)),
+                                      seq(char_b, r, (+)))))
 let test2 = compile test2
 
-let test3 = fixpoint (fun r -> alt(Vide 0, seq(r, Term(char_a), (+))))
+let test3 = fixpoint (fun r -> alt(empty 0, seq(r, char_a, (+))))
 let test3 = compile test3
 
-let test4 = fixpoint (fun r -> alt(alt(Vide 0,Term(char_b)), seq(r, Term(char_a), (+))))
+let test4 = fixpoint (fun r -> alt(alt(empty 0,char_b), seq(r, char_a, (+))))
 let test4 = compile test4
 
-let test5 = fixpoint (fun r -> alt(Vide 0,
-                                  alt(seq(r, Term(char_a), (+)),
-                                      seq(r, Term(char_b), (+)))))
+let test5 = fixpoint (fun r -> alt(empty 0,
+                                  alt(seq(r, char_a, (+)),
+                                      seq(r, char_b, (+)))))
 let test5 = compile test5
 
-let star g = fixpoint (fun r -> alt(seq(r, g, (+)), Vide 0))
+let star g = fixpoint (fun r -> alt(seq(r, g, (+)), empty 0))
 
 let plus g sep =
   let g' = appl(g,fun x -> [x]) in
   fixpoint (fun r -> alt(seq(seq(g, sep, fun x _ -> x), r, (fun x y -> x::y)), g'))
 
 
-let test6 = plus (star (Term(char_a))) (Term(Lex.char ',' ()))
+let test6 = plus (star (char_a)) (term(Lex.char ',' ()))
 let test6 = compile test6
 
-let na n = String.make n 'a'
-
-let parse_string c = parse_string c Lex.noblank
-
-let p1 = assert (parse_string test1 (na 10) = 10)
+let p0 = assert (parse_string test0 "a" = 1)
+let p0b = assert (parse_string test0 "b" = 1)
+let p0c = assert (parse_string test0b "ab" = 2)
+let p1 = assert (parse_string test1 (na 1) = 1)
 let p1b = assert (parse_string test1 "" = 0)
 let p2 = assert (parse_string test2 (na 10) = 10)
 let p2b = assert (parse_string test2 "" = 0)

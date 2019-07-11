@@ -4,13 +4,13 @@ open Grammar__Combinator
 module Lex = Grammar__Lex
 module Charset = Grammar__Charset
 
-let int = appl(Term(Lex.charset (Charset.range '0' '9')),int_of_string)
-let plus = Term(Lex.char '+' ())
-let moins = Term(Lex.char '-' ())
-let mul = Term(Lex.char '*' ())
-let div = Term(Lex.char '/' ())
-let opar = Term(Lex.char '(' ())
-let cpar = Term(Lex.char ')' ())
+let int = appl(term(Lex.charset (Charset.range '0' '9')),int_of_string)
+let plus = term(Lex.char '+' ())
+let moins = term(Lex.char '-' ())
+let mul = term(Lex.char '*' ())
+let div = term(Lex.char '/' ())
+let opar = term(Lex.char '(' ())
+let cpar = term(Lex.char ')' ())
 
 let seq3 (a,b,c,f) = seq(seq(a,b,fun x _ -> x),c,f)
 
