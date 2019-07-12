@@ -34,6 +34,12 @@ let cseq : 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t =
              (fun e x -> g2.c e
                 (fun e y -> k e (f x y))) }
 
+let cdep_seq: 'a t -> ('a -> 'b t) -> ('b -> 'c) -> 'c t =
+    fun g1 g2 f ->
+    { c = fun e k -> g1.c e
+             (fun e x -> (g2 x).c e
+                (fun e y -> k e (f y))) }
+
 let calt : ?cs1:Charset.t -> ?cs2:Charset.t -> 'a t -> 'a t -> 'a t =
   fun ?(cs1=Charset.full) ?(cs2=Charset.full) g1 g2 ->
     { c = fun e k ->

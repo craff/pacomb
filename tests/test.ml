@@ -52,8 +52,19 @@ let star_pos g =
                             empty (fun lpos rpos -> (lpos.col,0,rpos.col))))))
 
 let test7 = seq (plus (star_pos (char_a)) (term(Lex.char ',' ())), char_b, fun x _ -> x)
-
 let test7 = compile test7
+
+let test8 = fixpoint
+              (fun r -> alt(empty 0,
+                            seq(char_a,seq(r,char_b,fun x _ -> x + 1), fun _ x -> x)))
+let test9 = dseq(test8,
+                 (let rec fn x =
+                    if x <= 0 then empty 0
+                    else seq(fn (x-1),char_a, fun x _  -> x+1 )
+                       in fn),
+                 fun x -> x)
+let test8 = compile test8
+let test9 = compile test9
 
 let p0 = assert (parse_string test0 "a" = 1)
 let p0b = assert (parse_string test0 "b" = 1)
@@ -77,6 +88,12 @@ let p6b = assert (parse_string test6 "a,aa,aaa,aa,a," = [1;2;3;2;1;0])
 let p7 = assert (parse_string test7 "b" = [(0,0,0)])
 let p7b = assert (parse_string test7 "ab" = [(0,1,1)])
 let p7c = assert (parse_string test7 "a,aa,aaab" = [(0,1,1);(2,2,4);(5,3,8)])
+let p8 = assert (parse_string test8 "" = 0)
+let p8b = assert (parse_string test8 "ab" = 1)
+let p8c = assert (parse_string test8 "aaaabbbb" = 4)
+let p9 = assert (parse_string test9 "" = 0)
+let p9b = assert (parse_string test9 "aba" = 1)
+let p9c = assert (parse_string test9 "aaaabbbbaaaa" = 4)
 
 let nas p =
   let rec fn p =

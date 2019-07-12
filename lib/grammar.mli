@@ -31,6 +31,8 @@ val alt : 'a t * 'a t -> 'a t
     to combine both semantics *)
 val seq : 'a t * 'b t * ('a -> 'b -> 'c) -> 'c t
 
+val dseq : 'a t * ('a -> 'b t) * ('b -> 'c) -> 'c t
+
 (** [lr(g1,g2)] corresponds to R::= g1 | R g2 and is used in the elimination of
     left recursion *)
 val lr : 'a t * ('a -> 'a) t -> 'a t

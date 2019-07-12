@@ -21,6 +21,8 @@ val cterm : 'a Lex.fterm -> 'a t
     is used to compose the semantics returned by the two combinators.*)
 val cseq : 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t
 
+val cdep_seq: 'a t -> ('a -> 'b t) -> ('b -> 'c) -> 'c t
+
 (** combinator parsing with the first combinator and in case
     of failure with the second from the same position.
     The optionnal charset corresponds to the charaters accepted

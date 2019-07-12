@@ -13,6 +13,7 @@ type 'a ne_grammar =
   | Term : 'a terminal -> 'a ne_grammar
   | Alt  : 'a ne_grammar * 'a ne_grammar -> 'a ne_grammar
   | Seq  : 'a ne_grammar * 'b grammar * ('a -> 'b -> 'c) -> 'c ne_grammar
+  | DSeq : 'a ne_grammar * ('a -> 'b grammar) * ('b -> 'c) -> 'c ne_grammar
   | Appl : 'a ne_grammar * ('a -> 'b) -> 'b ne_grammar
   | Lr   : 'a ne_grammar * ('a -> 'a) ne_grammar -> 'a ne_grammar
   | Rest : 'a grammar -> 'a ne_grammar
@@ -59,6 +60,7 @@ let rec print_ne_grammar
     | Term t -> pr "%s" t.n
     | Alt(g1,g2) -> pr "(%a|%a)" pg g1 pg g2
     | Seq(g1,g2,_) -> pr "%a%a" pg g1 pv g2
+    | DSeq(g1,_,_) -> pr "%a???" pg g1
     | Appl(g,_) -> pr "App(%a)" pg g
     | Lr(g,s) -> pr "%a(%a)*" pg g pg s
     | Rest(g) -> pr "(%a\\0)" pv g
@@ -104,6 +106,7 @@ let ne_appl(g,f) =
   | Fail -> Fail
   | Appl(g,h) -> Appl(g,fun x -> f (h x))
   | Seq(g1,g2,h) -> Seq(g1,g2,fun x y -> f (h x y))
+  | DSeq(g1,g2,h) -> DSeq(g1,g2,fun y -> f (h y))
   | _ -> Appl(g,f)
 
 let appl({e;_} as g,f) =
@@ -164,10 +167,27 @@ let seq : type a b c. a grammar * b grammar * (a -> b -> c) -> c grammar =
   in
   alt(ga,gb)
 
+let ne_dseq(g1,g2,f) = match g1 with
+  | Fail  -> Fail
+  | _     -> DSeq(g1,g2,f)
+
+let dseq : type a b c. a grammar * (a -> b grammar) * (b -> c) -> c grammar =
+  fun ({e=e1;_} as g1,g2,f) ->
+  let ga = mkg EFail (ne_dseq(get g1,g2,f)) in
+  let gb = match e1 with
+    | EFail -> fail()
+    | Empty x -> appl(g2 x,f)
+    | EPos x  -> appl(g2 (x phantom),f)
+                    (* FIXME: loose position, can not be avoided ? *)
+  in
+  alt(ga,gb)
+
 type 'a with_pos =
   | Nope
   | With of (pos -> 'a) ne_grammar
 
+(* remove a lpos left prefix.
+   FIXME: useless if the prefix is not followed by Tpm *)
 let rec remove_lpos : type a. a ne_grammar -> a with_pos = function
   | Fail -> Nope
   | Term _ -> Nope
@@ -176,6 +196,12 @@ let rec remove_lpos : type a. a ne_grammar -> a with_pos = function
        match remove_lpos g1 with
        | Nope -> Nope
        | With g1 -> With(ne_seq(g1,g2,fun x y pos -> f (x pos) y))
+     end
+  | DSeq(g1,_,_) ->
+     begin
+       match remove_lpos g1 with
+       | Nope -> Nope
+       | With _ -> Nope (* left recursion in not supported under DSeq *)
      end
   | Alt(g1,g2) ->
      begin
@@ -230,6 +256,11 @@ let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
          let (g1, s1) = elim_left_rec g1 in
          (seq(g1,g2,f),
           seq(s1,g2,fun fx y a -> f (fx a) y))
+      | DSeq(g1,_,_) ->
+         let (_, s1) = elim_left_rec g1 in
+         if s1.g <> Fail then
+           invalid_arg "fixpoint: left recursion under dependant sequence";
+         (mkg EFail g, fail())
       | Alt(g1,g2) ->
          let (g1, s1) = elim_left_rec g1 in
          let (g2, s2) = elim_left_rec g2 in
@@ -295,6 +326,7 @@ let first_charset : type a. a ne_grammar -> Charset.t = fun g ->
     | Term(c) -> c.c
     | Alt(g1,g2) -> Charset.union (fn g1) (fn g2)
     | Seq(g,_,_) -> fn g
+    | DSeq(g,_,_) -> fn g
     | Appl(g,_) -> fn g
     | Lr(g,_) -> fn g
     | Rest g -> fn g.g
@@ -311,6 +343,7 @@ let rec compile_ne : type a. a ne_grammar -> a Combinator.t = fun g ->
   | Alt(g1,g2) -> calt ~cs1:(first_charset g1) ~cs2:(first_charset g2)
                        (compile_ne g1) (compile_ne g2)
   | Seq(g1,g2,f) -> cseq (compile_ne g1) (compile g2) f
+  | DSeq(g1,g2,f) -> cdep_seq (compile_ne g1) (fun x -> compile (g2 x)) f
   | Appl(g1,f) -> capp (compile_ne g1) f
   | Lr(g,s) -> clr ~cs2:(first_charset s) (compile_ne g) (compile_ne s)
   | Rest g -> compile ~restrict:true g
