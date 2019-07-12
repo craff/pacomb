@@ -16,7 +16,7 @@ module type Ty = sig type 'a t end
 
 module type S = sig
   type _ elt
-  type t
+  type t = Nil : t | Cons : 'a key * 'a elt * t -> t
   val empty : t
   val add : 'a key -> 'a elt -> t -> t
   val add_key : 'a elt -> t -> ('a key * t)

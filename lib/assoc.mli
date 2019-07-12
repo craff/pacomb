@@ -6,7 +6,7 @@ type _ ty =  ..
 type ('a,'b) eq = NEq : ('a, 'b) eq | Eq : ('a, 'a) eq
 type 'a key = { k : 'a ty; eq : 'b.'b ty -> ('a,'b) eq }
 
-type t
+type t = Nil : t | Cons : 'a key * 'a * t -> t
 
 val new_key : unit -> 'a key
 
@@ -24,7 +24,7 @@ module type Ty = sig type 'a t end
 
 module type S = sig
   type _ elt
-  type t
+  type t = Nil : t | Cons : 'a key * 'a elt * t -> t
   val empty : t
   val add : 'a key -> 'a elt -> t -> t
   val add_key : 'a elt -> t -> ('a key * t)
