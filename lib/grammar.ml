@@ -114,7 +114,7 @@ let ne_appl(g,f) =
 let appl({e;_} as g,f) =
   let e = match e with
     | EFail   -> EFail
-    | Empty x -> Empty (f x)
+    | Empty x -> (try Empty (f x) with NoParse -> EFail)
     | EPos x  -> EPos (fun pos -> f (x pos))
   in
   mkg e (ne_appl(get g,f))
