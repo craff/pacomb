@@ -18,8 +18,8 @@ let empty = Nil
 
 let add : 'a key -> 'a -> t -> t = fun k x l -> Cons(k,x,l)
 
-let add_key : 'a -> t -> ('a key * 'a) = fun x l ->
-  let k = new_key () in Cons(k,x,l)
+let add_key : 'a -> t -> ('a key * t) = fun x l ->
+  let k = new_key () in (k, Cons(k,x,l))
 
 let find : type a.a key -> t -> a = fun k l ->
   let rec fn : t -> a = function
