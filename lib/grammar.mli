@@ -31,6 +31,9 @@ val alt : 'a t * 'a t -> 'a t
     to combine both semantics *)
 val seq : 'a t * 'b t * ('a -> 'b -> 'c) -> 'c t
 
+(** [dseq(g1,g2,f)] is a dependant sequence, the grammar [g2] used after [g1] may
+    depend upon the semantics of [g1]. This is not very efficient as the grammar
+    [g2] must be compiled at parsing time. *)
 val dseq : 'a t * ('a -> 'b t) * ('b -> 'c) -> 'c t
 
 (** [lr(g1,g2)] corresponds to R::= g1 | R g2 and is used in the elimination of

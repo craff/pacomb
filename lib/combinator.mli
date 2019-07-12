@@ -21,6 +21,9 @@ val cterm : 'a Lex.fterm -> 'a t
     is used to compose the semantics returned by the two combinators.*)
 val cseq : 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t
 
+(** [sdep_seq c1 c2 f] is a dependant sequence, contrary to [seq c1 c2 f],
+    the combinator used to parse after [c1] depends upon the value
+    returned by [c1]. *)
 val cdep_seq: 'a t -> ('a -> 'b t) -> ('b -> 'c) -> 'c t
 
 (** combinator parsing with the first combinator and in case

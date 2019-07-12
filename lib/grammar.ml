@@ -173,6 +173,7 @@ let ne_dseq(g1,g2,f) = match g1 with
   | Fail  -> Fail
   | _     -> DSeq(g1,g2,f)
 
+(* FIXME: add a cache *)
 let dseq : type a b c. a grammar * (a -> b grammar) * (b -> c) -> c grammar =
   fun ({e=e1;_} as g1,g2,f) ->
   let ga = mkg EFail (ne_dseq(get g1,g2,f)) in
