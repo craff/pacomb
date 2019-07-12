@@ -43,12 +43,20 @@ val clpos : (Lex.pos -> 'a) t -> 'a t
 val crpos : (Lex.pos -> 'a) t -> 'a t
 
 (** [cls c1 c2] is an optimized version of [let rec r = seq c1 (seq r c2)]
-    which is illegal as it is left recursive. The optional charset indicates    the characteres accepted by [c2] at the beginning of input. *)
+    which is illegal as it is left recursive. The optional charset indicates
+    the characteres accepted by [c2] at the beginning of input. *)
 val clr : ?cs2:Charset.t -> 'a t -> ('a -> 'a) t -> 'a t
 
 (** access to a reference to a combinator, use by Grammar.compile
     for recursive grammars (not for left recursion *)
 val cref : 'a t ref -> 'a t
+
+(** change the blank function used to parse with the given combinator.
+    we can choose which blank to use at the boundary with the optional
+    parameters. *)
+val clayout
+    : ?old_before:bool -> ?new_before:bool -> ?new_after:bool -> ?old_after:bool
+      -> 'a t -> Lex.blank -> 'a t
 
 (** exception raised by the function below when parsing fails *)
 exception ParseError of Lex.pos

@@ -19,6 +19,7 @@ type 'a ne_grammar =
   | Rest : 'a grammar -> 'a ne_grammar
   | LPos : (pos -> 'a) ne_grammar -> 'a ne_grammar
   | RPos : (pos -> 'a) ne_grammar -> 'a ne_grammar
+  | Layout : 'a ne_grammar * blank * bool * bool * bool * bool -> 'a ne_grammar
   | Tmp  : 'a ne_grammar
 
  and 'a grammar = { mutable e: 'a empty
@@ -66,6 +67,7 @@ let rec print_ne_grammar
     | Rest(g) -> pr "(%a\\0)" pv g
     | LPos(g) -> pr "%a" pg g
     | RPos(g) -> pr "%a" pg g
+    | Layout(g,_,_,_,_,_) -> pr "%a" pg g
     | Tmp     -> pr "TMP"
 
 and print_grammar
@@ -182,6 +184,15 @@ let dseq : type a b c. a grammar * (a -> b grammar) * (b -> c) -> c grammar =
   in
   alt(ga,gb)
 
+let ne_layout(g,b,ob,nb,na,oa) =
+  match g with
+  | Fail -> Fail
+  | _ -> Layout(g,b,ob,nb,na,oa)
+
+let layout ?(old_before=true) ?(new_before=false)
+           ?(new_after=false) ?(old_after=true) (g,b) =
+  mkg g.e (ne_layout(g.g,b,old_before,new_before,new_after,old_after))
+
 type 'a with_pos =
   | Nope
   | With of (pos -> 'a) ne_grammar
@@ -236,6 +247,7 @@ let rec remove_lpos : type a. a ne_grammar -> a with_pos = function
        | With g1 -> With(ne_lr(g1,ne_appl(s,fun f g pos -> f (g pos))))
      end
   | Rest(_) -> Nope
+  | Layout(_) -> Nope (* no left recursion under layout *)
   | Tmp -> Nope
 
 (* construction of recursive grammar *)
@@ -277,6 +289,11 @@ let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
       | RPos(g1) ->
          let (g1, s1) = elim_left_rec g1 in
          (rpos(g1),rpos(appl(s1,fun f pos a -> f a pos)))
+      | Layout(g1,_,_,_,_,_) ->
+         let (_, s1) = elim_left_rec g1 in
+         if s1.g <> Fail then
+           invalid_arg "fixpoint: left recursion under layout change";
+         (mkg EFail g, fail())
       | Tmp -> failwith "unsupported"
 
    and elim_e : type b. b grammar -> b grammar * (a -> b) grammar =
@@ -332,6 +349,7 @@ let first_charset : type a. a ne_grammar -> Charset.t = fun g ->
     | Rest g -> fn g.g
     | LPos g -> fn g
     | RPos g -> fn g
+    | Layout(g,_,ob,na,_,_) -> if ob && not na then fn g else Charset.full
     | Tmp -> assert false
   in fn g
 
@@ -349,6 +367,8 @@ let rec compile_ne : type a. a ne_grammar -> a Combinator.t = fun g ->
   | Rest g -> compile ~restrict:true g
   | LPos(g) -> clpos (compile_ne g)
   | RPos(g) -> crpos (compile_ne g)
+  | Layout(g,b,ob,nb,na,oa) -> clayout ~old_before:ob ~new_before:nb
+                                       ~new_after:na ~old_after:oa (compile_ne g) b
   | Tmp -> assert false
 
 and compile : type a. ?restrict:bool -> a grammar -> a Combinator.t =

@@ -49,6 +49,14 @@ val rpos : (Lex.pos -> 'a) t -> 'a t
     [g0 = g g0] *)
 val fixpoint : ?name:string -> ('a t -> 'a t) -> 'a t
 
+(** [layout (g,b)] changes the blank function to parse the input with the
+    grammar [g]. The optional parameters allow to control which blank is used
+    at the bounndary. Both can be used in which case the new blank are used
+    second before parseing with [g] and first after. *)
+val layout : ?old_before:bool -> ?new_before:bool ->
+             ?new_after:bool -> ?old_after:bool ->
+             'a t * Lex.blank -> 'a t
+
 (** [compile g] produces a combinator that can be used to actually do the parsing
     see the combinator module *)
 val compile : 'a t -> 'a Combinator.t

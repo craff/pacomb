@@ -23,7 +23,6 @@ let cempty : 'a -> 'a t =
 let cterm : 'a fterm -> 'a t =
   fun t ->
     { c = fun e k ->
-          (*Printf.printf "\r %d    %!" e.n;*)
           let (x,s0,n0) = t e.s e.n in
           let (s,n) = e.b s0 n0 in
           k { e with s0; n0; s; n } x }
@@ -78,6 +77,23 @@ let clr : ?cs2:Charset.t -> 'a t -> ('a -> 'a) t -> 'a t =
     g0.c e clr}
 
 let cref : 'a t ref -> 'a t = fun ptr -> { c = fun e k -> !ptr.c e k }
+
+let clayout
+    : ?old_before:bool -> ?new_before:bool -> ?new_after:bool -> ?old_after:bool
+      -> 'a t -> blank -> 'a t =
+  fun ?(old_before=true) ?(new_before=false) ?(new_after=false) ?(old_after=true)
+      g b ->
+  { c = fun e k ->
+        let (s,n) = if old_before then (e.s,e.n) else (e.s0,e.n0) in
+        let (s,n) = if new_before then b s n else (s,n) in
+        let b0 = e.b in
+        let e = { e with b; s; n } in
+        g.c e (fun e x ->
+              let (s,n) = if new_after then (e.s,e.n) else (e.s0,e.n0) in
+              let (s,n) = if old_after then b0 s n else (s,n) in
+              let e = { e with b=b0; s; n } in
+              k e x) }
+
 
 exception ParseError of pos
 

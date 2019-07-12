@@ -1,7 +1,10 @@
 open Grammar
 open Combinator
 
-let parse_string c = parse_string c Lex.noblank
+let parse_string c = parse_string c (Lex.blank_charset (Charset.singleton ' '))
+
+let assert_fail f =
+  try ignore (f ()); assert false with ParseError _ -> ()
 
 let char_a = term(Lex.char 'a' 1)
 let char_b = term(Lex.char 'b' 1)
@@ -66,34 +69,47 @@ let test9 = dseq(test8,
 let test8 = compile test8
 let test9 = compile test9
 
-let p0 = assert (parse_string test0 "a" = 1)
-let p0b = assert (parse_string test0 "b" = 1)
-let p0c = assert (parse_string test0b "ab" = 2)
-let p1 = assert (parse_string test1 (na 1) = 1)
-let p1b = assert (parse_string test1 "" = 0)
-let p2 = assert (parse_string test2 (na 10) = 10)
-let p2b = assert (parse_string test2 "" = 0)
-let p2c = assert (parse_string test2 "ababa" = 5)
-let p3 = assert (parse_string test3 (na 10) = 10)
-let p3b = assert (parse_string test3 "" = 0)
-let p4 = assert (parse_string test4 (na 10) = 10)
-let p4b = assert (parse_string test4 "" = 0)
-let p4c = assert (parse_string test4 "baaa" = 4)
-let p4d = assert (parse_string test4 "b" = 1)
-let p5 = assert (parse_string test5 "aaa" = 3)
-let p5b = assert (parse_string test5 "" = 0)
-let p5c = assert (parse_string test5 "ababa" = 5)
-let p6 = assert (parse_string test6 "a" = [1])
-let p6b = assert (parse_string test6 "a,aa,aaa,aa,a," = [1;2;3;2;1;0])
-let p7 = assert (parse_string test7 "b" = [(0,0,0)])
-let p7b = assert (parse_string test7 "ab" = [(0,1,1)])
-let p7c = assert (parse_string test7 "a,aa,aaab" = [(0,1,1);(2,2,4);(5,3,8)])
-let p8 = assert (parse_string test8 "" = 0)
-let p8b = assert (parse_string test8 "ab" = 1)
-let p8c = assert (parse_string test8 "aaaabbbb" = 4)
-let p9 = assert (parse_string test9 "" = 0)
-let p9b = assert (parse_string test9 "aba" = 1)
-let p9c = assert (parse_string test9 "aaaabbbbaaaa" = 4)
+let test10 = seq(char_a,layout(seq(char_a,char_b,(+)),Lex.noblank),(+))
+let test10 = compile test10
+
+let _ = assert (parse_string test0 "a" = 1)
+let _ = assert_fail (fun () -> parse_string test0 "")
+let _ = assert_fail (fun () -> parse_string test0 "c")
+let _ = assert (parse_string test0 "b" = 1)
+let _ = assert (parse_string test0b "ab" = 2)
+let _ = assert (parse_string test0b "a b" = 2)
+let _ = assert (parse_string test0b "  a  b  " = 2)
+
+let _ = assert (parse_string test1 (na 1) = 1)
+let _ = assert (parse_string test1 "" = 0)
+let _ = assert (parse_string test2 (na 10) = 10)
+let _ = assert (parse_string test2 "" = 0)
+let _ = assert (parse_string test2 "ababa" = 5)
+let _ = assert (parse_string test3 (na 10) = 10)
+let _ = assert (parse_string test3 "" = 0)
+let _ = assert (parse_string test4 (na 10) = 10)
+let _ = assert (parse_string test4 "" = 0)
+let _ = assert (parse_string test4 "baaa" = 4)
+let _ = assert (parse_string test4 "b" = 1)
+let _ = assert (parse_string test5 "aaa" = 3)
+let _ = assert (parse_string test5 "" = 0)
+let _ = assert (parse_string test5 "ababa" = 5)
+let _ = assert (parse_string test6 "a" = [1])
+let _ = assert (parse_string test6 "a,aa,aaa,aa,a," = [1;2;3;2;1;0])
+let _ = assert (parse_string test7 "b" = [(0,0,0)])
+let _ = assert (parse_string test7 "ab" = [(0,1,1)])
+let _ = assert (parse_string test7 "a,aa,aaab" = [(0,1,1);(2,2,4);(5,3,8)])
+let _ = assert (parse_string test8 "" = 0)
+let _ = assert (parse_string test8 "ab" = 1)
+let _ = assert (parse_string test8 "aaaabbbb" = 4)
+let _ = assert (parse_string test9 "" = 0)
+let _ = assert (parse_string test9 "aba" = 1)
+let _ = assert (parse_string test9 "aaaabbbbaaaa" = 4)
+let _ = assert_fail (fun () -> parse_string test9 "aaaabbbbaaa")
+let _ = assert_fail (fun () -> parse_string test9 "aaaabbbbaaaaa")
+let _ = assert (parse_string test10 "aab" = 3)
+let _ = assert (parse_string test10 " a ab  " = 3)
+let _ = assert_fail (fun () -> parse_string test10 "a a b")
 
 let nas p =
   let rec fn p =
@@ -111,10 +127,10 @@ let chrono_parse g s =
   Printf.printf "%f seconds\n%!" (t1 -. t0);
   r
 
-let p6c = chrono_parse test6 (nas 100)
+let _ = chrono_parse test6 (nas 100)
 
-let p6d = chrono_parse test6 (nas 1000)
+let _ = chrono_parse test6 (nas 1000)
 
-let p6e = chrono_parse test6 (nas 10000)
+let _ = chrono_parse test6 (nas 10000)
 
-let p6f = chrono_parse test6 (nas 20000)
+let _ = chrono_parse test6 (nas 20000)
