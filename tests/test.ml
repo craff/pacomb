@@ -8,6 +8,7 @@ let assert_fail f =
 
 let char_a = term(Lex.char 'a' 1)
 let char_b = term(Lex.char 'b' 1)
+let char_c = term(Lex.char 'c' 1)
 
 let na n = String.make n 'a'
 
@@ -72,6 +73,28 @@ let test9 = compile test9
 let test10 = seq(char_a,layout(seq(char_a,char_b,(+)),Lex.noblank),(+))
 let test10 = compile test10
 
+let test11 = fixpoint (fun ab ->
+                 let gbc =
+                   fixpoint (fun bc ->
+                       let gac =
+                         alt(empty (),
+                             alt(seq(ab,seq(char_a,char_b,fun _ _ -> ()), fun _ _ -> ()),
+                                 seq(bc,seq(char_b,char_c,fun _ _ -> ()), fun _ _ -> ())))
+                       in
+                       alt(empty (),
+                           alt(seq(ab,seq(char_a,char_b,fun _ _ -> ()), fun _ _ -> ()),
+                               seq(gac,seq(char_a,char_c,fun _ _ -> ()), fun _ _ -> ()))))
+                 in
+                 let gac =
+                   alt(empty (),
+                       alt(seq(ab,seq(char_a,char_b,fun _ _ -> ()), fun _ _ -> ()),
+                           seq(gbc,seq(char_b,char_c,fun _ _ -> ()), fun _ _ -> ())))
+                 in
+                 alt(empty (),
+                     alt(seq(gbc,seq(char_b,char_c,fun _ _ -> ()), fun _ _ -> ()),
+                         seq(gac,seq(char_a,char_c,fun _ _ -> ()), fun _ _ -> ()))))
+let test11 = compile test11
+
 let _ = assert (parse_string test0 "a" = 1)
 let _ = assert_fail (fun () -> parse_string test0 "")
 let _ = assert_fail (fun () -> parse_string test0 "c")
@@ -110,6 +133,21 @@ let _ = assert_fail (fun () -> parse_string test9 "aaaabbbbaaaaa")
 let _ = assert (parse_string test10 "aab" = 3)
 let _ = assert (parse_string test10 " a ab  " = 3)
 let _ = assert_fail (fun () -> parse_string test10 "a a b")
+let _ = assert (parse_string test11 "" = ())
+let _ = assert (parse_string test11 "ac" = ())
+let _ = assert (parse_string test11 "bc" = ())
+let _ = assert (parse_string test11 "bcac" = ())
+let _ = assert (parse_string test11 "abac" = ())
+let _ = assert (parse_string test11 "abbc" = ())
+let _ = assert (parse_string test11 "acbc" = ())
+let _ = assert (parse_string test11 "abbcac" = ())
+let _ = assert (parse_string test11 "acbcac" = ())
+let _ = assert (parse_string test11 "bcabac" = ())
+let _ = assert (parse_string test11 "acabac" = ())
+let _ = assert (parse_string test11 "bcabbc" = ())
+let _ = assert (parse_string test11 "acabbc" = ())
+let _ = assert (parse_string test11 "abacbc" = ())
+let _ = assert (parse_string test11 "bcacbc" = ())
 
 let nas p =
   let rec fn p =

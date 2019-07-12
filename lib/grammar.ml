@@ -22,6 +22,7 @@ type 'a ne_grammar =
                   ; recursive : bool
                   ; n : string; u : 'a ty; eq : 'b. 'b ty -> ('a,'b) eq
                   ; mutable compiled : 'a Combinator.t ref option
+                  ; mutable charset : Charset.t option
                   }
 
  and 'a empty =
@@ -34,7 +35,7 @@ type 'a t = 'a grammar
 let mkg : ?name:string -> ?recursive:bool -> 'a empty -> 'a ne_grammar -> 'a grammar =
   fun ?(name="...") ?(recursive=false) e g ->
     let k = new_key () in
-    { e; g; n = name; u = k.k; eq = k.eq; recursive; compiled = None }
+    { e; g; n = name; u = k.k; eq = k.eq; recursive; compiled = None; charset = None }
 
 type ety = E : 'a ty -> ety [@@unboxed]
 
@@ -286,22 +287,18 @@ let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
       | Tmp -> failwith "unsupported"
 
    and elim_e : type b. b grammar -> b grammar * (a -> b) grammar =
-    fun g ->
-    match g.eq u with
-    | Eq  -> assert g.recursive; (fail (), empty(fun x -> x))
-    | NEq ->
-       if g.recursive then (mkg EFail (Ref g), fail()) (* FIXME: handle mutual left recursion *)
-       else elim_left_rec g.g
+     fun g ->
+       assert g.recursive;
+       match g.eq u with
+       | Eq  -> (fail (), empty(fun x -> x))
+       | NEq -> (mkg g.e (Ref g), fail())
    in
    let g =
      match remove_lpos g with
      | Nope ->
         begin
-          Printf.printf "elim %a\n%!" print_ne_grammar g;
-          let ({e=e';g;_}, {g=s;_}) = elim_left_rec g in
-          assert(e'=EFail);
-          Printf.printf "  g = %a\n%!" print_ne_grammar g;
-          Printf.printf "  s = %a\n%!" print_ne_grammar s;
+          let ({e=_e';g;_}, {g=s;_}) = elim_left_rec g in
+          (*assert(e'=EFail);*)
           match e with
           | EFail -> ne_lr(g,s)
           | Empty x -> ne_lr(ne_alt(g,ne_appl(s,fun f -> f x)), s)
@@ -309,11 +306,8 @@ let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
         end
      | With g ->
         begin
-          Printf.printf "elim %a\n%!" print_ne_grammar g;
-          let ({e=e';g;_}, {g=s;_}) = elim_left_rec g in
-          assert(e'=EFail);
-          Printf.printf "  g = %a\n%!" print_ne_grammar g;
-          Printf.printf "  s = %a\n%!" print_ne_grammar s;
+          let ({e=_e';g;_}, {g=s;_}) = elim_left_rec g in
+          (*assert(e'=EFail);*)
           let s' = ne_appl(s,fun f x pos -> f (x pos) pos) in
           match e with
           | EFail -> LPos(ne_lr(g,s'))
@@ -323,7 +317,7 @@ let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
    in
    Printf.printf "  g = %a\n%!" print_ne_grammar g;
    r.g <- g;
-   r
+   mkg ~name e g (* for mutual recursion, expand fixpoint once *)
 
 let first_charset : type a. a ne_grammar -> Charset.t = fun g ->
   let rec fn : type a. a ne_grammar -> Charset.t = fun g ->
@@ -335,11 +329,20 @@ let first_charset : type a. a ne_grammar -> Charset.t = fun g ->
     | DSeq(g,_,_) -> fn g
     | Appl(g,_) -> fn g
     | Lr(g,_) -> fn g
-    | Ref g -> fn g.g
+    | Ref g -> gn g
     | LPos g -> fn g
     | RPos g -> fn g
     | Layout(g,_,ob,na,_,_) -> if ob && not na then fn g else Charset.full
     | Tmp -> assert false
+  and gn : type a. a grammar -> Charset.t = fun g ->
+    assert g.recursive;
+    match g.charset with
+    | Some c -> c
+    | None ->
+       g.charset <- Some Charset.empty;
+       let r = fn g.g in
+       g.charset <- Some r;
+       r
   in fn g
 
 (* compilation of a grammar to combinator *)
