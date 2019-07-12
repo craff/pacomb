@@ -16,7 +16,7 @@ type 'a ne_grammar =
   | DSeq : 'a ne_grammar * ('a -> 'b grammar) * ('b -> 'c) -> 'c ne_grammar
   | Appl : 'a ne_grammar * ('a -> 'b) -> 'b ne_grammar
   | Lr   : 'a ne_grammar * ('a -> 'a) ne_grammar -> 'a ne_grammar
-  | Rest : 'a grammar -> 'a ne_grammar
+  | Ref  : 'a grammar -> 'a ne_grammar
   | LPos : (pos -> 'a) ne_grammar -> 'a ne_grammar
   | RPos : (pos -> 'a) ne_grammar -> 'a ne_grammar
   | Layout : 'a ne_grammar * blank * bool * bool * bool * bool -> 'a ne_grammar
@@ -64,7 +64,7 @@ let rec print_ne_grammar
     | DSeq(g1,_,_) -> pr "%a???" pg g1
     | Appl(g,_) -> pr "App(%a)" pg g
     | Lr(g,s) -> pr "%a(%a)*" pg g pg s
-    | Rest(g) -> pr "(%a\\0)" pv g
+    | Ref(g)  -> pr "(%a\\0)" pv g
     | LPos(g) -> pr "%a" pg g
     | RPos(g) -> pr "%a" pg g
     | Layout(g,_,_,_,_,_) -> pr "%a" pg g
@@ -101,7 +101,7 @@ let term(x) =
   if accept_empty x then invalid_arg "term: empty terminals";
   mkg ~name:x.Lex.n EFail (Term x)
 
-let get g = if g.recursive then Rest g else g.g
+let get g = if g.recursive then Ref g else g.g
 
 let ne_appl(g,f) =
   match g with
@@ -247,7 +247,7 @@ let rec remove_lpos : type a. a ne_grammar -> a with_pos = function
        | Nope -> Nope
        | With g1 -> With(ne_lr(g1,ne_appl(s,fun f g pos -> f (g pos))))
      end
-  | Rest(_) -> Nope
+  | Ref(_) -> Nope
   | Layout(_) -> Nope (* no left recursion under layout *)
   | Tmp -> Nope
 
@@ -285,7 +285,7 @@ let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
       | Appl(g1,f) ->
          let (g1,s) = elim_left_rec g1 in
          (appl(g1,f), appl(s,fun g a -> f (g a)))
-      | Rest(g) -> elim_e g
+      | Ref(g) -> elim_e g
       | LPos _ -> assert false
       | RPos(g1) ->
          let (g1, s1) = elim_left_rec g1 in
@@ -302,7 +302,7 @@ let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
     match g.eq u with
     | Eq  -> assert g.recursive; (fail (), empty(fun x -> x))
     | NEq ->
-       if g.recursive then (mkg EFail (Rest g), fail()) (* FIXME: handle mutual left recursion *)
+       if g.recursive then (mkg EFail (Ref g), fail()) (* FIXME: handle mutual left recursion *)
        else elim_left_rec g.g
    in
    let g =
@@ -347,7 +347,7 @@ let first_charset : type a. a ne_grammar -> Charset.t = fun g ->
     | DSeq(g,_,_) -> fn g
     | Appl(g,_) -> fn g
     | Lr(g,_) -> fn g
-    | Rest g -> fn g.g
+    | Ref g -> fn g.g
     | LPos g -> fn g
     | RPos g -> fn g
     | Layout(g,_,ob,na,_,_) -> if ob && not na then fn g else Charset.full
@@ -365,15 +365,14 @@ let rec compile_ne : type a. a ne_grammar -> a Combinator.t = fun g ->
   | DSeq(g1,g2,f) -> cdep_seq (compile_ne g1) (fun x -> compile (g2 x)) f
   | Appl(g1,f) -> capp (compile_ne g1) f
   | Lr(g,s) -> clr ~cs2:(first_charset s) (compile_ne g) (compile_ne s)
-  | Rest g -> compile ~restrict:true g
+  | Ref g -> compile g
   | LPos(g) -> clpos (compile_ne g)
   | RPos(g) -> crpos (compile_ne g)
   | Layout(g,b,ob,nb,na,oa) -> clayout ~old_before:ob ~new_before:nb
                                        ~new_after:na ~old_after:oa (compile_ne g) b
   | Tmp -> assert false
 
-and compile : type a. ?restrict:bool -> a grammar -> a Combinator.t =
-  fun ?(restrict=false) g ->
+and compile : type a. a grammar -> a Combinator.t = fun g ->
   let cg =
     match g.recursive, g.compiled with
     | true, Some ptr -> cref ptr
@@ -386,13 +385,11 @@ and compile : type a. ?restrict:bool -> a grammar -> a Combinator.t =
     | false, None -> compile_ne g.g
   in
   match g.e with
-  | Empty x when not restrict ->
+  | Empty x ->
      let e = cempty x in
      if g.g = Fail then e else calt ~cs2:(first_charset g.g) e cg
-  | EPos  x when not restrict ->
+  | EPos  x ->
      let e = clpos (cempty x) in
      if g.g = Fail then e else calt ~cs2:(first_charset g.g) e cg
-  | _ ->
+  | EFail ->
      if g.g = Fail then cfail else cg
-
-let compile g = compile ~restrict:false g
