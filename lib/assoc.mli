@@ -14,6 +14,8 @@ val empty : t
 
 val add : 'a key -> 'a -> t -> t
 
+val add_key : 'a -> t -> ('a key * t)
+
 val find : 'a key -> t -> 'a
 
 val mem : 'a key -> t -> bool
