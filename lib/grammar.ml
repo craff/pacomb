@@ -24,13 +24,15 @@ type 'a ne_grammar =
                   ; mutable g : 'a ne_grammar
                   ; recursive : bool
                   ; n : string; u : 'a ty; eq : 'b. 'b ty -> ('a,'b) eq
-                  ; mutable compiled : 'a comb ref option
+                  ; mutable compiled : 'a Combinator.t ref option
                   }
 
  and 'a empty =
    | EFail
    | Empty of 'a
    | EPos  of (pos -> 'a) (* only one position for empty rule! *)
+
+type 'a t = 'a grammar
 
 let new_key : type a. unit -> a key = fun () ->
   let module M = struct type _ ty += T : a ty end in
@@ -65,16 +67,23 @@ let rec print_ne_grammar
     | Tmp     -> pr "TMP"
 
 and print_grammar
-    : type a. ety list -> out_channel -> a grammar -> unit = fun adone ch {n;e;g;u;_} ->
+    : type a. ety list -> out_channel -> a grammar -> unit = fun adone ch g ->
   let pr x = Printf.fprintf ch x in
-  if List.mem (E u) adone then Printf.fprintf ch "%s" n
+  if List.mem (E g.u) adone then Printf.fprintf ch "%s" g.n
+  else if g.recursive then
+    begin
+      let adone = E g.u :: adone in
+      let pg x = print_ne_grammar adone x in
+      match g.e with
+      | EFail -> pr "%s=(%a)" g.n pg g.g
+      | _     -> pr "%s=(1|%a)" g.n pg g.g
+    end
   else
     begin
-      let adone = E u :: adone in
       let pg x = print_ne_grammar adone x in
-      match e with
-      | EFail -> pr "%a" pg g
-      | _     -> pr "(1|%a)" pg g
+      match g.e with
+      | EFail -> pr "%a" pg g.g
+      | _     -> pr "(1|%a)" pg g.g
     end
 
 let print_ne_grammar ch s = print_ne_grammar [] ch s
@@ -121,12 +130,6 @@ let ne_lr = function
 
 let lr({e=e1;_} as g1,s) = mkg e1 (ne_lr(get g1,get s))
 
-let ne_seq(g1,g2,f) = match(g1,g2) with
-  | Fail, _                 -> Fail
-  | _, {e=EFail;g=Fail;_}   -> Fail
-  | _, {e=Empty y;g=Fail;_} -> Appl(g1,fun x -> f x y)
-  | _, _                    -> Seq(g1,g2,f)
-
 let lpos{e;g;_} =
   let e = match e with
     | EFail -> EFail
@@ -144,6 +147,12 @@ let rpos{e;g;_} =
   in
   let g = RPos(g) in
   mkg e g
+
+let ne_seq(g1,g2,f) = match(g1,g2) with
+  | Fail, _                 -> Fail
+  | _, {e=EFail;g=Fail;_}   -> Fail
+  | _, {e=Empty y;g=Fail;_} -> ne_appl(g1,fun x -> f x y)
+  | _, _                    -> Seq(g1,g2,f)
 
 let seq : type a b c. a grammar * b grammar * (a -> b -> c) -> c grammar =
   fun ({e=e1;_} as g1,g2,f) ->
@@ -205,7 +214,7 @@ let rec remove_lpos : type a. a ne_grammar -> a with_pos = function
 
 (* construction of recursive grammar *)
 let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
-  fun ?(name="") g ->
+  fun ?(name="...") g ->
 
   let r = mkg ~name ~recursive:true EFail Tmp in
   let {e;g;_} = g r in
@@ -295,8 +304,7 @@ let first_charset : type a. a ne_grammar -> Charset.t = fun g ->
   in fn g
 
 (* compilation of a grammar to combinator *)
-let use_info = true
-let rec compile_ne : type a. a ne_grammar -> a comb = fun g ->
+let rec compile_ne : type a. a ne_grammar -> a Combinator.t = fun g ->
   match g with
   | Fail -> cfail
   | Term(c) -> cterm c.f
@@ -310,7 +318,7 @@ let rec compile_ne : type a. a ne_grammar -> a comb = fun g ->
   | RPos(g) -> crpos (compile_ne g)
   | Tmp -> assert false
 
-and compile : type a. ?restrict:bool -> a grammar -> a comb =
+and compile : type a. ?restrict:bool -> a grammar -> a Combinator.t =
   fun ?(restrict=false) g ->
   let cg =
     match g.recursive, g.compiled with
@@ -332,3 +340,5 @@ and compile : type a. ?restrict:bool -> a grammar -> a comb =
      if g.g = Fail then e else calt ~cs2:(first_charset g.g) e cg
   | _ ->
      if g.g = Fail then cfail else cg
+
+let compile g = compile ~restrict:false g

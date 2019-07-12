@@ -16,13 +16,13 @@ let cpar = term(Lex.char ')' ())
 
 let seq3 (a,b,c,f) = seq(seq(a,b,fun x _ -> x),c,f)
 
-let expr = fixpoint(fun expr ->
+let expr = fixpoint ~name:"expr" (fun expr ->
   let atom =
     alt(int,
         seq(seq(opar,expr,fun _ x -> x),cpar, fun x _ -> x))
   in
 
-  let pro = fixpoint (fun pro ->
+  let pro = fixpoint ~name:"prod" (fun pro ->
                 alt(atom,
                     alt(seq3(pro,mul,atom,( * )),
                         seq3(pro,div,atom,( / )))))
