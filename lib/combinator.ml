@@ -5,8 +5,17 @@ open Lex
 (* type xof parsing combinator with continuation.
    continuation are necessary for correct semantics of
    alternative *)
-type env = { b : blank; s0 : buf; n0: int; s : buf; n : int }
+type env = { b : blank; maxp : (buf * int) ref; s0 : buf; n0: int; s : buf; n : int }
 type 'a t = { c : 'b. env -> (env -> 'a -> 'b) -> 'b } [@@unboxed]
+
+exception Next
+
+let next : env -> 'a= fun e ->
+  let (b0,n0) = !(e.maxp) in
+  let l = Input.line e.s in
+  let l0 = Input.line b0 in
+  if l > l0 || (l = l0 && e.n > n0) then e.maxp := (e.s,e.n);
+  raise Next
 
 let give_up () = raise NoParse
 
@@ -15,7 +24,7 @@ let test cs e =
 
 (* the usual combinators *)
 let cfail : ('a) t =
-  { c = fun _e _k -> raise NoParse }
+  { c = fun _e _k -> raise Next }
 
 let cempty : 'a -> 'a t =
   fun x -> { c = fun e k -> k e x }
@@ -23,7 +32,7 @@ let cempty : 'a -> 'a t =
 let cterm : 'a fterm -> 'a t =
   fun t ->
     { c = fun e k ->
-          let (x,s0,n0) = t e.s e.n in
+          let (x,s0,n0) = try t e.s e.n with NoParse -> next e in
           let (s,n) = e.b s0 n0 in
           k { e with s0; n0; s; n } x }
 
@@ -31,47 +40,47 @@ let cseq : 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t =
   fun g1 g2 f ->
     { c = fun e k -> g1.c e
              (fun e x -> g2.c e
-                (fun e y -> k e (f x y))) }
+                (fun e y -> k e (try f x y with NoParse -> next e))) }
 
 let cdep_seq: 'a t -> ('a -> 'b t) -> ('b -> 'c) -> 'c t =
     fun g1 g2 f ->
     { c = fun e k -> g1.c e
-             (fun e x -> (g2 x).c e
-                (fun e y -> k e (f y))) }
+             (fun e x -> (try g2 x with NoParse -> next e).c e
+                (fun e y -> k e (try f y with NoParse -> next e))) }
 
 let calt : ?cs1:Charset.t -> ?cs2:Charset.t -> 'a t -> 'a t -> 'a t =
   fun ?(cs1=Charset.full) ?(cs2=Charset.full) g1 g2 ->
     { c = fun e k ->
           match test cs1 e, test cs2 e with
-          | false, false -> raise NoParse
+          | false, false -> next e
           | true, false  -> g1.c e k
           | false, true  -> g2.c e k
           | true, true   ->
-             try g1.c e k with NoParse -> g2.c e k
+             try g1.c e k with Next -> g2.c e k
     }
 
 let capp : 'a t -> ('a -> 'b) -> 'b t =
-  fun g1 f -> { c = fun e k -> g1.c e (fun e x -> k e (f x)) }
+  fun g1 f -> { c = fun e k -> g1.c e (fun e x -> k e (try f x with NoParse -> next e)) }
 
 let clpos : (pos -> 'a) t -> 'a t =
   fun g ->
     { c = fun e k ->
           let pos = get_pos e.s e.n in
-          g.c e (fun e f -> k e (f pos)) }
+          g.c e (fun e f -> k e (try f pos with NoParse -> next e)) }
 
 
 let crpos : (pos -> 'a) t -> 'a t =
   fun g ->
     { c = fun e k ->
           g.c e (fun e f -> let pos = get_pos e.s0 e.n0 in
-                            k e (f pos)) }
+                            k e (try f pos with NoParse -> next e)) }
 
 let clr : ?cs2:Charset.t -> 'a t -> ('a -> 'a) t -> 'a t =
   fun ?(cs2=Charset.full) g0 gf -> { c = fun e k ->
     let rec clr e x =
       if test cs2 e then
         try k e x
-        with NoParse ->  gf.c e (fun e f -> clr e (f x))
+        with Next ->  gf.c e (fun e f -> clr e (try f x with NoParse -> next e))
       else k e x
     in
     g0.c e clr}
@@ -99,11 +108,14 @@ exception ParseError of pos
 
 let parse_buffer : type a. a t -> blank -> buf -> a = fun g b s0 ->
   let g = cseq g (cterm (eof ()).f) (fun x _ -> x) in
+  let maxp = ref (s0,0) in
   try
     let (s,n) = b s0 0 in
-    g.c { b; s0; n0=0; s; n} (fun _e x -> x)
-  with NoParse ->
-    let (l,c,c8) = Input.last_pos s0 in
+    g.c { b; s0; n0=0; s; n; maxp} (fun _e x -> x)
+  with Next ->
+    let (s,c) = !maxp in
+    let l = Input.line_num s in
+    let c8 = Input.utf8_col_num s c in
     let pos = { name = Input.filename s0; line = l; col = c
                 ; utf8_col = c8; phantom = false }
     in

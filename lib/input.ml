@@ -49,7 +49,6 @@ type line =
   ; mutable next : buffer (* Following line                          *)
   ; name         : string (* The name of the buffer (e.g. file name) *)
   ; uid          : int    (* Unique identifier                       *)
-  ; mutable maxp : int    (* max read pos *)
   ; ctnr         : Container.t} (* for map table                     *)
 and buffer = line Lazy.t
 
@@ -63,7 +62,7 @@ let empty_buffer name lnum loff =
   let rec line = lazy
     { is_eof = true ; name ; lnum ; loff ; llen = 0
     ; data = "" ; next = line ; uid = new_uid ()
-    ; ctnr = Container.create (); maxp = 0 }
+    ; ctnr = Container.create (); }
   in line
 
 (* Test if a buffer is empty. *)
@@ -76,7 +75,7 @@ let rec is_empty (lazy l) pos =
 let rec read (lazy l as b) i =
   if l.is_eof then ('\255', b, 0) else
   match compare (i+1) l.llen with
-  | -1 -> l.maxp <- max l.maxp (i+1); (l.data.[i], b     , i+1)
+  | -1 -> (l.data.[i], b     , i+1)
   | 0  -> (l.data.[i], l.next, 0  )
   | _  -> read l.next (i - l.llen)
 
@@ -114,14 +113,6 @@ let utf8_col_num (lazy {data; _}) i =
       -0 (* Invalid utf8 character. *)
     else num
   in find 0 0
-
-let last_pos b =
-  let rec fn (lazy l as b) =
-    if l.is_eof then (l.lnum, l.maxp, utf8_col_num b l.maxp)
-    else if Lazy.is_val l.next then fn l.next
-    else (l.lnum, l.maxp, utf8_col_num b l.maxp)
-  in
-  fn b
 
 (* Ensure that the given position is in the current line. *)
 let rec normalize (lazy b as str) pos =
@@ -218,7 +209,7 @@ include GenericInput(
             fun () ->
               { is_eof = false ; lnum ; loff ; llen ; data ; name
               ; next = lazy (fn name lnum (loff + llen) cont)
-              ; uid = new_uid () ; ctnr = Container.create (); maxp = 0}
+              ; uid = new_uid () ; ctnr = Container.create (); }
           with End_of_file ->
             finalise file;
             fun () -> cont name lnum loff
@@ -262,7 +253,7 @@ module Make(PP : Preprocessor) =
               fun () ->
                 { is_eof = false ; lnum ; loff ; llen ; data ; name
                 ; next = lazy (fn name lnum (loff + llen) st cont)
-                ; uid = new_uid () ; ctnr = Container.create (); maxp = 0 }
+                ; uid = new_uid () ; ctnr = Container.create (); }
             else
               fun () -> fn name lnum loff st cont
           with End_of_file ->
