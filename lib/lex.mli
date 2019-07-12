@@ -39,6 +39,9 @@ val not_charset : Charset.t -> unit terminal
 (** compose two terminals in sequence *)
 val seq : 'a terminal -> 'b terminal -> ('a -> 'b -> 'c) -> 'c terminal
 
+(** parses the given terminal 0 or 1 time. *)
+val option : 'a terminal -> 'a option terminal
+
 (** repetition of a given terminal 0,1 or more times.
     The type allows for ['b = Buffer.t] for efficiency*)
 val star : 'a terminal -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b terminal

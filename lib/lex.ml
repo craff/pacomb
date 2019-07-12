@@ -51,6 +51,13 @@ let seq : 'a terminal -> 'b terminal -> ('a -> 'b -> 'c) -> 'c terminal =
         let (s2,s,n) = t2.f s n in
         (f s1 s2,s,n) }
 
+let option : 'a terminal -> 'a option terminal = fun t ->
+  { n = sp "(%s)?" t.n
+  ; c = Charset.full
+  ; f = fun s n ->
+        try let (x,s,n) = t.f s n in (Some x,s,n)
+        with NoParse -> (None,s,n) }
+
 let star : 'a terminal -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b terminal = fun t a f ->
   { n = sp "(%s)*" t.n
   ; c = t.c
