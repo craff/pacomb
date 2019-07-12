@@ -19,3 +19,17 @@ val add_key : 'a -> t -> ('a key * t)
 val find : 'a key -> t -> 'a
 
 val mem : 'a key -> t -> bool
+
+module type Ty = sig type 'a t end
+
+module type S = sig
+  type _ elt
+  type t
+  val empty : t
+  val add : 'a key -> 'a elt -> t -> t
+  val add_key : 'a elt -> t -> ('a key * t)
+  val find : 'a key -> t -> 'a elt
+  val mem : 'a key -> t -> bool
+end
+
+module Make(Ty:Ty) : S with type 'a elt = 'a Ty.t

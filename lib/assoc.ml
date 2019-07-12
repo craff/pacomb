@@ -6,35 +6,55 @@ type _ ty =  ..
 type ('a,'b) eq = NEq : ('a, 'b) eq | Eq : ('a, 'a) eq
 type 'a key = { k : 'a ty; eq : 'b.'b ty -> ('a,'b) eq }
 
-type t = Nil : t | Cons : 'a key * 'a * t -> t
-
 let new_key : type a. unit -> a key = fun () ->
   let module M = struct type _ ty += T : a ty end in
   let open M in
   let eq : type b. b ty -> (a, b) eq = function T -> Eq | _ -> NEq in
   { k = T; eq }
 
-let empty = Nil
+module type Ty = sig type 'a t end
 
-let add : 'a key -> 'a -> t -> t = fun k x l -> Cons(k,x,l)
+module type S = sig
+  type _ elt
+  type t
+  val empty : t
+  val add : 'a key -> 'a elt -> t -> t
+  val add_key : 'a elt -> t -> ('a key * t)
+  val find : 'a key -> t -> 'a elt
+  val mem : 'a key -> t -> bool
+end
 
-let add_key : 'a -> t -> ('a key * t) = fun x l ->
-  let k = new_key () in (k, Cons(k,x,l))
+module Make(Ty:Ty) = struct
+  type 'a elt = 'a Ty.t
 
-let find : type a.a key -> t -> a = fun k l ->
-  let rec fn : t -> a = function
-    | Nil -> raise Not_found
-    | Cons(k',x,l) ->
-       match k'.eq k.k with
-       | Eq -> x
-       | NEq -> fn l
-  in fn l
+  type t = Nil : t | Cons : 'a key * 'a elt * t -> t
 
-let mem : type a.a key -> t -> bool = fun k l ->
-  let rec fn : t -> bool = function
-    | Nil -> false
-    | Cons(k',_,l) ->
-       match k'.eq k.k with
-       | Eq -> true
-       | NEq -> fn l
-  in fn l
+  let empty = Nil
+
+  let add : 'a key -> 'a elt -> t -> t = fun k x l -> Cons(k,x,l)
+
+  let add_key : 'a elt -> t -> ('a key * t) = fun x l ->
+    let k = new_key () in (k, Cons(k,x,l))
+
+  let find : type a.a key -> t -> a elt = fun k l ->
+    let rec fn : t -> a elt = function
+      | Nil -> raise Not_found
+      | Cons(k',x,l) ->
+         match k'.eq k.k with
+         | Eq -> x
+         | NEq -> fn l
+    in fn l
+
+  let mem : type a.a key -> t -> bool = fun k l ->
+    let rec fn : t -> bool = function
+      | Nil -> false
+      | Cons(k',_,l) ->
+         match k'.eq k.k with
+         | Eq -> true
+         | NEq -> fn l
+    in fn l
+end
+
+module Idt = struct type 'a t = 'a end
+
+include Make(Idt)
