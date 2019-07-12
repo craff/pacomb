@@ -1,11 +1,6 @@
 open Combinator
 open Lex
-
-(* extensible type of key used for elimination of left recursion,
-   see elim_left_rec below *)
-type _ ty =  ..
-type ('a,'b) eq = NEq : ('a, 'b) eq | Eq : ('a, 'a) eq
-type 'a key = { k : 'a ty; eq : 'b.'b ty -> ('a,'b) eq }
+open Assoc
 
 (* type of a grammar *)
 type 'a ne_grammar =
@@ -35,13 +30,6 @@ type 'a ne_grammar =
    | EPos  of (pos -> 'a) (* only one position for empty rule! *)
 
 type 'a t = 'a grammar
-
-let new_key : type a. unit -> a key = fun () ->
-  let module M = struct type _ ty += T : a ty end in
-  let open M in
-  let eq : type b. b ty -> (a, b) eq = function T -> Eq | _ -> NEq in
-  { k = T; eq }
-
 
 let mkg : ?name:string -> ?recursive:bool -> 'a empty -> 'a ne_grammar -> 'a grammar =
   fun ?(name="...") ?(recursive=false) e g ->
