@@ -131,6 +131,7 @@ let push{e;g;_} =
 let read(n, {e;g;_}) =
   let e = match e with
     | EFail -> EFail
+    (* Loose position: too costly to manage position of empty parse *)
     | Empty f -> try Empty(f phantom) with NoParse -> EFail
   in
   let g = match g with Fail -> Fail | _ -> Read(n,g) in
@@ -141,6 +142,7 @@ let lpos g = push(read(0, g))
 let rpos{e;g;_} =
   let e = match e with
     | EFail -> EFail
+    (* Loose position: too costly to manage position of empty parse *)
     | Empty f -> try Empty(f phantom) with NoParse -> EFail
   in
   let g = match g with Fail -> Fail | _ -> RPos(g) in
