@@ -5,7 +5,8 @@ open Lex
 (* type xof parsing combinator with continuation.
    continuation are necessary for correct semantics of
    alternative *)
-type env = { b : blank; maxp : (buf * int) ref; s0 : buf; n0: int; s : buf; n : int }
+type env = { b : blank; lpos : pos list; maxp : (buf * int) ref
+           ; s0 : buf; n0: int; s : buf; n : int }
 type 'a t = { c : 'b. env -> (env -> 'a -> 'b) -> 'b } [@@unboxed]
 
 exception Next
@@ -62,12 +63,30 @@ let calt : ?cs1:Charset.t -> ?cs2:Charset.t -> 'a t -> 'a t -> 'a t =
 let capp : 'a t -> ('a -> 'b) -> 'b t =
   fun g1 f -> { c = fun e k -> g1.c e (fun e x -> k e (try f x with NoParse -> next e)) }
 
-let clpos : (pos -> 'a) t -> 'a t =
-  fun g ->
-    { c = fun e k ->
-          let pos = get_pos e.s e.n in
-          g.c e (fun e f -> k e (try f pos with NoParse -> next e)) }
+let head_pos n e =
+  let rec fn n = function
+  | [] -> assert false
+  | x::l -> if n <= 0 then x else fn (n-1) l
+  in fn n e.lpos
 
+let tail_pos e = match e.lpos with
+  | [] -> assert false
+  | _::l -> l
+
+let cpush : 'a t -> 'a t =
+  fun g ->
+  { c = fun e k ->
+        let pos = get_pos e.s e.n in
+        let e = { e with lpos = pos::e.lpos } in
+        g.c e ( fun e x -> k { e with lpos = tail_pos e} x) }
+
+let cread : int -> (pos -> 'a) t -> 'a t =
+  fun n g ->
+  { c = fun e k ->
+        let pos = head_pos n e in
+        g.c e ( fun e f -> k e (f pos) ) }
+
+let clpos : (pos -> 'a) t -> 'a t = fun g -> cpush (cread 0 g)
 
 let crpos : (pos -> 'a) t -> 'a t =
   fun g ->
@@ -111,7 +130,7 @@ let parse_buffer : type a. a t -> blank -> buf -> a = fun g b s0 ->
   let maxp = ref (s0,0) in
   try
     let (s,n) = b s0 0 in
-    g.c { b; s0; n0=0; s; n; maxp} (fun _e x -> x)
+    g.c { b; s0; n0=0; s; n; maxp; lpos=[]} (fun _e x -> x)
   with Next ->
     let (s,c) = !maxp in
     let l = Input.line_num s in

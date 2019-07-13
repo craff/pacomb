@@ -9,6 +9,8 @@ type 'a terminal = { n : string; f : 'a fterm; c : Charset.t }
 
 exception NoParse
 
+let compute_utf8_col = ref true
+
 let sp = Printf.sprintf
 
 let s0 = Input.from_string ""
@@ -141,6 +143,6 @@ let get_pos : buf -> int -> pos = fun b n ->
   { name = filename b;
     line = line_num b;
     col = n;
-    utf8_col = utf8_col_num b n;
+    utf8_col = if !compute_utf8_col then utf8_col_num b n else (-1);
     phantom = false
   }

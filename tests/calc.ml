@@ -16,10 +16,19 @@ let cpar = term(Lex.char ')' ())
 
 let seq3 (a,b,c,f) = seq(seq(a,b,fun x _ -> x),c,f)
 
+let show_sub = Array.length Sys.argv > 1 && Sys.argv.(1) = "-v"
+
 let expr = fixpoint ~name:"expr" (fun expr ->
   let atom =
     alt(int,
-        seq(seq(opar,expr,fun _ x -> x),cpar, fun x _ -> x))
+        if show_sub then
+          rpos(lpos(seq(seq(opar,expr,fun _ x -> x),cpar,
+            fun x _ lpos rpos ->
+              Printf.printf "%d=%d: %d\n%!" lpos.Lex.col rpos.Lex.col x;
+              x)))
+        else
+          seq(seq(opar,expr,fun _ x -> x),cpar, fun x _ -> x)
+       )
   in
 
   let pro = fixpoint ~name:"prod" (fun pro ->

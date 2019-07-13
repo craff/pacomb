@@ -42,6 +42,14 @@ val capp : 'a t -> ('a -> 'b) -> 'b t
     to the left of the parsing input as argument to the action *)
 val clpos : (Lex.pos -> 'a) t -> 'a t
 
+(** to eliminate left recursion, lpos has to be left factored.
+    if lpos is one single combinator, this adds a lot of closures
+    in action code. To solve this problem, lpos is splitted in
+    two combinator, one that pushes the position to a stack and pops it
+    after parsing and another that reads the position. *)
+val cpush : 'a t -> 'a t
+val cread : int -> (Lex.pos -> 'a) t -> 'a t
+
 (** same as above with the position to the right *)
 val crpos : (Lex.pos -> 'a) t -> 'a t
 

@@ -12,7 +12,8 @@ type 'a ne_grammar =
   | Appl : 'a ne_grammar * ('a -> 'b) -> 'b ne_grammar
   | Lr   : 'a ne_grammar * ('a -> 'a) ne_grammar -> 'a ne_grammar
   | Ref  : 'a grammar -> 'a ne_grammar
-  | LPos : (pos -> 'a) ne_grammar -> 'a ne_grammar
+  | Push : 'a ne_grammar -> 'a ne_grammar
+  | Read : int * (pos -> 'a) ne_grammar -> 'a ne_grammar
   | RPos : (pos -> 'a) ne_grammar -> 'a ne_grammar
   | Layout : 'a ne_grammar * blank * bool * bool * bool * bool -> 'a ne_grammar
   | Tmp  : 'a ne_grammar
@@ -28,7 +29,6 @@ type 'a ne_grammar =
  and 'a empty =
    | EFail
    | Empty of 'a
-   | EPos  of (pos -> 'a) (* only one position for empty rule! *)
 
 type 'a t = 'a grammar
 
@@ -54,7 +54,8 @@ let rec print_ne_grammar
     | Appl(g,_) -> pr "App(%a)" pg g
     | Lr(g,s) -> pr "%a(%a)*" pg g pg s
     | Ref(g)  -> pr "(%a\\0)" pv g
-    | LPos(g) -> pr "%a" pg g
+    | Push(g) -> pr "%a" pg g
+    | Read(_,g) -> pr "%a" pg g
     | RPos(g) -> pr "%a" pg g
     | Layout(g,_,_,_,_,_) -> pr "%a" pg g
     | Tmp     -> pr "TMP"
@@ -104,7 +105,6 @@ let appl({e;_} as g,f) =
   let e = match e with
     | EFail   -> EFail
     | Empty x -> (try Empty (f x) with NoParse -> EFail)
-    | EPos x  -> EPos (fun pos -> f (x pos))
   in
   mkg e (ne_appl(get g,f))
 
@@ -124,22 +124,26 @@ let ne_lr = function
 
 let lr({e=e1;_} as g1,s) = mkg e1 (ne_lr(get g1,get s))
 
-let lpos{e;g;_} =
+let push{e;g;_} =
+  let g = match g with Fail -> Fail | _ -> Push(g) in
+  mkg e g
+
+let read(n, {e;g;_}) =
   let e = match e with
     | EFail -> EFail
-    | Empty f -> EPos f
-    | EPos f -> EPos(fun pos -> f pos pos)
+    | Empty f -> try Empty(f phantom) with NoParse -> EFail
   in
-  let g = LPos(g) in
+  let g = match g with Fail -> Fail | _ -> Read(n,g) in
   mkg e g
+
+let lpos g = push(read(0, g))
 
 let rpos{e;g;_} =
   let e = match e with
     | EFail -> EFail
-    | Empty f -> EPos f
-    | EPos f -> EPos(fun pos -> f pos pos)
+    | Empty f -> try Empty(f phantom) with NoParse -> EFail
   in
-  let g = RPos(g) in
+  let g = match g with Fail -> Fail | _ -> RPos(g) in
   mkg e g
 
 let ne_seq(g1,g2,f) = match(g1,g2) with
@@ -154,7 +158,6 @@ let seq : type a b c. a grammar * b grammar * (a -> b -> c) -> c grammar =
   let gb = match e1 with
     | EFail -> fail()
     | Empty x -> appl(g2,f x)
-    | EPos x  -> lpos(appl(g2,fun y pos -> f (x pos) y))
   in
   alt(ga,gb)
 
@@ -169,8 +172,6 @@ let dseq : type a b c. a grammar * (a -> b grammar) * (b -> c) -> c grammar =
   let gb = match e1 with
     | EFail -> fail()
     | Empty x -> appl(g2 x,f)
-    | EPos x  -> appl(g2 (x phantom),f)
-                    (* FIXME: loose position, can not be avoided ? *)
   in
   alt(ga,gb)
 
@@ -183,62 +184,30 @@ let layout ?(old_before=true) ?(new_before=false)
            ?(new_after=false) ?(old_after=true) (g,b) =
   mkg g.e (ne_layout(g.g,b,old_before,new_before,new_after,old_after))
 
-type 'a with_pos =
-  | Nope
-  | With of (pos -> 'a) ne_grammar
-
 (* remove a lpos left prefix.
-   FIXME: useless if the prefix is not followed by Tpm *)
-let rec remove_lpos : type a. a ne_grammar -> a with_pos = function
-  | Fail -> Nope
-  | Term _ -> Nope
-  | Seq(g1,g2,f) ->
-     begin
-       match remove_lpos g1 with
-       | Nope -> Nope
-       | With g1 -> With(ne_seq(g1,g2,fun x y pos -> f (x pos) y))
-     end
-  | DSeq(g1,_,_) ->
-     begin
-       match remove_lpos g1 with
-       | Nope -> Nope
-       | With _ -> Nope (* left recursion in not supported under DSeq *)
-     end
-  | Alt(g1,g2) ->
-     begin
-       match remove_lpos g1, remove_lpos g2 with
-       | Nope, Nope -> Nope
-       | With g1, Nope -> With(ne_alt(g1,ne_appl(g2,fun x _pos -> x)))
-       | Nope, With g2 -> With(ne_alt(ne_appl(g1,fun x _pos -> x),g2))
-       | With g1, With g2 -> With(ne_alt(g1,g2))
-     end
-  | LPos(g1) ->
-     begin
-       match remove_lpos g1 with
-       | Nope -> With(g1)
-       | With g1 -> With(ne_appl(g1,fun f pos -> f pos pos))
-     end
-  | RPos(g1) ->
-     begin
-       match remove_lpos g1 with
-       | Nope -> Nope
-       | With g1 -> With(RPos(ne_appl(g1, fun f posr posl -> f posl posr)))
-     end
-  | Appl(g1,f) ->
-     begin
-       match remove_lpos g1 with
-       | Nope -> Nope
-       | With g1 -> With(ne_appl(g1,fun x pos -> f (x pos)))
-     end
-  | Lr(g1,s) ->
-     begin
-       match remove_lpos g1 with
-       | Nope -> Nope
-       | With g1 -> With(ne_lr(g1,ne_appl(s,fun f g pos -> f (g pos))))
-     end
-  | Ref(_) -> Nope
-  | Layout(_) -> Nope (* no left recursion under layout *)
-  | Tmp -> Nope
+   FIXME: useless if the prefix is not followed by Tmp *)
+let remove_push : type a b. b ty -> a ne_grammar -> bool * a ne_grammar =
+  fun k g ->
+    let found = ref false in
+    let rec fn : type a. bool -> a ne_grammar -> a ne_grammar =
+      fun r -> function
+      | Seq(g1,g2,f) -> ne_seq(fn r g1,g2,f)
+      | DSeq(g1,g2,f) -> ne_dseq(fn r g1,g2,f)
+      | Alt(g1,g2) -> ne_alt(fn r g1, fn r g2)
+      | Push(g1) -> fn true g1
+      | Read(n,g1) -> Read((if r then n else n+1), fn r g1)
+      | RPos(g1) -> RPos(fn r g1)
+      | Appl(g1,f) -> ne_appl(fn r g1,f)
+      | Lr(g1,s) -> ne_lr(fn r g1,s)
+      | Layout(g1,b,ob,nb,na,oa) -> ne_layout(fn r g1, b,ob,nb,na,oa)
+      | Ref g0 as g ->
+         if r && (match g0.eq k with Eq -> true | _ -> false)
+         then found := true;
+         g
+      | g -> g
+    in
+    let r = fn false g in
+    if !found then (true, r) else (false, g)
 
 (* construction of recursive grammar *)
 let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
@@ -275,7 +244,12 @@ let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
          let (g1,s) = elim_left_rec g1 in
          (appl(g1,f), appl(s,fun g a -> f (g a)))
       | Ref(g) -> elim_e g
-      | LPos _ -> assert false
+      | Push(g1) as g ->
+         assert ((snd (elim_left_rec g1)).g = Fail);
+         (mkg EFail g, fail())
+      | Read(n,g1) ->
+         let (g1, s1) = elim_left_rec g1 in
+         (read(n,g1),read(n,appl(s1,fun f pos a -> f a pos)))
       | RPos(g1) ->
          let (g1, s1) = elim_left_rec g1 in
          (rpos(g1),rpos(appl(s1,fun f pos a -> f a pos)))
@@ -293,28 +267,15 @@ let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
        | Eq  -> (fail (), empty(fun x -> x))
        | NEq -> (mkg g.e (Ref g), fail())
    in
+   let (push, g) = remove_push u g in
    let g =
-     match remove_lpos g with
-     | Nope ->
-        begin
-          let ({e=_e';g;_}, {g=s;_}) = elim_left_rec g in
-          (*assert(e'=EFail);*)
-          match e with
-          | EFail -> ne_lr(g,s)
-          | Empty x -> ne_lr(ne_alt(g,ne_appl(s,fun f -> f x)), s)
-          | EPos x -> ne_lr(ne_alt(g,LPos(ne_appl(s,fun f pos -> f (x pos)))), s)
-        end
-     | With g ->
-        begin
-          let ({e=_e';g;_}, {g=s;_}) = elim_left_rec g in
-          (*assert(e'=EFail);*)
-          let s' = ne_appl(s,fun f x pos -> f (x pos) pos) in
-          match e with
-          | EFail -> LPos(ne_lr(g,s'))
-          | Empty x -> LPos(ne_lr(ne_alt(g,ne_appl(s,fun f pos -> f x pos)), s'))
-          | EPos x -> LPos(ne_lr(ne_alt(g,ne_appl(s,fun f pos -> f (x pos) pos)), s'))
-        end
+     let ({e=_e';g;_}, {g=s;_}) = elim_left_rec g in
+     (*assert(e'=EFail);*)
+     match e with
+     | EFail -> ne_lr(g,s)
+     | Empty x -> ne_lr(ne_alt(g,ne_appl(s,fun f -> f x)), s)
    in
+   let g = if push then Push(g) else g in
    Printf.printf "  g = %a\n%!" print_ne_grammar g;
    r.g <- g;
    mkg ~name e g (* for mutual recursion, expand fixpoint once *)
@@ -330,7 +291,8 @@ let first_charset : type a. a ne_grammar -> Charset.t = fun g ->
     | Appl(g,_) -> fn g
     | Lr(g,_) -> fn g
     | Ref g -> gn g
-    | LPos g -> fn g
+    | Push g -> fn g
+    | Read(_,g) -> fn g
     | RPos g -> fn g
     | Layout(g,_,ob,na,_,_) -> if ob && not na then fn g else Charset.full
     | Tmp -> assert false
@@ -357,7 +319,8 @@ let rec compile_ne : type a. a ne_grammar -> a Combinator.t = fun g ->
   | Appl(g1,f) -> capp (compile_ne g1) f
   | Lr(g,s) -> clr ~cs2:(first_charset s) (compile_ne g) (compile_ne s)
   | Ref g -> compile g
-  | LPos(g) -> clpos (compile_ne g)
+  | Push(g) -> cpush (compile_ne g)
+  | Read(n,g) -> cread n (compile_ne g)
   | RPos(g) -> crpos (compile_ne g)
   | Layout(g,b,ob,nb,na,oa) -> clayout ~old_before:ob ~new_before:nb
                                        ~new_after:na ~old_after:oa (compile_ne g) b
@@ -378,9 +341,6 @@ and compile : type a. a grammar -> a Combinator.t = fun g ->
   match g.e with
   | Empty x ->
      let e = cempty x in
-     if g.g = Fail then e else calt ~cs2:(first_charset g.g) e cg
-  | EPos  x ->
-     let e = clpos (cempty x) in
      if g.g = Fail then e else calt ~cs2:(first_charset g.g) e cg
   | EFail ->
      if g.g = Fail then cfail else cg
