@@ -40,7 +40,17 @@ val not_charset : Charset.t -> unit terminal
 val seq : 'a terminal -> 'b terminal -> ('a -> 'b -> 'c) -> 'c terminal
 
 (** parses the given terminal 0 or 1 time. *)
-val option : 'a terminal -> 'a option terminal
+val option : 'a -> 'a terminal -> 'a terminal
+
+val alt : 'a terminal -> 'a terminal -> 'a terminal
+
+val appl : ('a -> 'b) -> 'a terminal -> 'b terminal
+
+val regexp : ?name:string -> Regexp.t -> string list terminal
+
+val int : int terminal
+
+val float : float terminal
 
 (** repetition of a given terminal 0,1 or more times.
     The type allows for ['b = Buffer.t] for efficiency*)

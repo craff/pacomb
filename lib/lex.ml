@@ -53,12 +53,23 @@ let seq : 'a terminal -> 'b terminal -> ('a -> 'b -> 'c) -> 'c terminal =
         let (s2,s,n) = t2.f s n in
         (f s1 s2,s,n) }
 
-let option : 'a terminal -> 'a option terminal = fun t ->
+let alt : 'a terminal -> 'a terminal -> 'a terminal = fun t1 t2 ->
+  { n = sp "(%s)|(%s)" t1.n t2.n
+  ; c = Charset.union t1.c t2.c
+  ; f = fun s n ->
+        try t1.f s n with NoParse -> t2.f s n }
+
+let option : 'a -> 'a terminal -> 'a terminal = fun d t ->
   { n = sp "(%s)?" t.n
   ; c = Charset.full
   ; f = fun s n ->
-        try let (x,s,n) = t.f s n in (Some x,s,n)
-        with NoParse -> (None,s,n) }
+        try let (x,s,n) = t.f s n in (x,s,n)
+        with NoParse -> (d,s,n) }
+
+let appl : ('a -> 'b) -> 'a terminal -> 'b terminal = fun f t ->
+  { n = t.n
+  ; c = t.c
+  ; f = fun s n -> let (x,s,n) = t.f s n in (f x,s,n) }
 
 let star : 'a terminal -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b terminal = fun t a f ->
   { n = sp "(%s)*" t.n
@@ -100,8 +111,74 @@ let string : string -> unit terminal = fun k ->
         let (s,n) = fn 0 s n in
         ((),s,n) }
 
+let int : int terminal =
+  { n = "INT"
+  ; c = Charset.from_string "-+0-9"
+  ; f = fun s n ->
+        let r = ref 0 in
+        let f = ref (fun x -> x) in
+        let (c,s,n) =
+          let (c,s,n as r) = Input.read s n in
+          if c = '+' || c = '-' then
+            (f := (fun x -> -x); Input.read s n)
+          else r
+        in
+        if not (c >= '0' && c <= '9') then raise NoParse;
+        r := !r * 10 + (Char.code c - Char.code '0');
+        let rec fn s n =
+          if (c >= '0' && c <= '9') then (
+            r := !r * 10 + (Char.code c - Char.code '0');
+            fn s n)
+          else (c,s,n)
+        in
+        let (_,s,n) = fn s n in
+        (!f !r,s,n) }
+
+let float : float terminal =
+  { n = "FLOAT"
+  ; c = Charset.from_string "-+0-9"
+  ; f = fun s n ->
+        let b = Buffer.create 16 in
+        let (c,s,n) =
+          let (c,s,n as r) = Input.read s n in
+          if c = '+' || c = '-' then
+            (Buffer.add_char b c; Input.read s n)
+          else r
+        in
+        if not (c >= '0' && c <= '9') then raise NoParse;
+        Buffer.add_char b c;
+        let rec fn s n =
+          let (c,s0,n0) = Input.read s n in
+          if (c >= '0' && c <= '9') then (
+            Buffer.add_char b c;
+            fn s0 n0)
+          else (c,s,n)
+        in
+        let (c,s,n) = fn s n in
+        let (c,s,n) =
+          if c <> '.' then (c,s,n) else
+            begin
+              Buffer.add_char b c;
+              fn s n
+            end
+        in
+        let (_,s,n) =
+          if c <> 'E' && c <> 'e' then (c,s,n) else
+            begin
+              Buffer.add_char b c;
+              fn s n
+            end
+        in
+        (float_of_string (Buffer.contents b), s, n) }
+
 let keyword : string -> Charset.t -> unit terminal = fun k cs ->
   seq (string k) (not_charset cs) (fun _ _ -> ())
+
+let regexp : ?name:string -> Regexp.t -> string list terminal = fun ?(name="REGEXP") r ->
+  { n = name
+  ; c = Regexp.accepted_first_chars r
+  ; f = fun s n ->
+        try Regexp.read_regexp r s n with Regexp.Regexp_error _ -> raise NoParse }
 
 let noblank : blank = fun s n -> (s,n)
 
