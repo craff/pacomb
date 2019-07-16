@@ -73,9 +73,9 @@ let test9 = compile test9
 let test10 = seq(char_a,layout(seq(char_a,char_b,(+)),Lex.noblank),(+))
 let test10 = compile test10
 
-let test11 = fixpoint (fun ab ->
+let test11 = fixpoint ~name:"AB" (fun ab ->
                  let gbc =
-                   fixpoint (fun bc ->
+                   fixpoint ~name:"BC" (fun bc ->
                        let gac =
                          alt(empty (),
                              alt(seq(ab,seq(char_a,char_b,fun _ _ -> ()), fun _ _ -> ()),
@@ -93,7 +93,30 @@ let test11 = fixpoint (fun ab ->
                  alt(empty (),
                      alt(seq(gbc,seq(char_b,char_c,fun _ _ -> ()), fun _ _ -> ()),
                          seq(gac,seq(char_a,char_c,fun _ _ -> ()), fun _ _ -> ()))))
-let test11 = compile test11
+let test11c = compile test11
+let _ = Printf.printf "test11: %a\n%!" (print_grammar ~def:false) test11
+let test11 = test11c
+
+let test12 =
+  let ab = declare_grammar ~name:"AB" () in
+  let ac = declare_grammar ~name:"AC" () in
+  let bc = declare_grammar ~name:"BC" () in
+  set_grammar ab
+              (alt(empty (),
+                   alt(seq(bc,seq(char_b,char_c,fun _ _ -> ()), fun _ _ -> ()),
+                       seq(ac,seq(char_a,char_c,fun _ _ -> ()), fun _ _ -> ()))));
+  set_grammar ac
+              (alt(empty (),
+                   alt(seq(ab,seq(char_a,char_b,fun _ _ -> ()), fun _ _ -> ()),
+                       seq(bc,seq(char_b,char_c,fun _ _ -> ()), fun _ _ -> ()))));
+  set_grammar bc
+              (alt(empty (),
+                   alt(seq(ab,seq(char_a,char_b,fun _ _ -> ()), fun _ _ -> ()),
+                       seq(ac,seq(char_a,char_c,fun _ _ -> ()), fun _ _ -> ()))));
+  ab
+let test12c = compile test12
+let _ = Printf.printf "test12: %a\n%!" (print_grammar ~def:false) test12
+let test12 = test12c
 
 let _ = assert (parse_string test0 "a" = 1)
 let _ = assert_fail (fun () -> parse_string test0 "")
@@ -133,6 +156,7 @@ let _ = assert_fail (fun () -> parse_string test9 "aaaabbbbaaaaa")
 let _ = assert (parse_string test10 "aab" = 3)
 let _ = assert (parse_string test10 " a ab  " = 3)
 let _ = assert_fail (fun () -> parse_string test10 "a a b")
+
 let _ = assert (parse_string test11 "" = ())
 let _ = assert (parse_string test11 "ac" = ())
 let _ = assert (parse_string test11 "bc" = ())
@@ -148,6 +172,7 @@ let _ = assert (parse_string test11 "bcabbc" = ())
 let _ = assert (parse_string test11 "acabbc" = ())
 let _ = assert (parse_string test11 "abacbc" = ())
 let _ = assert (parse_string test11 "bcacbc" = ())
+
 
 let nas p =
   let rec fn p =

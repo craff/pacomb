@@ -9,7 +9,7 @@
 type 'a t
 
 (** [print_grammar ch g] prints the grammar [g] of the given output channel. *)
-val print_grammar : out_channel -> 'a t -> unit
+val print_grammar : ?def:bool -> out_channel -> 'a t -> unit
 
 (** [fail ()] is a grammar that parses nothing (always fails) *)
 val fail : unit -> 'a t
@@ -51,6 +51,10 @@ val rpos : (Lex.pos -> 'a) t -> 'a t
 (** [fixpoint g] compute the fixpoint of [g], that is a grammar [g0] such that
     [g0 = g g0] *)
 val fixpoint : ?name:string -> ('a t -> 'a t) -> 'a t
+
+val declare_grammar : ?name:string -> unit -> 'a t
+
+val set_grammar : 'a t -> 'a t -> unit
 
 (** [layout (g,b)] changes the blank function to parse the input with the
     grammar [g]. The optional parameters allow to control which blank is used
