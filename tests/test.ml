@@ -4,7 +4,7 @@ open Combinator
 let parse_string c = parse_string c (Lex.blank_charset (Charset.singleton ' '))
 
 let assert_fail f =
-  try ignore (f ()); assert false with ParseError _ -> ()
+  try ignore (f ()); assert false with Parse_error _ -> ()
 
 let char_a = term(Lex.char 'a' 1)
 let char_b = term(Lex.char 'b' 1)
@@ -41,16 +41,17 @@ let star g = fixpoint (fun r -> alt(seq(r, g, (+)), empty 0))
 
 let plus g sep =
   let g' = appl(g,fun x -> [x]) in
-  fixpoint (fun r -> alt(seq(seq(g, sep, fun x _ -> x), r, (fun x y -> x::y)), g'))
+  fixpoint (fun r -> alt(seq(seq1(g,sep),r, (fun x y -> x::y)), g'))
 
 let test6 = plus (star (char_a)) (term(Lex.char ',' ()))
 let test6 = compile test6
 
 let star_pos g =
   let gseq = seq in
+  let galt = alt in
   let open Lex in
   fixpoint
-    (fun r -> rpos(lpos(alt(gseq(r, g,
+    (fun r -> rpos(lpos(galt(gseq(r, g,
                                  fun (_,x,_) y lpos rpos ->
                                  (lpos.col,x+y,rpos.col)),
                             empty (fun lpos rpos -> (lpos.col,0,rpos.col))))))
@@ -98,9 +99,9 @@ let _ = Printf.printf "test11: %a\n%!" (print_grammar ~def:false) test11
 let test11 = test11c
 
 let test12 =
-  let ab = declare_grammar ~name:"AB" () in
-  let ac = declare_grammar ~name:"AC" () in
-  let bc = declare_grammar ~name:"BC" () in
+  let ab = declare_grammar "AB" in
+  let ac = declare_grammar "AC" in
+  let bc = declare_grammar "BC" in
   set_grammar ab
               (alt(empty (),
                    alt(seq(bc,seq(char_b,char_c,fun _ _ -> ()), fun _ _ -> ()),

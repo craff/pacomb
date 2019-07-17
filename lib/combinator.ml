@@ -123,7 +123,28 @@ let clayout
               k e x) }
 
 
-exception ParseError of pos
+exception Parse_error of Input.buffer * int
+
+(** A helper to hangle exceptions *)
+let fail_no_parse () = exit 1
+
+let handle_exception ?(error=fail_no_parse) f a =
+  try f a with Parse_error(buf, pos) ->
+    let red fmt = "\027[31m" ^^ fmt ^^ "\027[0m%!" in
+    Printf.eprintf (red "Parse error: file %S, line %d, character %d.\n")
+      (Input.filename buf) (Input.line_num buf) (Input.utf8_col_num buf pos);
+    error ()
+
+let partial_parse_buffer : type a. a t -> blank -> ?blank_after:bool -> buf -> int -> a * buf * int =
+  fun g b ?(blank_after=false) s0 n0 ->
+    let maxp = ref (s0,n0) in
+    try
+      let (s,n) = b s0 n0 in
+      g.c { b; s0; n0; s; n; maxp; lpos=[]} (fun e x ->
+            if blank_after then (x,e.s,e.n) else (x,e.s0,e.n0))
+  with Next ->
+    let (s,c) = !maxp in
+    raise (Parse_error (s,c))
 
 let parse_buffer : type a. a t -> blank -> buf -> a = fun g b s0 ->
   let g = cseq g (cterm (eof ()).f) (fun x _ -> x) in
@@ -133,12 +154,7 @@ let parse_buffer : type a. a t -> blank -> buf -> a = fun g b s0 ->
     g.c { b; s0; n0=0; s; n; maxp; lpos=[]} (fun _e x -> x)
   with Next ->
     let (s,c) = !maxp in
-    let l = Input.line_num s in
-    let c8 = Input.utf8_col_num s c in
-    let pos = { name = Input.filename s0; line = l; col = c
-                ; utf8_col = c8; phantom = false }
-    in
-    raise (ParseError pos)
+    raise (Parse_error (s,c))
 
 let parse_string : type a. a t -> blank -> string -> a = fun g b s ->
   let s = Input.from_string s in

@@ -1,5 +1,5 @@
 (library
   (name grammar)
-  (modules :standard)
+  (modules :standard earley)
   (wrapped false)
   (private_modules container))

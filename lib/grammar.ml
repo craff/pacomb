@@ -1,3 +1,4 @@
+open Utils
 open Combinator
 open Lex
 open Assoc
@@ -50,6 +51,8 @@ and 'a ne_grammar =
  and phase = Defined | EmptyRemoved | PushFactored | LeftRecEliminated | Compiled
 
 type 'a t = 'a grammar
+
+let give_name n g = { g with n }
 
 let mkg : ?name:string -> ?recursive:bool -> 'a def_grammar -> 'a grammar =
   fun ?(name="...") ?(recursive=false) d ->
@@ -149,17 +152,22 @@ let fail () = mkg Fail
 
 let empty(x) = mkg (Empty x)
 
-let term(x) =
+let term ?name (x) =
   if accept_empty x then invalid_arg "term: empty terminals";
-  mkg ~name:x.Lex.n (Term x)
+  let name = match name with None -> x.Lex.n | Some n -> n in
+  mkg ~name (Term x)
 
 let alt(g,f) = mkg (if g.d = Fail && f.d = Fail then Fail else Alt(g,f))
 
-let appl(g,f) = mkg (if g.d = Fail then Fail else Appl(g,f))
+let appl ?name (g,f) = mkg ?name (if g.d = Fail then Fail else Appl(g,f))
 
 let seq(g1,g2,f) = mkg (if g1.d = Fail || g2.d = Fail then Fail else Seq(g1,g2,f))
 
 let dseq(g1,g2,f) = mkg (if g1.d = Fail then Fail else DSeq(g1,g2,f))
+
+let seq1(g1,g2) = seq(g1,g2,fun x _ -> x)
+
+let seq2(g1,g2) = seq(g1,g2,fun _ x -> x)
 
 let lr(g1,g2) =
   if g2.d = Fail then g1
@@ -175,7 +183,7 @@ let layout ?(old_before=true) ?(new_before=false)
            ?(new_after=false) ?(old_after=true) (g,b) =
   mkg (if g.d = Fail then Fail else Layout(g,b,old_before,new_before,new_after,old_after))
 
-let declare_grammar ?(name="") () =
+let declare_grammar name =
   mkg ~name ~recursive:true Tmp
 
 let set_grammar : type a. a grammar -> a grammar -> unit =
@@ -432,8 +440,7 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
 
 let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
   fun ?(name="...") g ->
-
-    let g0 = declare_grammar ~name () in
+    let g0 = declare_grammar name in
     set_grammar g0 (g g0);
     g0
 
@@ -506,3 +513,27 @@ let rec compile_ne : type a. a ne_grammar -> a Combinator.t = fun g ->
      if g.ne = EFail then e else calt ~cs2:(first_charset g.ne) e cg
   | None ->
      if g.ne = EFail then cfail else cg
+
+let grammar_info g =
+  ignore (compile g);
+  let cs = first_charset g.ne in
+  (g.e <> None, cs)
+
+let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
+  let tbl = Utils.EqHashtbl.create 8 in
+  let is_set = ref None in
+  (fun p ->
+    try EqHashtbl.find tbl p
+    with Not_found ->
+      let g = declare_grammar (name^"_"^param_to_string p) in
+      EqHashtbl.add tbl p g;
+      (match !is_set with None -> ()
+      | Some f ->
+         set_grammar g (f p);
+      );
+      g),
+  (fun f ->
+    is_set := Some f;
+    EqHashtbl.iter (fun p r ->
+      set_grammar r (f p);
+    ) tbl)

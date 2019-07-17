@@ -60,17 +60,17 @@ type t = regexp
 (** Exception that is raised when a regexp cannot be read. *)
 exception Regexp_error of buffer * int
 
-val print_regexp : out_channel -> regexp -> unit
+val print : out_channel -> regexp -> unit
 
 val accept_empty : regexp -> bool
 
 val accepted_first_chars : regexp -> Charset.t
 
-val regexp_from_string : string -> regexp
+val from_string : string -> regexp
 
-(** [read_regexp re buf pos] attempts to parse using the buffer [buf] at
+(** [read re buf pos] attempts to parse using the buffer [buf] at
     position [pos] using the regular expression [re]. The return value is
     a triple of the parsed string, the buffer after parsing and the
     position after parsing. The exception [Regexp_error(err_buf, err_pos]
     is raised in case of failure at the given position. *)
-val read_regexp : regexp -> buffer -> int -> string list * buffer * int
+val read : regexp -> buffer -> int -> string list * buffer * int

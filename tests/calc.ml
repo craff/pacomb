@@ -85,8 +85,8 @@ let _ =
         let line = input_line stdin in
         let n = parse_string g blank line in
         Printf.printf "%f\n%!" n
-      with ParseError pos ->
-        Printf.eprintf "parse error at %d\n%!" pos.col
+      with Parse_error (_,c) ->
+        Printf.eprintf "parse error at %d\n%!" c
     done
   with
     End_of_file -> ()

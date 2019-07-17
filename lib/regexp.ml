@@ -53,7 +53,7 @@ type regexp =
 
 type t = regexp
 
-let print_regexp ch re =
+let print ch re =
   let rec pregexp ch = function
     | Chr(c) -> Printf.fprintf ch "Chr(%C)" c
     | Set(s) -> Printf.fprintf ch "Set(%a)" Charset.print s
@@ -111,7 +111,7 @@ let pop = function
   | Acc l -> l
   | Par _ -> invalid_arg "Regexp: final bar."
 
-let regexp_from_string : string -> regexp = fun s ->
+let from_string : string -> regexp = fun s ->
   let cs =
     let cs = ref [] in
     for i = String.length s - 1 downto 0 do
@@ -206,7 +206,7 @@ let string_of_char_list : char list -> string = fun cs ->
   Buffer.contents b
 
 (* Input characters according to the given regexp. *)
-let read_regexp : regexp -> Input.buffer -> int -> string list * Input.buffer * int =
+let read : regexp -> Input.buffer -> int -> string list * Input.buffer * int =
   fun re buf pos ->
     let grps = ref [] in
     let rec sread_regexp re buf pos cs =

@@ -70,7 +70,13 @@ val clayout
       -> 'a t -> Lex.blank -> 'a t
 
 (** exception raised by the function below when parsing fails *)
-exception ParseError of Lex.pos
+exception Parse_error of Input.buffer * int
+
+(** [handle_exception fn v] applies the function [fn] to [v] and handles
+    the [Parse_error] exception. In particular, a parse error message is
+    presented to the user in  case  of  a  failure, then [error ()]
+    is called. The default [error] is [fun () -> exit 1]. *)
+val handle_exception : ?error:(unit -> 'b) -> ('a -> 'b) -> 'a -> 'b
 
 (** parse a whole input buffer. the eof combinator is added at
     the end of the given combinator *)
@@ -81,3 +87,6 @@ val parse_string : 'a t -> Lex.blank -> string -> 'a
 
 (** parse a whole input channel *)
 val parse_channel : 'a t -> Lex.blank -> in_channel -> 'a
+
+val partial_parse_buffer : 'a t -> Lex.blank -> ?blank_after:bool
+                           -> Input.buffer -> int -> 'a * Input.buffer * int
