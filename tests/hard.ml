@@ -30,9 +30,9 @@ let char_c = term(Lex.char 'c' 1)
 let g =
   let g = declare_grammar "g" in
   set_grammar g
-              (alt(empty (),
-                   alt(seq(char_a,seq(g,char_b,fun _ _ -> ()), fun _ _ -> ()),
-                       seq(char_a,seq(g,char_c,fun _ _ -> ()), fun _ _ -> ()))));
+    (cache (alt(empty (),
+                alt(seq(char_a,seq(g,char_b,fun _ _ -> ()), fun _ _ -> ()),
+                    seq(char_a,seq(g,char_c,fun _ _ -> ()), fun _ _ -> ())))));
   g
 
 let g = compile g

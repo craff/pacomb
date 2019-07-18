@@ -208,7 +208,7 @@ type 'a result =
   | Value : 'c env * (unit -> 'c) * 'a -> 'a result
 
 (** combinator that caches a grammar to avoid exponential behavior *)
-let cache : type a.a t -> a t = fun g ->
+let ccache : type a.a t -> a t = fun g ->
   let open Assoc in
   let open Input.Tbl in
   let cache = create () in

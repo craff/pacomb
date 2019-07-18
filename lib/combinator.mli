@@ -72,7 +72,7 @@ val clayout
 (** combinator that caches a grammar to avoid exponential behavior.
     parsing with the grammar from each position is memoized to avoid
     parsing twice the same sequence with the same grammar. *)
-val cache : 'a t -> 'a t
+val ccache : 'a t -> 'a t
 
 (** exception raised by the function below when parsing fails *)
 exception Parse_error of Input.buffer * int

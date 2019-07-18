@@ -55,6 +55,8 @@ val rpos : (Lex.pos -> 'a) grammar -> 'a grammar
     [g0 = g g0] *)
 val fixpoint : ?name:string -> ('a grammar -> 'a grammar) -> 'a grammar
 
+val cache : 'a grammar -> 'a grammar
+
 val declare_grammar : string -> 'a grammar
 
 val set_grammar : 'a grammar -> 'a grammar -> unit

@@ -19,6 +19,7 @@ type 'a def_grammar =
   | RPos : (pos -> 'a) grammar -> 'a def_grammar
   | Read : int * (pos -> 'a) grammar -> 'a def_grammar
   | Layout : 'a grammar * blank * bool * bool * bool * bool -> 'a def_grammar
+  | Cache : 'a grammar -> 'a def_grammar
   | Tmp  : 'a def_grammar
 
  (* type after elimination of empty and for later phase *)
@@ -35,6 +36,7 @@ and 'a ne_grammar =
   | ERead : int * (pos -> 'a) ne_grammar -> 'a ne_grammar
   | ERPos : (pos -> 'a) ne_grammar -> 'a ne_grammar
   | ELayout : 'a ne_grammar * blank * bool * bool * bool * bool -> 'a ne_grammar
+  | ECache : 'a ne_grammar -> 'a ne_grammar
   | ETmp  : 'a ne_grammar
 
  and 'a grammar = { mutable d : 'a def_grammar
@@ -43,7 +45,8 @@ and 'a ne_grammar =
                   ; mutable phase : phase
                   ; mutable e: 'a option        (* valid from phase Empty Removed *)
                   ; mutable ne : 'a ne_grammar  (* valid from phase Empty Removed *)
-                  ; mutable push : bool         (* valid from pahse PushFactored  *)
+                  ; mutable push : bool         (* valid from phase PushFactored  *)
+                  ; mutable cache : bool        (* valid from phase PushFactored  *)
                   ; mutable compiled : 'a Combinator.t ref (* valid from phase Compiled *)
                   ; mutable charset : Charset.t option     (* valid from phase Compiled *)
                   }
@@ -58,7 +61,7 @@ let mkg : ?name:string -> ?recursive:bool -> 'a def_grammar -> 'a grammar =
   fun ?(name="...") ?(recursive=false) d ->
     let k = new_key () in
     { e = None; d; n = name; u = k.k; eq = k.eq; recursive; compiled = ref cfail
-    ; charset = None; phase = Defined; ne = ETmp; push = false }
+    ; charset = None; phase = Defined; ne = ETmp; push = false; cache = false }
 
 type ety = E : 'a ty -> ety [@@unboxed]
 
@@ -80,6 +83,7 @@ let rec print_ne_grammar
     | EPush(g) -> pr "%a" pg g
     | ERead(_,g) -> pr "%a" pg g
     | ERPos(g) -> pr "%a" pg g
+    | ECache(g) -> pr "%a" pg g
     | ELayout(g,_,_,_,_,_) -> pr "%a" pg g
     | ETmp     -> pr "TMP"
 
@@ -100,6 +104,7 @@ and print_def_grammar
     | Read(_,g) -> pr "%a" pg g
     | RPos(g) -> pr "%a" pg g
     | LPos(g) -> pr "%a" pg g
+    | Cache(g) -> pr "%a" pg g
     | Layout(g,_,_,_,_,_) -> pr "%a" pg g
     | Tmp     -> pr "TMP"
 
@@ -179,6 +184,8 @@ let rpos(g) = mkg (if g.d = Fail then Fail else RPos(g))
 
 let read(n,g) = mkg (if g.d = Fail then Fail else Read(n,g))
 
+let cache(g) = mkg (if g.d = Fail then Fail else Cache(g))
+
 let layout ?(old_before=true) ?(new_before=false)
            ?(new_after=false) ?(old_after=true) (g,b) =
   mkg (if g.d = Fail then Fail else Layout(g,b,old_before,new_before,new_after,old_after))
@@ -232,6 +239,10 @@ let ne_read(n,g1) = match g1 with
   | EFail -> EFail
   | _     -> ERead(n,g1)
 
+let ne_cache(g1) = match g1 with
+  | EFail -> EFail
+  | _     -> ECache(g1)
+
 let ne_layout(g,b,ob,nb,na,oa) =
   match g with
   | EFail -> EFail
@@ -271,6 +282,7 @@ let factor_empty g =
     | LPos(g1) -> ne_lpos(get g1)
     | RPos(g1) -> ne_rpos(get g1)
     | Read(n,g1) -> ne_read(n, get g1)
+    | Cache(g1) -> ne_cache(get g1)
     | Layout(g,b,ob,nb,na,oa) -> ne_layout(get g,b,ob,nb,na,oa)
     | Tmp           -> failwith "grammar compiled before full definition"
 
@@ -306,31 +318,34 @@ let factor_empty g =
                                | None -> None
                                | Some x -> Some (x phantom)) (* Loose position *)
     | Layout(g,_,_,_,_,_) -> fn g; g.e
+    | Cache(g)      -> fn g; g.e
     | Tmp           -> failwith "grammar compiled before full definition"
   in fn g
 
 (* remove a lpos left prefix.
    FIXME: useless if the prefix is not followed by Tmp *)
 let remove_push : type a. a grammar -> unit =
-  let rec fn : type a. a ne_grammar -> bool * a ne_grammar = fun g ->
+  let rec fn : type a. a ne_grammar -> bool * bool * a ne_grammar = fun g ->
     let found = ref false in
+    let cache = ref false in
     let rec fn : type a. bool -> a ne_grammar -> a ne_grammar =
       fun r -> function
         | EAlt(g1,g2) -> ne_alt(fn r g1, fn r g2)
         | EAppl(g1,f) -> ne_appl(fn r g1,f)
         | ESeq(g1,g2,f) -> ne_seq(fn r g1,g2,f)
         | EDSeq(g1,g2,f) -> ne_dseq(fn r g1,g2,f)
-        | EPush(g1) -> fn true g1
+        | EPush(g1) -> found := true; fn true g1
         | ERead(n,g1) -> ERead((if r then n else n+1), fn r g1)
         | ERPos(g1) -> ERPos(fn r g1)
         | ELr(_,_) -> assert false
+        | ECache(g1) -> cache := true; fn r g1
         | ELayout(g1,b,ob,nb,na,oa) -> ne_layout(fn r g1, b,ob,nb,na,oa)
-        | ERef g0 as g -> gn g0; if r || g0.push then found := true; g
+        | ERef g0 as g -> gn g0; g
         | ETmp -> assert false
         | EFail | ETerm _ as g -> g
     in
     let g = fn false g in
-    (!found, g)
+    (!found, !cache, g)
 
   and gn : type a.a grammar -> unit = fun g ->
     assert(g.phase >= EmptyRemoved);
@@ -338,9 +353,10 @@ let remove_push : type a. a grammar -> unit =
       begin
         g.phase <- PushFactored;
         assert(g.ne <> ETmp);
-        let (push, g1) = fn g.ne in
+        let (push, cache, g1) = fn g.ne in
         g.ne <- g1;
         g.push <- push;
+        g.cache <- cache;
       end
   in gn
 
@@ -381,6 +397,9 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
          (ne_appl(g1,f), appl(s,fun g a -> f (g a)))
       | ERef(g) -> gn g
       | EPush(g1) as g ->
+         assert ((snd (fn g1)).d = Fail);
+         (g, fail())
+      | ECache(g1) as g ->
          assert ((snd (fn g1)).d = Fail);
          (g, fail())
       | ERead(n,g1) ->
@@ -458,6 +477,7 @@ let first_charset : type a. a ne_grammar -> Charset.t = fun g ->
     | EPush g -> fn g
     | ERead(_,g) -> fn g
     | ERPos g -> fn g
+    | ECache g -> fn g
     | ELayout(g,_,ob,na,_,_) -> if ob && not na then fn g else Charset.full
     | ETmp -> assert false
 
@@ -487,6 +507,7 @@ let rec compile_ne : type a. a ne_grammar -> a Combinator.t = fun g ->
   | EPush(g) -> cpush (compile_ne g)
   | ERead(n,g) -> cread n (compile_ne g)
   | ERPos(g) -> crpos (compile_ne g)
+  | ECache(g) -> ccache (compile_ne g)
   | ELayout(g,b,ob,nb,na,oa) -> clayout ~old_before:ob ~new_before:nb
                                        ~new_after:na ~old_after:oa (compile_ne g) b
   | ETmp -> assert false
@@ -507,6 +528,7 @@ let rec compile_ne : type a. a ne_grammar -> a Combinator.t = fun g ->
       end
   in
   let cg = if g.push then cpush cg else cg in
+  let cg = if g.cache then ccache cg else cg in
   match g.e with
   | Some x ->
      let e = cempty x in
