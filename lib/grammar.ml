@@ -250,6 +250,8 @@ let seq1 g1 g2 = seq g1 g2 (fun x _ -> x)
 
 let seq2 g1 g2 = seq g1 g2 (fun _ x -> x)
 
+let seqf g1 g2 = seq g1 g2 (fun x f -> f x)
+
 let lr g1 g2 =
   if g2.d = Fail then g1
   else mkg (if g1.d = Fail then Fail else Lr(g1,g2))

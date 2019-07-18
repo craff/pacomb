@@ -6,6 +6,7 @@
 (executable
   (name calc)
   (modules calc)
+  (flags -ppx "ppx/parserPpx.exe")
   (libraries unix grammar))
 
 (executable

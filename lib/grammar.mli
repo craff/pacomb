@@ -79,6 +79,7 @@ val seq : 'a grammar -> 'b grammar -> ('a -> 'b -> 'c) -> 'c grammar
 (** usefull derivations from [seq] *)
 val seq1 : 'a grammar -> 'b grammar -> 'a grammar
 val seq2 : 'a grammar -> 'b grammar -> 'b grammar
+val seqf : 'a grammar -> ('a -> 'b) grammar -> 'b grammar
 
 (** [dseq g1 g2 f)] is a dependant sequence, the grammar [g2] used after [g1] may
     depend upon the semantics of [g1]. This is not very efficient as the grammar

@@ -1,0 +1,4 @@
+(executable
+  (name parserPpx)
+  (modules parserPpx)
+  (libraries unix compiler-libs.common))
