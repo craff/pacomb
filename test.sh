@@ -2,8 +2,10 @@
 
 cd tests
 
-dune build calc.exe test.exe big_expr.exe
+dune build calc.exe test.exe big_expr.exe hard.exe
 
-time dune exec -- ./big_expr.exe 5 4 4 | time dune exec ./calc.exe
+dune exec -- ./hard.exe 100000
 
-time dune exec ./test.exe
+dune exec -- ./big_expr.exe 5 4 4 | time dune exec ./calc.exe
+
+dune exec ./test.exe

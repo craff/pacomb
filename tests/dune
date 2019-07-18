@@ -12,3 +12,8 @@
   (name big_expr)
   (modules big_expr)
   (libraries))
+
+(executable
+  (name hard)
+  (modules hard)
+  (libraries unix grammar))
