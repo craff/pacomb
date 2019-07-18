@@ -1,3 +1,45 @@
+(*
+  ======================================================================
+  Copyright Christophe Raffalli & Rodolphe Lepigre
+  LAMA, UMR 5127 CNRS, Université Savoie Mont Blanc
+
+  christophe.raffalli@univ-savoie.fr
+  rodolphe.lepigre@univ-savoie.fr
+
+  This software contains a parser combinator library for the OCaml lang-
+  uage. It is intended to be used in conjunction with pa_ocaml (an OCaml
+  parser and syntax extention mechanism) to provide  a  fully-integrated
+  way of building parsers using an extention of OCaml's syntax.
+
+  This software is governed by the CeCILL-B license under French law and
+  abiding by the rules of distribution of free software.  You  can  use,
+  modify and/or redistribute the software under the terms of the CeCILL-
+  B license as circulated by CEA, CNRS and INRIA at the following URL.
+
+      http://www.cecill.info
+
+  As a counterpart to the access to the source code and  rights to copy,
+  modify and redistribute granted by the  license,  users  are  provided
+  only with a limited warranty  and the software's author, the holder of
+  the economic rights, and the successive licensors  have  only  limited
+  liability.
+
+  In this respect, the user's attention is drawn to the risks associated
+  with loading, using, modifying and/or developing  or  reproducing  the
+  software by the user in light of its specific status of free software,
+  that may mean that it is complicated  to  manipulate,  and  that  also
+  therefore means that it is reserved  for  developers  and  experienced
+  professionals having in-depth computer knowledge. Users are  therefore
+  encouraged to load and test  the  software's  suitability  as  regards
+  their requirements in conditions enabling the security of  their  sys-
+  tems and/or data to be ensured and, more generally, to use and operate
+  it in the same conditions as regards security.
+
+  The fact that you are presently reading this means that you  have  had
+  knowledge of the CeCILL-B license and that you accept its terms.
+  ======================================================================
+*)
+
 open Utils
 open Lex
 open Combinator
@@ -13,8 +55,8 @@ let handle_exception = Combinator.handle_exception
 let empty = empty
 let eof x = term(Lex.eof x)
 let declare_grammar = declare_grammar
-let regexp ?name r = appl ?name (term ?name (Lex.regexp (Regexp.from_string r)),
-                                 (fun l-> Array.of_list (List.rev l)))
+let regexp ?name r = appl ?name (term ?name (Lex.regexp (Regexp.from_string r)))
+                                 (fun l-> Array.of_list (List.rev l))
 
 let set_grammar = set_grammar
 let char ?name c x = term ?name (Lex.char c x)
@@ -27,7 +69,7 @@ let grammar_family = grammar_family
 let alternatives gs =
   let rec fn acc = function
     | [] -> acc
-    | g1::l -> fn (alt(acc,g1)) l
+    | g1::l -> fn (alt acc g1) l
   in
   fn (fail ()) gs
 
@@ -107,15 +149,15 @@ let grammar_prio_family ?(param_to_string=(fun _ -> "<...>")) name =
 let accept_empty g = fst (grammar_info g)
 let any = term(charset Charset.full)
 let fail = fail
-let apply f g = appl(g,f)
+let apply f g = appl g f
 let in_charset ?name cs = term ?name(Lex.charset cs)
-let sequence g1 g2 f = seq(g1,g2,f)
-let simple_dependent_sequence g1 g2 = dseq(g1,g2,fun x -> x)
+let sequence = seq
+let simple_dependent_sequence g1 g2 = dseq g1 g2 (fun x -> x)
 let debug_lvl = ref 0
 let warn_merge = ref false
-let fsequence g1 g2 = seq(g1,g2,fun x f -> f x)
-let fsequence_ignore g1 g2 = seq2(g1,g2)
-let sequence3 g1 g2 g3 f = seq(g1,seq(g2,g3,fun y z x -> f x y z),fun x f -> f x)
+let fsequence g1 g2 = seq g1 g2 (fun x f -> f x)
+let fsequence_ignore g1 g2 = seq2 g1 g2
+let sequence3 g1 g2 g3 f = seq g1 (seq g2 g3 (fun y z x -> f x y z)) (fun x f -> f x)
 let greedy g = g (* useless ?*)
 
-let fixpoint x g = lr(empty x,g)
+let fixpoint x g = fixpoint (fun gr -> alt (empty x) (seq gr g (fun x f -> f x)))
