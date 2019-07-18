@@ -248,29 +248,37 @@ let float : ?name:string -> unit -> float t = fun ?name () ->
         in
         if not (c >= '0' && c <= '9') then raise NoParse;
         Buffer.add_char b c;
-        let rec fn s n =
-          let (c,s0,n0) = Input.read s n in
+        let rec fn s0 n0 =
+          let (c,s,n) = Input.read s0 n0 in
           if (c >= '0' && c <= '9') then (
             Buffer.add_char b c;
-            fn s0 n0)
-          else (c,s,n)
+            fn s n)
+          else (c,s,n,s0,n0)
         in
-        let (c,s,n) = fn s n in
-        let (c,s,n) =
-          if c <> '.' then (c,s,n) else
+        let (c,s,n,s0,n0) = fn s n in
+        let (c,s,n,s0,n0) =
+          if c <> '.' then (c,s,n,s0,n0) else
             begin
               Buffer.add_char b c;
               fn s n
             end
         in
-        let (_,s,n) =
-          if c <> 'E' && c <> 'e' then (c,s,n) else
+        let (_,_s,_n,s0,n0) =
+          if c <> 'E' && c <> 'e' then (c,s,n,s0,n0) else
             begin
+              Buffer.add_char b c;
+              let (c,s,n) =
+                let (c,s,n as r) = Input.read s n in
+                if c = '+' || c = '-' then
+                  (Buffer.add_char b c; Input.read s n)
+                else r
+              in
+              if not (c >= '0' && c <= '9') then raise NoParse;
               Buffer.add_char b c;
               fn s n
             end
         in
-        (float_of_string (Buffer.contents b), s, n) }
+        (float_of_string (Buffer.contents b), s0, n0) }
 
 (** keyword *)
 let keyword : ?name:string -> string -> (char -> bool) -> 'a -> 'a t =
