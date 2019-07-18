@@ -9,3 +9,6 @@ lib/grammar.cmxa:
 .PHONY: tests
 tests:
 	bash ./test.sh
+
+clean:
+	dune clean
