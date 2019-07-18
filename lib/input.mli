@@ -176,26 +176,7 @@ val buffer_compare : buffer -> buffer -> int
     same file. *)
 val buffer_before : buffer -> int -> buffer -> int -> bool
 
-(** .... *)
-(** First kind of table: association list in file order
-    (first position in the beginning *)
-
-module OrdTbl : sig
-  type 'a t
-
-
-  val empty : 'a t
-
-  val add : buffer -> int -> 'a -> 'a t -> 'a t
-
-  val pop : 'a t -> buffer * int * 'a list * 'a t
-
-  val iter : 'a t -> ('a -> unit) -> unit
-
-  val is_empty : 'a t -> bool
-end
-
-(** Second kind of table: unordered, but imperative and more efficient *)
+(** Table to associate value to positions in input buffers *)
 module Tbl : sig
   type 'a t
 

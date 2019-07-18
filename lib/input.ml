@@ -278,40 +278,7 @@ let leq_buf {uid=ident1; _} i1 {uid=ident2; _} i2 =
 
 let buffer_before b1 i1 b2 i2 = leq_buf (Lazy.force b1) i1 (Lazy.force b2) i2
 
-(** First kind of table: association list in file order
-    (first position in the beginning *)
-module OrdTbl = struct
-  type 'a t = (line * int * 'a list) list
-
-  let empty = []
-
-  let add buf pos x tbl =
-    let buf = Lazy.force buf in
-    let rec fn acc = function
-      | [] -> List.rev_append acc [(buf, pos, [x])]
-      | ((buf',pos', y as c) :: rest) as tbl ->
-         if pos = pos' && buf.uid = buf'.uid then
-           List.rev_append acc ((buf', pos', (x::y)) :: rest)
-         else if leq_buf buf pos buf' pos' then
-           List.rev_append acc ((buf, pos, [x]) :: tbl)
-         else fn (c::acc) rest
-    in
-    fn [] tbl
-
-  let pop = function
-    | [] -> raise Not_found
-    | (buf,pos,l)::rest -> Lazy.from_val buf,pos,l,rest
-
-  let is_empty tbl = tbl = []
-
-  let iter buf fn =
-    List.iter (fun (_,_,l) -> List.iter fn l) buf
-
-
-
-end
-
-(** Second kind of table: unordered, but imperative and more efficient *)
+(** Table to associate value to positions in input buffers *)
 module Tbl = struct
   type 'a t = 'a option array Container.table
 

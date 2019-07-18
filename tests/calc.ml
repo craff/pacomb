@@ -2,44 +2,7 @@
 open Grammar
 open Combinator
 
-let float = term(Lex.float)
-
-(*
-let float = term(Lex.appl float Lex.int)
- *)
-
-(*
-let float = Regexp.regexp_from_string "\\([-+]?[0-9]+\\([.][0-9]*\\)?\\([Ee][0-9]+\\)?\\)"
-let float = term(Lex.appl (function x::_ -> float_of_string x | _ -> assert false)
-                         (Lex.regexp ~name:"NUM" float))
- *)
-
-(*
-let float =
-  let pos s =
-    Lex.appl Buffer.contents
-             (Lex.plus (Lex.charset (Charset.range '0' '9'))
-                       (fun () -> let b = Buffer.create 16 in Buffer.add_string b s; b)
-                       (fun b c -> Buffer.add_char b c; b))
-  in
-  let int = Lex.seq
-              (Lex.option '+' (Lex.charset (Charset.from_string "+-")))
-              (pos "")
-              (fun c s -> if c = '-' then "-" ^ s else s)
-  in
-  let dec = Lex.option "" (Lex.seq
-              (Lex.charset (Charset.singleton '.'))
-              (pos ".") (fun _ x -> x))
-  in
-  let exp = Lex.option "" (Lex.seq
-              (Lex.charset (Charset.from_string "Ee"))
-              (pos "e") (fun _ x -> x))
-  in
-  term(Lex.seq int
-               (Lex.seq dec exp (fun x y -> (x,y)))
-               (fun x (y,z) -> float_of_string (x ^ y ^ z)))
- *)
-
+let float = term(Lex.float ())
 let plus = term(Lex.char '+' ())
 let moins = term(Lex.char '-' ())
 let mul = term(Lex.char '*' ())
