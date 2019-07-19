@@ -307,10 +307,12 @@ let rec alts : 'a t list -> 'a t = function
   | [r] -> r
   | r::l -> alt r (alts l)
 
-let rec seqs : 'a list t list -> 'a list t = function
+let seqs : 'a t list -> ('a -> 'a -> 'a) -> 'a t = fun l f ->
+  let rec fn = function
   | [] -> invalid_arg "alts: empty list"
   | [r] -> r
-  | r::l -> seq r (seqs l) (@)
+  | r::l -> seq r (fn l) f
+  in fn l
 
 let from_regexp : Regexp.t -> string list t =
   let open Regexp in
@@ -318,7 +320,7 @@ let from_regexp : Regexp.t -> string list t =
   | Chr c -> char c []
   | Set s -> appl (fun _ -> []) (charset s)
   | Alt l -> alts (List.map fn l)
-  | Seq l -> seqs (List.map fn l)
+  | Seq l -> seqs (List.map fn l) (@)
   | Opt r -> option [] (fn r)
   | Str r -> star (fn r) (fun () -> []) (@)
   | Pls r -> plus (fn r) (fun () -> []) (@)
