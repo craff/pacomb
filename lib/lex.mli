@@ -102,7 +102,7 @@ val seq : ?name:string -> 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t
 val seq1 : ?name:string -> 'a t -> 'b t -> 'a t
 val seq2 : ?name:string -> 'a t -> 'b t -> 'b t
 
-(** [alt t1 t2] parses the input with [t1] and if it fails then [t2].
+(** [alt t1 t2] parses the input with [t1] or [t2].
     Contrary to grammars, terminals does not use continuations,
     if [t1] succeds, no backtrack will be performed to try [t2].
     For instance,
@@ -110,6 +110,7 @@ val seq2 : ?name:string -> 'a t -> 'b t -> 'b t
                  (seq1 (char 'a' ()) (char 'b' ())))
             (char 'c' ())]
     will reject "abc".
+    If both [t1] and [t2] accept the input, longuest match is selected.
     [name] default to [sprintf "(%s)|(%s)" t1.n t2.n]. *)
 val alt : ?name:string -> 'a t -> 'a t -> 'a t
 

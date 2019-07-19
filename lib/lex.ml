@@ -140,13 +140,21 @@ let seq : ?name:string -> 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t =
 let seq1 ?name t1 t2 = seq ?name t1 t2 (fun x _ -> x)
 let seq2 ?name t1 t2 = seq ?name t1 t2 (fun _ x -> x)
 
-(** [alt t1 t2] parses the input with [t1] and if it fails then [t2]. *)
+(** [alt t1 t2] parses the input with [t1] or [t2]. *)
 let alt : ?name:string -> 'a t -> 'a t -> 'a t =
   fun ?name t1 t2 ->
   { n = Option.get (sp "(%s)|(%s)" t1.n t2.n) name
   ; c = Charset.union t1.c t2.c
   ; f = fun s n ->
-        try t1.f s n with NoParse -> t2.f s n
+        try
+          let (_,s1,n1 as r1) = t1.f s n in
+          try
+            let (_,s2,n2 as r2) = t2.f s n in
+            let l1 = Input.line_num s1 in
+            let l2 = Input.line_num s2 in
+            if l2 > l1 || (l2 = l1 && n2 > n1) then r2 else r1
+          with NoParse -> r1
+        with NoParse -> t2.f s n
   }
 
 (** Parses the given terminal 0 or 1 time. *)
