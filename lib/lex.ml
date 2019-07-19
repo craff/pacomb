@@ -157,8 +157,8 @@ let alt : ?name:string -> 'a t -> 'a t -> 'a t =
         with NoParse -> t2.f s n
   }
 
-let save : ?name:string -> string list t -> string list t =
-  fun ?name t1 ->
+let save : ?name:string -> 'a t -> (string -> 'a -> 'b) -> 'b t =
+  fun ?name t1 f ->
   { n = Option.get t1.n name
   ; c = t1.c
   ; f = fun s n ->
@@ -167,7 +167,7 @@ let save : ?name:string -> string list t -> string list t =
                   - Input.line_offset s - n
         in
         let str = Input.sub s n len in
-        (str::l, s1, n1) }
+        (f str l, s1, n1) }
 
 (** Parses the given terminal 0 or 1 time. *)
 let option : ?name:string -> 'a -> 'a t -> 'a t =
@@ -314,7 +314,21 @@ let seqs : 'a t list -> ('a -> 'a -> 'a) -> 'a t = fun l f ->
   | r::l -> seq r (fn l) f
   in fn l
 
-let from_regexp : Regexp.t -> string list t =
+let from_regexp : Regexp.t -> string t = fun r ->
+  let open Regexp in
+  let rec fn = function
+  | Chr c -> char c ()
+  | Set s -> appl (fun _ -> ()) (charset s)
+  | Alt l -> alts (List.map fn l)
+  | Seq l -> seqs (List.map fn l) (fun () () -> ())
+  | Opt r -> option () (fn r)
+  | Str r -> star (fn r) (fun () -> ()) (fun () () -> ())
+  | Pls r -> plus (fn r) (fun () -> ()) (fun () () -> ())
+  | Sav r -> fn r
+  in
+  save (fn r) (fun s () -> s)
+
+let from_regexp_grps : Regexp.t -> string list t = fun r ->
   let open Regexp in
   let rec fn = function
   | Chr c -> char c []
@@ -324,9 +338,9 @@ let from_regexp : Regexp.t -> string list t =
   | Opt r -> option [] (fn r)
   | Str r -> star (fn r) (fun () -> []) (@)
   | Pls r -> plus (fn r) (fun () -> []) (@)
-  | Sav r -> save (fn r)
+  | Sav r -> save (fn r) (fun s l -> s :: l)
   in
-  fn
+  fn r
 
 (** keyword *)
 let keyword : ?name:string -> string -> (char -> bool) -> 'a -> 'a t =
@@ -335,7 +349,11 @@ let keyword : ?name:string -> string -> (char -> bool) -> 'a -> 'a t =
 
 (** create a terminal from a regexp. Returns the groups list, last to finish
     to be parsed is first in the result *)
-let regexp : ?name:string -> Regexp.t -> string list t = fun ?name r ->
+let regexp_grps : ?name:string -> Regexp.t -> string list t = fun ?name r ->
+  let r = from_regexp_grps r in
+  { r with n = Option.get r.n name }
+
+let regexp : ?name:string -> Regexp.t -> string t = fun ?name r ->
   let r = from_regexp r in
   { r with n = Option.get r.n name }
 

@@ -55,7 +55,7 @@ let handle_exception = Combinator.handle_exception
 let empty = empty
 let eof x = term(Lex.eof x)
 let declare_grammar = declare_grammar
-let regexp ?name r = appl ?name (term ?name (Lex.regexp (Regexp.from_string r)))
+let regexp ?name r = appl ?name (term ?name (Lex.regexp_grps (Regexp.from_string r)))
                                  (fun l-> Array.of_list (List.rev l))
 
 let set_grammar = set_grammar

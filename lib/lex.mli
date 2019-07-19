@@ -150,9 +150,12 @@ val float : ?name:string -> unit -> float t
     usefull to accept a keyword only when not followed by an alpha-numeric char *)
 val keyword : ?name:string -> string -> (char -> bool) -> 'a -> 'a t
 
+(** create a terminal from a regexp. Returns the whole matched string *)
+val regexp : ?name:string -> Regexp.t -> string t
+
 (** create a terminal from a regexp. Returns the groups list, last to finish
     to be parsed is first in the result *)
-val regexp : ?name:string -> Regexp.t -> string list t
+val regexp_grps : ?name:string -> Regexp.t -> string list t
 
 (** Functions managing blanks *)
 
