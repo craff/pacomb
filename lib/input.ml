@@ -79,6 +79,17 @@ let rec read (lazy l as b) i =
   | 0  -> (l.data.[i], l.next, 0  )
   | _  -> read l.next (i - l.llen)
 
+let sub b i len =
+  let s = Bytes.create len in
+  let rec fn b i j =
+    if j = len then Bytes.unsafe_to_string s
+    else
+      let (c,b,i) = read b i in
+      Bytes.set s j c;
+      fn b i (j+1)
+  in
+  fn b i 0
+
 (* Get the character at the given position in the given buffer. *)
 let rec get (lazy l) i =
   if l.is_eof then '\255' else

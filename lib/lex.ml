@@ -157,6 +157,18 @@ let alt : ?name:string -> 'a t -> 'a t -> 'a t =
         with NoParse -> t2.f s n
   }
 
+let save : ?name:string -> string list t -> string list t =
+  fun ?name t1 ->
+  { n = Option.get t1.n name
+  ; c = t1.c
+  ; f = fun s n ->
+        let (l,s1,n1) = t1.f s n in
+        let len = Input.line_offset s1 + n1
+                  - Input.line_offset s - n
+        in
+        let str = Input.sub s n len in
+        (str::l, s1, n1) }
+
 (** Parses the given terminal 0 or 1 time. *)
 let option : ?name:string -> 'a -> 'a t -> 'a t =
   fun ?name d t ->
@@ -180,10 +192,11 @@ let star : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
   ; c = t.c
   ; f = fun s n ->
         let rec fn a s n =
-          try
+          (try
             let (x,s,n) = t.f s n in
-            fn (f a x) s n
-          with NoParse -> (a,s,n)
+            fun () -> fn (f a x) s n
+          with NoParse ->
+            fun () -> (a,s,n)) ()
         in
         fn (a ()) s n }
 
@@ -194,10 +207,11 @@ let plus : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
   ; c = t.c
   ; f = fun s n ->
         let rec fn a s n =
-          try
+          (try
             let (x,s,n) = t.f s n in
-            fn (f a x) s n
-          with NoParse -> (a,s,n)
+            fun () -> fn (f a x) s n
+           with NoParse ->
+             fun () -> (a,s,n)) ()
         in
         let (x,s,n) = t.f s n in
         fn (f (a ()) x) s n }
@@ -288,6 +302,30 @@ let float : ?name:string -> unit -> float t = fun ?name () ->
         in
         (float_of_string (Buffer.contents b), s0, n0) }
 
+let rec alts : 'a t list -> 'a t = function
+  | [] -> invalid_arg "alts: empty list"
+  | [r] -> r
+  | r::l -> alt r (alts l)
+
+let rec seqs : 'a list t list -> 'a list t = function
+  | [] -> invalid_arg "alts: empty list"
+  | [r] -> r
+  | r::l -> seq r (seqs l) (@)
+
+let from_regexp : Regexp.t -> string list t =
+  let open Regexp in
+  let rec fn = function
+  | Chr c -> char c []
+  | Set s -> appl (fun _ -> []) (charset s)
+  | Alt l -> alts (List.map fn l)
+  | Seq l -> seqs (List.map fn l)
+  | Opt r -> option [] (fn r)
+  | Str r -> star (fn r) (fun () -> []) (@)
+  | Pls r -> plus (fn r) (fun () -> []) (@)
+  | Sav r -> save (fn r)
+  in
+  fn
+
 (** keyword *)
 let keyword : ?name:string -> string -> (char -> bool) -> 'a -> 'a t =
   fun ?name k f x ->
@@ -295,11 +333,9 @@ let keyword : ?name:string -> string -> (char -> bool) -> 'a -> 'a t =
 
 (** create a terminal from a regexp. Returns the groups list, last to finish
     to be parsed is first in the result *)
-let regexp : ?name:string -> Regexp.t -> string list t = fun ?(name="REGEXP") r ->
-  { n = name
-  ; c = Regexp.accepted_first_chars r
-  ; f = fun s n ->
-        try Regexp.read r s n with Regexp.Regexp_error _ -> raise NoParse }
+let regexp : ?name:string -> Regexp.t -> string list t = fun ?name r ->
+  let r = from_regexp r in
+  { r with n = Option.get r.n name }
 
 (** Functions managing blanks *)
 

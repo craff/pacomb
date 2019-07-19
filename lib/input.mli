@@ -53,6 +53,10 @@ type buffer
     [buf], together with the new buffer and position. *)
 val read : buffer -> int -> char * buffer * int
 
+(** [sub b i len] returns [len] characters from position [pos]. If the
+    end of buffer is reached, the string is filed with eof '\255' *)
+val sub : buffer -> int -> int -> string
+
 (** [get buf pos] returns the character at position [pos] in the  buffer
     [buf]. *)
 val get : buffer -> int -> char
