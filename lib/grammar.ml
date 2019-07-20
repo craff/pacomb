@@ -232,6 +232,8 @@ let fail () = mkg Fail
 
 let empty x = mkg (Empty x)
 
+let test b = if b then empty () else fail ()
+
 let term ?name (x) =
   if accept_empty x then invalid_arg "term: empty terminals";
   let name = match name with None -> x.Lex.n | Some n -> n in
@@ -242,7 +244,13 @@ let alt g f  =
 
 let appl ?name g f = mkg ?name (if g.d = Fail then Fail else Appl(g,f))
 
-let seq g1 g2 f = mkg (if g1.d = Fail || g2.d = Fail then Fail else Seq(g1,g2,f))
+let seq g1 g2 f = mkg (
+  match g1.d,g2.d with
+  | Fail, _ -> Fail
+  | _, Fail -> Fail
+  | Empty x, _ -> Appl(g2, fun y -> f x y)
+  | _, Empty y -> Appl(g1, fun x -> f x y)
+  | _ -> Seq(g1,g2,f))
 
 let dseq g1 g2 f = mkg (if g1.d = Fail then Fail else DSeq(g1,g2,f))
 

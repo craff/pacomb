@@ -42,6 +42,8 @@ let exp_to_grammar exp =
     | Pexp_construct({txt = Lident "RE"; _}, Some s) ->
        app (grmod "term") (app (lxmod "regexp")
                              (app (rgmod "from_string") s))
+    | Pexp_apply({ pexp_desc = Pexp_ident { txt = Lident("="|"<"|">"|"<="|">="); _ }; _}, _) ->
+       app (grmod "test") exp
     | _ -> exp
   in
   let item e =  match e.pexp_desc with
@@ -116,11 +118,13 @@ let exp_to_grammar exp =
   in
   let fail = app (grmod "fail") unit_ in
   let fn rule exp = app2 (grmod "alt") rule exp in
-  try List.fold_right fn (rules exp) fail with Exit -> exp
+  try List.fold_right fn (rules exp) fail
+  with Exit -> exp
 
 let str_to_grammar str =
   match str with
-  | [{pstr_desc = Pstr_eval(e,_); _}] -> exp_to_grammar e
+  | [{pstr_desc = Pstr_eval(e,_); _}] ->
+     exp_to_grammar e
   | _              -> Exp.extension
                         (extension_of_error
                            (Location.error ~loc:(List.hd str).pstr_loc "shoud be an expression"))
@@ -134,14 +138,25 @@ let str_to_parser items =
            | Ppat_var s -> s
            | _          -> exit 1
          in
-         let rules = exp_to_grammar vb.pvb_expr in
-         (name,rules)
+         let (param,exp) = match vb.pvb_expr.pexp_desc with
+           | Pexp_fun (Nolabel, None, { ppat_desc = Ppat_var param; _ }, exp) ->
+             (Some param, exp)
+           | _ -> (None, vb.pvb_expr)
+         in
+         let rules = exp_to_grammar exp in
+         let rules =
+           if List.exists (fun (s,_) -> Printf.printf "%s\n%!" s.txt; s.txt = "cached") vb.pvb_attributes then
+             app (grmod "cache") rules
+           else rules
+         in
+         (name,param,rules)
        in
        let ls = List.map gn ls in
        begin match rec_ with
        | Nonrecursive ->
          let definitions =
-           let gn (name, rules) =
+           let gn (name, param, rules) =
+             if param <> None then exit 1; (* FIXME *)
              Str.value Nonrecursive
                [Vb.mk (Pat.var name) rules]
            in
@@ -149,21 +164,36 @@ let str_to_parser items =
          in
          definitions
        | Recursive ->
-         let declarations =
-           let gn (name, _) =
-             Str.value Nonrecursive
-               [Vb.mk (Pat.var name)
-                  (app (grmod "declare_grammar") (Exp.constant (Const.string name.txt)))]
-           in
-           List.map gn ls
+          let set name = "set__grammar__" ^ name.txt in
+          let declarations =
+            let gn (name, param, _) =
+              let vd =
+                match param with
+                | None ->
+                   Vb.mk (Pat.var name)
+                     (app (grmod "declare_grammar") (Exp.constant (Const.string name.txt)))
+                | Some _ ->
+                   Vb.mk (Pat.tuple [Pat.var name; Pat.var (mkloc (set name) name.loc)])
+                     (app (grmod "grammar_family") (Exp.constant (Const.string name.txt)))
+              in
+              Str.value Nonrecursive [vd]
+            in
+            List.map gn ls
          in
          let definitions =
-           let fn (name, rules) =
-             Str.value Nonrecursive
-               [Vb.mk (Pat.any ())
-                  (app2 (grmod "set_grammar")
-                     (Exp.ident (Location.mkloc (Lident name.txt) name.loc))
-                     rules)]
+           let fn (name, param, rules) =
+             let exp =
+               match param with
+               | None ->
+                  app2 (grmod "set_grammar")
+                    (Exp.ident (Location.mkloc (Lident name.txt) name.loc))
+                    rules
+               | Some n ->
+                  app
+                    (Exp.ident (Location.mkloc (Lident (set name)) name.loc))
+                    (Exp.fun_ Nolabel None (Pat.var n) rules)
+             in
+             Str.value Nonrecursive [Vb.mk (Pat.any ()) exp]
            in
            List.map fn ls
          in

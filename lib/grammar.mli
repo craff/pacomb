@@ -62,6 +62,10 @@ val fail : unit -> 'a grammar
 (** [empty a] accepts the empty input and returns [a] *)
 val empty : 'a -> 'a grammar
 
+(** [test b] is [if b then empty () else fail ()]. Very usefull in
+    grammar family at the beginning of a rule *)
+val test : bool -> unit grammar
+
 (** [term t] accepts the terminal [t] and returns its semantics.
     See module [Lex] *)
 val term : ?name:string -> 'a Lex.terminal -> 'a grammar

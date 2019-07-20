@@ -27,13 +27,10 @@ let char_a = term(Lex.char 'a' 1)
 let char_b = term(Lex.char 'b' 1)
 let char_c = term(Lex.char 'c' 1)
 
-let g =
-  let g = declare_grammar "g" in
-  set_grammar g (cache [%grammar
-                        () => ()
+[%%parser
+  let [@cached] rec g =        () => ()
                       ; 'a' g 'b' => ()
-                      ; 'a' g 'c' => ()]);
-  g
+                      ; 'a' g 'c' => ()]
 
 let g = compile g
 

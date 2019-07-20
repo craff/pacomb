@@ -10,21 +10,21 @@ let float =
                        "\\([-+]?[0-9]+\\([.][0-9]*\\)?\\([eE][-+]?[0-9]+\\)?\\)")))
 [%%parser
  let rec
-     atom_pos = (x::FLOAT) => x
-              ; (l::'(') (e::exp) (r::')') =>
-                  let open Lex in Printf.printf "%d-%d: %f\n" l_lpos.col r_rpos.col e; e
- and atom_nopos = (x::FLOAT) => x
-                ; '(' (e::exp) ')' => e
- and atom = if show_sub then atom_pos else atom_nopos
- and prod = (a::atom) => a
+     atom = (x::FLOAT)        => x
+          ; (show_sub=false) '(' (e::expr) ')' => e
+          ; (show_sub=true) (l::'(') (e::expr) (r::')') =>
+              let open Lex in
+              Printf.printf "%d-%d: %f\n" l_lpos.col r_rpos.col e;
+              e
+ and prod = (a::atom)               => a
           ; (x::prod) '*' (y::atom) => x*.y
           ; (x::prod) '/' (y::atom) => x/.y
- and exp  = (a::prod) => a
-          ; (x::exp) '+' (y::prod) => x+.y
-          ; (x::exp) '-' (y::prod) => x-.y
+ and expr = (a::prod)               => a
+          ; (x::expr) '+' (y::prod) => x+.y
+          ; (x::expr) '-' (y::prod) => x-.y
 ]
 
-let g = compile exp
+let g = compile expr
 
 let blank = Lex.blank_charset (Charset.singleton ' ')
 

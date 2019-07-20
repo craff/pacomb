@@ -10,6 +10,12 @@
   (libraries unix grammar))
 
 (executable
+  (name calc_prio)
+  (modules calc_prio)
+  (flags -ppx "ppx/parserPpx.exe")
+  (libraries unix grammar))
+
+(executable
   (name big_expr)
   (modules big_expr)
   (libraries))
