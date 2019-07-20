@@ -40,17 +40,37 @@
   ======================================================================
 *)
 
+(** {1 Lexing: grouping characters before parsing}
+
+    It is traditionnal to do parsing in two phases (scanning/parsing).  This
+    is not necessary with combinators in general this is still true with
+    Pacomb (scannerless). However, this makes the grammar more readable to
+    use a lexing phase.
+
+    Moreover, lexing is often done with a longuest match rule that is not
+    semantically equivalent to the semantics of context free grammar.
+
+    This modules provide combinator to create terminals that the parser
+    will call.
+
+    It also provide function to eliminate "blank" characteres. *)
+
+(** {2 Types and exception} *)
 type buf = Input.buffer
 
 (** A blank function is just a function progressing in a buffer *)
 type blank = buf -> int -> buf * int
 
-(** same as blank with a value returned *)
+(** Type of terminal function, similar to blank, but with a returned value *)
 type 'a fterm = buf -> int -> 'a * buf * int
+
+(** The previous type encapsulated in a record *)
 type 'a terminal = { n : string    (** name *)
                    ; f : 'a fterm  (** the terminal itself *)
                    ; c : Charset.t (** the set of characters accepted
                                        at the beginning of input *) }
+
+(** Abbreviation *)
 type 'a t = 'a terminal
 
 (** exception when failing,
@@ -62,12 +82,7 @@ type 'a t = 'a terminal
  *)
 exception NoParse
 
-(** Test wether a terminal accept the empty string. Such a terminal
-   are illegal in a grammar, but may be used in combinator below to create
-   terminals *)
-val accept_empty : 'a t -> bool
-
-(** Combinators to create terminals *)
+(** {2 Combinators to create terminals} *)
 
 (** Terminal accepting then end of a buffer only.
     remark: [eof] is automatically added at the end of a grammar by
@@ -157,7 +172,7 @@ val regexp : ?name:string -> Regexp.t -> string t
     to be parsed is first in the result *)
 val regexp_grps : ?name:string -> Regexp.t -> string list t
 
-(** Functions managing blanks *)
+(** {2 Functions managing blanks} *)
 
 (** Use when you have no blank chars *)
 val noblank : blank
@@ -168,25 +183,7 @@ val blank_charset : Charset.t -> blank
 (** Blank from a terminal *)
 val blank_terminal : 'a t -> blank
 
-(** Functions managing positions *)
-
-(** Functions managing positions *)
-
-(** Type to represent position *)
-type pos = { name : string  (** file's name *)
-           ; line  : int    (** line number *)
-           ; col   : int    (** column number *)
-           ; utf8_col : int (** column number with unicode *)
-           ; phantom : bool (** is the postion a "phantom", i.e. not really
-                                in the file *) }
-
-(** a phnatom position, used for grammar accepting the empty input *)
-val phantom : pos
-
-(** the max of to position (further in the file *)
-val max_pos : pos -> pos -> pos
-
-(** if false (the default) [utf8_col] field is set to [-1] by [get_pos] *)                   val compute_utf8_col : bool ref
-
-(** Get a position from an input buffer and a column number *)
-val get_pos : buf -> int -> pos
+(** Test wether a terminal accept the empty string. Such a terminal
+   are illegal in a grammar, but may be used in combinator below to create
+   terminals *)
+val accept_empty : 'a t -> bool

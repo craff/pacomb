@@ -1,4 +1,5 @@
 open Lex
+open Position
 
 (** Combinator library *)
 
@@ -36,7 +37,9 @@ type 'a env =
 (** type of a combinator. it is polymorphic in the type of the global result *)
 type 'b error = unit -> 'b
 type ('a,'b) continuation = 'b env -> 'b error -> 'a -> 'b
-type 'a t = { c : 'b. 'b env -> ('a,'b) continuation -> 'b error -> 'b } [@@unboxed]
+type 'a combinator =
+  { c : 'b. 'b env -> ('a,'b) continuation -> 'b error -> 'b } [@@unboxed]
+type 'a t = 'a combinator
 
 (** function that record the position beffor calling the error function *)
 let next : 'b env -> 'a error -> 'a = fun e f ->

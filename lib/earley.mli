@@ -40,10 +40,11 @@
   ======================================================================
 *)
 
+(** {1 Earley compatible interface (UNFINISHED) } *)
+
 (** Earley is a parser combinator library implemented using  the  Earley
-    algorithm. It focuses mainly on efficiency and  is  indended  to  be
-    used in conjunction with the pa_ocaml parser  and  syntax  extention
-    mechanism. *)
+    algorithm. This modules is an UNFINISHED WORK to provide an Earley
+    compatible interface to Pacomb *)
 
 open Charset
 open Input

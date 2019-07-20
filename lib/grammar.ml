@@ -42,6 +42,7 @@
 
 open Utils
 open Combinator
+open Position
 open Lex
 open Assoc
 

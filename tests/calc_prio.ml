@@ -2,9 +2,9 @@
 open Grammar
 open Combinator
 
-type p = Atom | Prod | Sum
 
 [%%parser
+ type p = Atom | Prod | Sum
  let rec
      expr p = Atom < Prod < Sum
             ; (p=Atom) (x::FLOAT)                        => x

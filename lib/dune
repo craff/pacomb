@@ -3,4 +3,4 @@
   (public_name pacomb)
   (modules :standard earley)
   (wrapped false)
-  (private_modules container))
+  (private_modules container utils assoc))

@@ -40,16 +40,79 @@
   ======================================================================
 *)
 
-(** This library implements a representation of grammar with semantical action.
-    A  semantical  action is a value returned  as result of parsing. Parsing is
-    performed  by  compiling   the grammar  to  combinators implemented  in the
-    [Combinator]  module.  This library offers  "scanner less" parsing, but the
-    [Lex] module provide a notion of terminals and blanks which allows for easy
-    way to write grammars. *)
+(** {1 Main module of Pacomb}
+
+    PaComb implements a representation  of grammar with semantical action.  A
+    semantical action  is a value returned  as result of parsing.  Parsing is
+    performed  by compiling  the grammar  to combinators  implemented in  the
+    [Combinator] module. This library offers  "scanner less" parsing, but the
+    [Lex] module  provide a notion of  terminals and blanks which  allows for
+    easy way to write grammars in two phases as usual.
+
+    Defining languages using directly the  Grammar module leads to cumbersome
+    code. This is  why Pacomb propose a  ppx extension that can  be used with
+    the compilation flag [-ppx pacombPpx]. Here is an example:
+
+
+    {[
+    [%%parser
+       type p = Atom | Prod | Sum
+       let rec
+         expr p = Atom < Prod < Sum
+                ; (p=Atom) (x::FLOAT)                        => x
+                ; (p=Atom) '(' (e::expr Sum) ')'             => e
+                ; (p=Prod) (x::expr Prod) '*' (y::expr Atom) => x*.y
+                ; (p=Prod) (x::expr Prod) '/' (y::expr Atom) => x/.y
+                ; (p=Sum ) (x::expr Sum ) '+' (y::expr Prod) => x+.y
+                ; (p=Sum ) (x::expr Sum ) '-' (y::expr Prod) => x-.y
+    ]]}
+
+    The extension  [[%%parser ...]] extends  structure with new  let bindings
+    defining grammars. This  applies both for [let] and [let  rec] the latter
+    being  reserved  to recursive  grammars.  We  also provide  an  extension
+    [[%grammar]]  for  expression  that  corresponds to  grammars,  i.e.  the
+    right-hand side of binding in the [[%%parser]] extension.
+
+    Here is the BNF for these right-hand-side, with its semantics
+    {[
+    grammar ::= rule                                                   itself
+           | grammar ; rule                                       Grammar.alt
+    rule ::= qitems => expr                            A rule with its action
+           | expr < ... < expr                       priority order see below
+    qitems ::= ()                                               Grammar.empty
+           | non_empty_qitems                                          itself
+    non_empty_qitems ::= qitem
+           | non_empty_qitems qitems                              Grammar.seq
+    qitem ::= item | (lid :: item)          give a name if used in the action
+    item ::= '...'                                  Grammar.term(Lex.char ())
+           | "..."                                Grammar.term(Lex.string ())
+           | INT                                     Grammar.term(Lex.int ())
+           | FLOAT                                 Grammar.term(Lex.float ())
+           | RE(exp)        Grammar.term(Lex.regexp (Regexp.from_string exp))
+           | exp                                                       itself
+    ]}
+
+    - non recursive let bindings correspond to just a name for the grammar.
+    - recursive let bindings correspond either to
+      - [declare_grammar + set_grammar] (if no paramater)
+      - [grammar_familly + setting the grammar] is a parameter is given.
+
+    Anything  which  does not  coresponds  to  this  grammar will  we  keeped
+    unchanged in the structure as ocaml code (like the type definition in the
+    example  above.   A  mutually  recursive   definition  can  also  mix  te
+    definition of grammars (parametric of  not) with the definition of normal
+    ocaml values.
+ *)
+
+(** {2 Type} *)
 
 (** type of a grammar with semantical action of type ['a ].*)
 type 'a grammar
+
+(** An abbreviation *)
 type 'a t = 'a grammar
+
+(** {2 Grammar contructors} *)
 
 (** [print_grammar ch g] prints the grammar [g] of the given output channel.
     if [def=false] (the default is [true]) it will print the transformed
@@ -92,25 +155,35 @@ val dseq : 'a grammar -> ('a -> 'b grammar) -> ('b -> 'c) -> 'c grammar
 
 (** [lpos g] is identical to [g] but passes the position just before parsing with
     [g] to the semantical action of [g] *)
-val lpos : (Lex.pos -> 'a) grammar -> 'a grammar
+val lpos : (Position.t -> 'a) grammar -> 'a grammar
 
 (** [rpos g] is identical to [g] but passes the position just after parsing with
     [g] to the semantical action of [g] *)
-val rpos : (Lex.pos -> 'a) grammar -> 'a grammar
+val rpos : (Position.t -> 'a) grammar -> 'a grammar
 
 (** variants of seqf with the position of the first iterm *)
-val seqf_pos : 'a grammar -> (Lex.pos -> 'a -> Lex.pos -> 'b) grammar -> 'b grammar
-val seqf_lpos : 'a grammar -> (Lex.pos -> 'a -> 'b) grammar -> 'b grammar
-val seqf_rpos : 'a grammar -> ('a -> Lex.pos -> 'b) grammar -> 'b grammar
+val seqf_pos : 'a grammar -> (Position.t -> 'a -> Position.t -> 'b) grammar -> 'b grammar
+val seqf_lpos : 'a grammar -> (Position.t -> 'a -> 'b) grammar -> 'b grammar
+val seqf_rpos : 'a grammar -> ('a -> Position.t -> 'b) grammar -> 'b grammar
 
 (** variants of seq2 with the position of the first iterm *)
-val seq2_pos : 'a grammar -> (Lex.pos -> Lex.pos -> 'b) grammar -> 'b grammar
-val seq2_lpos : 'a grammar -> (Lex.pos -> 'b) grammar -> 'b grammar
-val seq2_rpos : 'a grammar -> (Lex.pos -> 'b) grammar -> 'b grammar
+val seq2_pos : 'a grammar -> (Position.t -> Position.t -> 'b) grammar -> 'b grammar
+val seq2_lpos : 'a grammar -> (Position.t -> 'b) grammar -> 'b grammar
+val seq2_rpos : 'a grammar -> (Position.t -> 'b) grammar -> 'b grammar
 
 (** [cache g] avoid to parse twice the same input with g by memoizing the result
     of the first parsing. Using [cache] allows to recover a polynomial complexity *)
 val cache : 'a grammar -> 'a grammar
+
+(** [layout g b] changes the blank function to parse the input with the
+    grammar [g]. The optional parameters allow to control which blanks are used
+    at the bounndary. Both can be used in which case the new blanks are used
+    second before parsing with [g] and first after. *)
+val layout : ?old_before:bool -> ?new_before:bool ->
+             ?new_after:bool -> ?old_after:bool ->
+             'a grammar -> Lex.blank -> 'a grammar
+
+(** {2 Definition of recursive grammars } *)
 
 (** to define recursive grammars, one may declare the grammar first and then
     gives its value.
@@ -125,26 +198,6 @@ val set_grammar : 'a grammar -> 'a grammar -> unit
 (** [fixpoint g] compute the fixpoint of [g], that is a grammar [g0] such that
     [g0 = g g0] *)
 val fixpoint : ?name:string -> ('a grammar -> 'a grammar) -> 'a grammar
-
-(** [layout g b] changes the blank function to parse the input with the
-    grammar [g]. The optional parameters allow to control which blanks are used
-    at the bounndary. Both can be used in which case the new blanks are used
-    second before parsing with [g] and first after. *)
-val layout : ?old_before:bool -> ?new_before:bool ->
-             ?new_after:bool -> ?old_after:bool ->
-             'a grammar -> Lex.blank -> 'a grammar
-
-(** [compile g] produces a combinator that can be used to actually do the parsing
-    see the [Combinator] module *)
-val compile : 'a grammar -> 'a Combinator.t
-
-(** [grammar_info g] returns [(b,cs)] where [b] is true is the grammar accepts
-    the empty input and where [cs] is the characters set accepted at the beginnning
-    of the input. *)
-val grammar_info : 'a grammar -> bool * Charset.t
-
-(** gives the grammar name *)
-val grammar_name : 'a grammar -> string
 
 (** [grammar_family to_str name] returns a pair [(gs, set_gs)], where [gs]
     is a finite family of grammars parametrized by a value of type ['a]. A name
@@ -168,6 +221,20 @@ val grammar_family : ?param_to_string:('a -> string) -> string
    ... now the new family can be used ...
    ]}
 *)
+
+(** {2 Compilation of a grammar and various} *)
+
+(** [compile g] produces a combinator that can be used to actually do the parsing
+    see the [Combinator] module *)
+val compile : 'a grammar -> 'a Combinator.t
+
+(** [grammar_info g] returns [(b,cs)] where [b] is true is the grammar accepts
+    the empty input and where [cs] is the characters set accepted at the beginnning
+    of the input. *)
+val grammar_info : 'a grammar -> bool * Charset.t
+
+(** gives the grammar name *)
+val grammar_name : 'a grammar -> string
 
 (** allows to rename a grammar *)
 val give_name : string -> 'a grammar -> 'a grammar

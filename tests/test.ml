@@ -49,7 +49,7 @@ let test6 = compile test6
 let star_pos g =
   let gseq = seq in
   let galt = alt in
-  let open Lex in
+  let open Position in
   fixpoint
     (fun r -> rpos(lpos(galt (gseq r g
                                 (fun (_,x,_) y lpos rpos -> (lpos.col,x+y,rpos.col)))

@@ -13,7 +13,7 @@ let float =
      atom = (x::FLOAT)        => x
           ; (show_sub=false) '(' (e::expr) ')' => e
           ; (show_sub=true) (l::'(') (e::expr) (r::')') =>
-              let open Lex in
+              let open Position in
               Printf.printf "%d-%d: %f\n" l_lpos.col r_rpos.col e;
               e
  and prod = (a::atom)               => a
