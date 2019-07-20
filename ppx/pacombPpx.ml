@@ -145,7 +145,7 @@ let str_to_parser items =
          in
          let rules = exp_to_grammar exp in
          let rules =
-           if List.exists (fun (s,_) -> Printf.printf "%s\n%!" s.txt; s.txt = "cached") vb.pvb_attributes then
+           if List.exists (fun (s,_) -> s.txt = "cached") vb.pvb_attributes then
              app (grmod "cache") rules
            else rules
          in

@@ -191,10 +191,12 @@ let chrono_parse g s =
   Printf.printf "%f seconds\n%!" (t1 -. t0);
   r
 
-let _ = chrono_parse test6 (nas 100)
+let n = if Array.length Sys.argv > 1 then
+          int_of_string Sys.argv.(1)
+        else 100
 
-let _ = chrono_parse test6 (nas 1000)
+let _ = chrono_parse test6 (nas n)
 
-let _ = chrono_parse test6 (nas 10000)
+let _ = chrono_parse test6 (nas (10 * n))
 
-let _ = chrono_parse test6 (nas 20000)
+let _ = chrono_parse test6 (nas (100 * n))

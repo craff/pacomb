@@ -1,5 +1,6 @@
 (library
-  (name grammar)
+  (name pacomb)
+  (public_name pacomb)
   (modules :standard earley)
   (wrapped false)
   (private_modules container))

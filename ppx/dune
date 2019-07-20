@@ -1,4 +1,11 @@
+(library
+  (name pacomb_ppx)
+  (public_name pacomb.ppx)
+  (modules )
+  (synopsis "A ppx extension to write parser using Pacomb"))
+
 (executable
-  (name parserPpx)
-  (modules parserPpx)
+  (name pacombPpx)
+  (public_name pacombPpx)
+  (modules pacombPpx)
   (libraries unix compiler-libs.common))

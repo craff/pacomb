@@ -1,20 +1,17 @@
 
 
 .PHONY: all
-all: lib/grammar.cmxa lib/grammar.cma ppx/parserPpx.exe
-
-lib/grammar.cmxa:
-	dune build $@
-
-lib/grammar.cma:
-	dune build $@
-
-ppx/parserPpx.exe:
-	dune build $@
+all:
+	dune build
 
 .PHONY: tests
 tests:
-	bash ./test.sh
+	dune runtest
 
+.PHONY: clean
 clean:
 	dune clean
+
+.PHONY: install
+install:
+	dune install

@@ -1,27 +1,36 @@
-(executable
+(test
   (name test)
   (modules test)
-  (libraries unix grammar))
+  (libraries unix pacomb)
+  (action (run ./test.exe)))
 
-(executable
-  (name calc)
-  (modules calc)
-  (flags -ppx "ppx/parserPpx.exe")
-  (libraries unix grammar))
-
-(executable
-  (name calc_prio)
-  (modules calc_prio)
-  (flags -ppx "ppx/parserPpx.exe")
-  (libraries unix grammar))
+(test
+  (name hard)
+  (modules hard)
+  (flags -ppx "./ppx/pacombPpx.exe")
+  (libraries unix pacomb)
+  (deps ../ppx/pacombPpx.exe ../tests/hard.exe)
+  (action (run ./hard.exe 1000)))
 
 (executable
   (name big_expr)
   (modules big_expr)
   (libraries))
 
-(executable
-  (name hard)
-  (modules hard)
-  (flags -ppx "ppx/parserPpx.exe")
-  (libraries unix grammar))
+(test
+  (name calc)
+  (modules calc)
+  (flags -ppx "./ppx/pacombPpx.exe")
+  (libraries unix pacomb)
+  (deps ../ppx/pacombPpx.exe big_expr.exe calc.exe)
+  (action
+    (system "./big_expr.exe 4 4 4 | ./calc.exe")))
+
+(test
+  (name calc_prio)
+  (modules calc_prio)
+  (flags -ppx "./ppx/pacombPpx.exe")
+  (libraries unix pacomb)
+  (deps ../ppx/pacombPpx.exe big_expr.exe calc_prio.exe)
+  (action
+    (system "./big_expr.exe 4 4 4 | ./calc_prio.exe")))
