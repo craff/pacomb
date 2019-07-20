@@ -288,3 +288,24 @@ let parse_string : type a. a t -> blank -> string -> a = fun g b s ->
 let parse_channel : type a. a t -> blank -> in_channel -> a = fun g b s ->
   let s = Input.from_channel s in
   parse_buffer g b s
+
+let parse_all_buffer : type a. a t -> blank -> buf -> a list =
+  fun g b s0->
+    let g = cseq g (cterm (eof ()).f) (fun x _ -> x) in
+    let n0 = 0 in
+    let maxp = ref (s0,n0) in
+    let f () =
+      let (s,c) = !maxp in
+      raise (Parse_error (s,c))
+    in
+    let res = ref [] in
+    let k _e f x =
+      res := x :: !res;
+      f ()
+    in
+    let (s,n) = b s0 n0 in
+    try
+      ignore (g.c { b; s0; n0; s; n; maxp; lpos=[]; k = Assoc.new_key ()} k f);
+      assert false
+    with Parse_error _ as e ->
+      if !res = [] then raise e else !res

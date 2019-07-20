@@ -119,6 +119,9 @@ let test12c = compile test12
 let _ = Printf.printf "test12: %a\n%!" (print_grammar ~def:false) test12
 let test12 = test12c
 
+let test13 = fixpoint (fun r -> alt (empty 0) (seq r (seq char_a r (+)) (+)))
+let test13 = compile test13
+
 let _ = assert (parse_string test0 "a" = 1)
 let _ = assert_fail (fun () -> parse_string test0 "")
 let _ = assert_fail (fun () -> parse_string test0 "c")
@@ -174,6 +177,49 @@ let _ = assert (parse_string test11 "acabbc" = ())
 let _ = assert (parse_string test11 "abacbc" = ())
 let _ = assert (parse_string test11 "bcacbc" = ())
 
+let _ = assert (parse_string test12 "" = ())
+let _ = assert (parse_string test12 "ac" = ())
+let _ = assert (parse_string test12 "bc" = ())
+(*let _ = assert (parse_string test12 "bcac" = ())*)
+let _ = assert (parse_string test12 "abac" = ())
+let _ = assert (parse_string test12 "abbc" = ())
+let _ = assert (parse_string test12 "acbc" = ())
+let _ = assert (parse_string test12 "abbcac" = ())
+let _ = assert (parse_string test12 "acbcac" = ())
+let _ = assert (parse_string test12 "bcabac" = ())
+let _ = assert (parse_string test12 "acabac" = ())
+let _ = assert (parse_string test12 "bcabbc" = ())
+let _ = assert (parse_string test12 "acabbc" = ())
+let _ = assert (parse_string test12 "abacbc" = ())
+let _ = assert (parse_string test12 "bcacbc" = ())
+
+let parse_all_string g s =
+  let s = Input.from_string s in
+  parse_all_buffer g Lex.noblank s
+
+let catalan =
+  let memo = Hashtbl.create 128 in
+  let rec fn n =
+    if n = 0 then 1 else if n = 1 then 1 else
+    try Hashtbl.find memo n
+    with Not_found ->
+      let r = ref 0 in
+      for i = 0 to n-1 do
+        r := fn i * fn (n - i - 1) + !r
+      done;
+      Hashtbl.add memo n !r;
+      !r
+  in
+  fn
+
+let _ =
+  for i = 0 to 6 do
+    let s = String.make i 'a' in
+    let j = List.length (parse_all_string test13 s)
+    and k = catalan i in
+    Printf.printf "catalan: %d=%d=%d\n%!" i j k ;
+    assert (j = k)
+  done
 
 let nas p =
   let rec fn p =
