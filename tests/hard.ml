@@ -29,10 +29,10 @@ let char_c = term(Lex.char 'c' 1)
 
 let g =
   let g = declare_grammar "g" in
-  set_grammar g
-    (cache (alt (empty ())
-                (alt (seq char_a (seq g char_b (fun _ _ -> ())) (fun _ _ -> ()))
-                     (seq char_a (seq g char_c (fun _ _ -> ())) (fun _ _ -> ())))));
+  set_grammar g (cache [%grammar
+                        () => ()
+                      ; 'a' g 'b' => ()
+                      ; 'a' g 'c' => ()]);
   g
 
 let g = compile g

@@ -17,4 +17,5 @@
 (executable
   (name hard)
   (modules hard)
+  (flags -ppx "ppx/parserPpx.exe")
   (libraries unix grammar))

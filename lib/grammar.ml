@@ -260,6 +260,24 @@ let lpos g = mkg (if g.d = Fail then Fail else LPos(g))
 
 let rpos g = mkg (if g.d = Fail then Fail else RPos(g))
 
+let seqf_rpos g1 g2 =
+  seq (rpos (appl g1 (fun x rpos -> (x, rpos)))) g2 (fun (x,rpos) f -> f x rpos)
+
+let seq2_rpos g1 g2 =
+  seq (rpos (appl g1 (fun _ rpos -> rpos))) g2 (fun rpos f -> f rpos)
+
+let seqf_lpos g1 g2 =
+  seq (lpos (appl g1 (fun x lpos -> (lpos, x)))) g2 (fun (lpos,x) f -> f lpos x)
+
+let seq2_lpos g1 g2 =
+  seq (lpos (appl g1 (fun _ lpos -> lpos))) g2 (fun lpos f -> f lpos)
+
+let seqf_pos g1 g2 =
+  seq (lpos (rpos (appl g1 (fun x rpos lpos -> (lpos, x, rpos))))) g2 (fun (lpos,x,rpos) f -> f lpos x rpos)
+
+let seq2_pos g1 g2 =
+  seq (lpos (rpos (appl g1 (fun _ rpos lpos -> (lpos, rpos))))) g2 (fun (lpos,rpos) f -> f lpos rpos)
+
 let read n g = mkg (if g.d = Fail then Fail else Read(n,g))
 
 let cache g = mkg (if g.d = Fail then Fail else Cache(g))

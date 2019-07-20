@@ -94,6 +94,16 @@ val lpos : (Lex.pos -> 'a) grammar -> 'a grammar
     [g] to the semantical action of [g] *)
 val rpos : (Lex.pos -> 'a) grammar -> 'a grammar
 
+(** variants of seqf with the position of the first iterm *)
+val seqf_pos : 'a grammar -> (Lex.pos -> 'a -> Lex.pos -> 'b) grammar -> 'b grammar
+val seqf_lpos : 'a grammar -> (Lex.pos -> 'a -> 'b) grammar -> 'b grammar
+val seqf_rpos : 'a grammar -> ('a -> Lex.pos -> 'b) grammar -> 'b grammar
+
+(** variants of seq2 with the position of the first iterm *)
+val seq2_pos : 'a grammar -> (Lex.pos -> Lex.pos -> 'b) grammar -> 'b grammar
+val seq2_lpos : 'a grammar -> (Lex.pos -> 'b) grammar -> 'b grammar
+val seq2_rpos : 'a grammar -> (Lex.pos -> 'b) grammar -> 'b grammar
+
 (** [cache g] avoid to parse twice the same input with g by memoizing the result
     of the first parsing. Using [cache] allows to recover a polynomial complexity *)
 val cache : 'a grammar -> 'a grammar
