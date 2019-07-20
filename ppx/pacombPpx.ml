@@ -28,7 +28,7 @@ let has_ident id e =
   let _ = mapper.expr mapper e in
   !found
 
-let exp_to_grammar exp =
+let exp_to_grammar ?name_param exp =
   let lexify exp =
     match exp.pexp_desc with
     | Pexp_constant (Pconst_char _) ->
@@ -112,6 +112,33 @@ let exp_to_grammar exp =
        in
        let rule = List.fold_right fn rule action in
        [rule]
+    | Pexp_apply
+      ( { pexp_desc = Pexp_ident {txt = Lident "<"; _}; _ }
+      , [_;_]) when name_param <> None ->
+       let rec fn exp = match exp.pexp_desc with
+         | Pexp_apply
+           ( { pexp_desc = Pexp_ident {txt = Lident "<"; _}; _ }
+           , [(Nolabel, x);(Nolabel, y)]) ->
+            y :: fn x
+         | _ -> [exp]
+       in
+       let prios = fn e in
+       let (name,param) =
+         match name_param with None -> assert false
+                       | Some x -> x
+       in
+       let rec gn acc l =
+         match l with
+         | x::(y::_ as l) ->
+            let e =
+              app2 (grmod "seq2")
+                (app (grmod "test") (app2 (Exp.ident (mknoloc (Lident "=")))
+                                     (Exp.ident param) x))
+                (app (Exp.ident name) y)
+            in gn (e::acc) l
+         | [] | [_] -> acc
+       in
+       gn [] prios
     | Pexp_sequence(e1,e2) ->
        rules e1 @ rules e2
     | _ -> raise Exit
@@ -143,7 +170,12 @@ let str_to_parser items =
              (Some param, exp)
            | _ -> (None, vb.pvb_expr)
          in
-         let rules = exp_to_grammar exp in
+         let name_param = match param with
+           | None -> None
+           | Some p -> Some ( mkloc (Lident name.txt) name.loc
+                            , mkloc (Lident p.txt) p.loc)
+         in
+         let rules = exp_to_grammar ?name_param exp in
          let rules =
            if List.exists (fun (s,_) -> s.txt = "cached") vb.pvb_attributes then
              app (grmod "cache") rules

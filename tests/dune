@@ -9,7 +9,7 @@
   (modules hard)
   (flags -ppx "./ppx/pacombPpx.exe")
   (libraries unix pacomb)
-  (deps ../ppx/pacombPpx.exe ../tests/hard.exe)
+  (deps ../ppx/pacombPpx.exe hard.exe)
   (action (run ./hard.exe 1000)))
 
 (executable

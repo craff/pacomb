@@ -6,12 +6,11 @@ type p = Atom | Prod | Sum
 
 [%%parser
  let rec
-     expr p = (p=Atom) (x::FLOAT)                        => x
+     expr p = Atom < Prod < Sum
+            ; (p=Atom) (x::FLOAT)                        => x
             ; (p=Atom) '(' (e::expr Sum) ')'             => e
-            ; (p=Prod) (a::expr Atom)                    => a
             ; (p=Prod) (x::expr Prod) '*' (y::expr Atom) => x*.y
             ; (p=Prod) (x::expr Prod) '/' (y::expr Atom) => x/.y
-            ; (p=Sum ) (a::expr Prod)                    => a
             ; (p=Sum ) (x::expr Sum ) '+' (y::expr Prod) => x+.y
             ; (p=Sum ) (x::expr Sum ) '-' (y::expr Prod) => x-.y
 ]
