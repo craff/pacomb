@@ -4,8 +4,8 @@
 
 PaComb implements a representation of grammars with semantical action (i.e. a
 value returned as result of parsing).  Parsing is performed by compiling the
-grammar to combinators implemented in the [Combinator] module. This library
-offers "scanner less" parsing, but the [Lex] module provide a notion of
+grammar to combinators implemented in the `Combinator` module. This library
+offers "scanner less" parsing, but the `Lex` module provide a notion of
 terminals and blanks which allows for easy way to write grammars in two
 phases as usual.
 
@@ -19,9 +19,9 @@ is a compiler.
 
 Defining languages using directly the Grammar module leads to cumbersome
 code. This is why Pacomb propose a ppx extension that can be used with the
-compilation flag [-ppx pacombPpx]. Here is an example:
+compilation flag `-ppx pacombPpx`. Here is an example:
 
-```
+```ocaml
     [%%parser
        type p = Atom | Prod | Sum
        let rec
@@ -35,11 +35,11 @@ compilation flag [-ppx pacombPpx]. Here is an example:
     ]
 ```
 
-The extension [[%%parser ...]] extends structure with new let bindings
-defining grammars. This applies both for [let] and [let rec] the latter being
-reserved to recursive grammars.  We also provide an extension [[%grammar]]
+The extension `[%%parser ...]` extends structure with new let bindings
+defining grammars. This applies both for `let` and `let rec` the latter being
+reserved to recursive grammars.  We also provide an extension `[%grammar]`
 for expression that corresponds to grammars, i.e.  the right-hand side of
-binding in the [[%%parser]] extension.
+binding in the `[%%parser]` extension.
 
 Here is the BNF for these right-hand-side, with its semantics
 
@@ -80,10 +80,10 @@ Pacomb must eliminate left recursion in grammars in order to use combinators
 that would loop otherwise. However, left recursion is not supported if it
 traverses:
 
-- A [Grammar.layout] contructor to change blanks (probably possible to solve this,
+- A `Grammar.layout` contructor to change blanks (probably possible to solve this,
   but probably not woth it).
 
-- A [Grammar.desq] constructor that provides dependent sequence. Solving this
+- A `Grammar.desq` constructor that provides dependent sequence. Solving this
   is an open problem.
 
 - Grammars are not left factorised automatically: (A B) | (A C) may parse A twice.
@@ -92,6 +92,6 @@ traverses:
   - Use Grammar.cache trading memory for speed.
 
 - The ppx extension is not too bad but still suffer from the fact that is
-  uses a sublanguage of OCaml to describe grammar. For instance [%grammar
-  (_::INT) => 0] is not legal because "_" can not be used in an Ocaml
+  uses a sublanguage of OCaml to describe grammar. For instance
+  `[%grammar (_::INT) => 0]` is not legal because `_` cannot be used in an Ocaml
   expression.
