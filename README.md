@@ -58,6 +58,9 @@ Here is the BNF for these right-hand-side, with its semantics
 - recursive let bindings correspond either to
   - [Grammar.declare_grammar + Grammar.set_grammar] (if no paramater)
   - [Grammar.grammar_familly + setting the grammar] is a parameter is given.
+  In the latter case, a rule [p_1 < p_2 < ... < p_n] will automatically add
+  rules to include the grammar parametrized by p_i in the grammar parametrized
+  by p_(i+1).
 
 Anything which does not coresponds to this grammar will we keeped unchanged
 in the structure as ocaml code (like the type definition in the example
@@ -78,7 +81,7 @@ that would loop otherwise. However, left recursion is not support it it traverse
 - Grammars are not left factorised automatically: (A B) | (A C) may parse A twice.
   two solutions
   - left factorise your grammar yourself,
-  - Use Grammar.cache for A trading memory for speed.
+  - Use Grammar.cache trading memory for speed.
 
 - The ppx extension is not not too bad but still suffer from the fact that is uses
   a sublanguage of OCaml to describe grammar. For instance [%grammar (_::INT) => 0]

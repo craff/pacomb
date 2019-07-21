@@ -99,6 +99,9 @@
     - recursive let bindings correspond either to
       - [declare_grammar + set_grammar] (if no paramater)
       - [grammar_familly + setting the grammar] is a parameter is given.
+        In the latter case, a rule [p_1 < p_2 < ... < p_n] will automatically
+        add rules to  include the grammar parametrized by p_i  in the grammar
+        parametrized by p_(i+1).
 
     Anything  which  does not  coresponds  to  this  grammar will  we  keeped
     unchanged in the structure as ocaml code (like the type definition in the
@@ -121,7 +124,7 @@
       A twice.  two solutions
 
       - left factorise your grammar yourself,
-      - Use Grammar.cache for A trading memory for speed.
+      - Use Grammar.cache, trading memory for speed.
 
     - The ppx  extension is not  not too bad but  still suffer from  the fact
       that is uses  a sublanguage of OCaml to describe  grammar. For instance
