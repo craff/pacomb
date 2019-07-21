@@ -15,8 +15,6 @@
       This is solved here by a [cache] combinator, that avoids parsing twice
       the same part of the input with the same grammar. *)
 
-(** type of parsing combinator with continuation. *)
-
 (** Environment holding information require for parsing. *)
 type 'a env =
   { blank_fun         : Lex.blank
@@ -42,7 +40,7 @@ type 'b err = unit -> 'b
 (** Type of a parsing continuation. *)
 type ('a,'b) cont = 'b env -> 'b err -> 'a -> 'b
 
-(** Type of a parser combinator. *)
+(** Type of a parser combinator, with continuation. *)
 type 'a t = { comb : 'b. 'b env -> ('a,'b) cont -> 'b err -> 'b } [@@unboxed]
 
 (** [next env err] updates the current maximum position [env.max_pos] and then
