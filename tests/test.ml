@@ -1,5 +1,18 @@
 open Grammar
 open Combinator
+open Arg
+
+let catalan_max = ref 10
+let seq_max = ref 1000
+
+let spec = [ ("--catalan", Set_int catalan_max,
+              "set maximum size to test g ::= () | g 'a' g");
+             ("--sequence", Set_int seq_max,
+              "set maximem size to test g ::= () | g ',' ('a' *)") ]
+
+let _ = Arg.parse spec
+          (fun s -> raise (Bad ("don't know what to do with: "^s)))
+          "test.exe [options]"
 
 let parse_string c = parse_string c (Lex.blank_charset (Charset.singleton ' '))
 
@@ -213,7 +226,7 @@ let catalan =
   fn
 
 let _ =
-  for i = 0 to 6 do
+  for i = 0 to !catalan_max do
     let s = String.make i 'a' in
     let j = List.length (parse_all_string test13 s)
     and k = catalan i in
@@ -237,12 +250,7 @@ let chrono_parse g s =
   Printf.printf "%f seconds\n%!" (t1 -. t0);
   r
 
-let n = if Array.length Sys.argv > 1 then
-          int_of_string Sys.argv.(1)
-        else 100
-
-let _ = chrono_parse test6 (nas n)
-
-let _ = chrono_parse test6 (nas (10 * n))
-
-let _ = chrono_parse test6 (nas (100 * n))
+let _ =
+  for i = 10 downto 1 do
+    ignore (chrono_parse test6 (nas (!seq_max/i)))
+  done
