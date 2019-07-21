@@ -4,7 +4,7 @@
 
     PaComb  implements a  representation of  grammars with  semantical action
     (i.e. a  value returned as  result of  parsing). Parsing is  performed by
-    compiling  the grammar  to  combinators implemented  in the  [Combinator]
+    compiling  the grammar  to  combinators implemented  in the  [Comb]
     module. This library offers "scanner  less" parsing, but the [Lex] module
     provide a  notion of terminals  and blanks which  allows for easy  way to
     write grammars in two phases as usual.
@@ -147,21 +147,21 @@ val dseq : 'a grammar -> ('a -> 'b grammar) -> ('b -> 'c) -> 'c grammar
 
 (** [lpos g] is identical to [g] but passes the position just before parsing with
     [g] to the semantical action of [g] *)
-val lpos : (Position.t -> 'a) grammar -> 'a grammar
+val lpos : (Pos.t -> 'a) grammar -> 'a grammar
 
 (** [rpos g] is identical to [g] but passes the position just after parsing with
     [g] to the semantical action of [g] *)
-val rpos : (Position.t -> 'a) grammar -> 'a grammar
+val rpos : (Pos.t -> 'a) grammar -> 'a grammar
 
 (** variants of seqf with the position of the first iterm *)
-val seqf_pos : 'a grammar -> (Position.t -> 'a -> Position.t -> 'b) grammar -> 'b grammar
-val seqf_lpos : 'a grammar -> (Position.t -> 'a -> 'b) grammar -> 'b grammar
-val seqf_rpos : 'a grammar -> ('a -> Position.t -> 'b) grammar -> 'b grammar
+val seqf_pos : 'a grammar -> (Pos.t -> 'a -> Pos.t -> 'b) grammar -> 'b grammar
+val seqf_lpos : 'a grammar -> (Pos.t -> 'a -> 'b) grammar -> 'b grammar
+val seqf_rpos : 'a grammar -> ('a -> Pos.t -> 'b) grammar -> 'b grammar
 
 (** variants of seq2 with the position of the first iterm *)
-val seq2_pos : 'a grammar -> (Position.t -> Position.t -> 'b) grammar -> 'b grammar
-val seq2_lpos : 'a grammar -> (Position.t -> 'b) grammar -> 'b grammar
-val seq2_rpos : 'a grammar -> (Position.t -> 'b) grammar -> 'b grammar
+val seq2_pos : 'a grammar -> (Pos.t -> Pos.t -> 'b) grammar -> 'b grammar
+val seq2_lpos : 'a grammar -> (Pos.t -> 'b) grammar -> 'b grammar
+val seq2_rpos : 'a grammar -> (Pos.t -> 'b) grammar -> 'b grammar
 
 (** [cache g] avoid to parse twice the same input with g by memoizing the result
     of the first parsing. Using [cache] allows to recover a polynomial complexity *)
@@ -217,8 +217,8 @@ val grammar_family : ?param_to_string:('a -> string) -> string
 (** {2 Compilation of a grammar and various} *)
 
 (** [compile g] produces a combinator that can be used to actually do the parsing
-    see the [Combinator] module *)
-val compile : 'a grammar -> 'a Combinator.t
+    see the [Comb] module *)
+val compile : 'a grammar -> 'a Comb.t
 
 (** [grammar_info g] returns [(b,cs)] where [b] is true is the grammar accepts
     the empty input and where [cs] is the characters set accepted at the beginnning

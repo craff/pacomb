@@ -20,11 +20,11 @@ type buf = Input.buffer
 type blank = buf -> int -> buf * int
 
 (** Type of terminal function, similar to blank, but with a returned value *)
-type 'a fterm = buf -> int -> 'a * buf * int
+type 'a lexeme = buf -> int -> 'a * buf * int
 
 (** The previous type encapsulated in a record *)
 type 'a terminal = { n : string    (** name *)
-                   ; f : 'a fterm  (** the terminal itself *)
+                   ; f : 'a lexeme (** the terminal itself *)
                    ; c : Charset.t (** the set of characters accepted
                                        at the beginning of input *) }
 

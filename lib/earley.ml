@@ -1,6 +1,5 @@
 open Utils
 open Lex
-open Combinator
 open Grammar
 
 type 'a grammar = 'a Grammar.grammar
@@ -8,8 +7,8 @@ type 'a fpos = Input.buffer -> int -> Input.buffer -> int -> 'a
 
 type blank = Lex.blank
 let no_blank = Lex.noblank
-let give_up = Combinator.give_up ()
-let handle_exception = Combinator.handle_exception
+let give_up = Comb.give_up ()
+let handle_exception = Comb.handle_exception
 let empty = empty
 let eof x = term(Lex.eof x)
 let declare_grammar = declare_grammar
@@ -19,7 +18,7 @@ let regexp ?name r = appl ?name (term ?name (Lex.regexp_grps (Regexp.from_string
 let set_grammar = set_grammar
 let char ?name c x = term ?name (Lex.char c x)
 let string ?name s x = term ?name (Lex.string ?name s x)
-exception Parse_error = Combinator.Parse_error
+exception Parse_error = Comb.Parse_error
 let keyword ?name k f x = term ?name (keyword k f x)
 let give_name = give_name
 let grammar_info = grammar_info
@@ -32,7 +31,7 @@ let alternatives gs =
   fn (fail ()) gs
 
 let parse_buffer g bl b =
-  let g = compile g in parse_buffer g bl b
+  let g = compile g in Comb.parse_buffer g bl b
 
 let parse_string ?(filename="") grammar blank str =
   let str = Input.from_string ~filename str in
@@ -48,7 +47,7 @@ let parse_file grammar blank filename  =
 
 let partial_parse_buffer g bl ?(blank_after=false) buf n =
   let g = compile g in
-  partial_parse_buffer g bl ~blank_after buf n
+  Comb.partial_parse_buffer g bl ~blank_after buf n
 
 let grammar_prio ?(param_to_string=(fun _ -> "<...>")) name =
   let tbl = EqHashtbl.create 8 in

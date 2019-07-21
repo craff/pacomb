@@ -9,9 +9,9 @@ type blank = buf -> int -> buf * int
 exception NoParse
 
 (** Terminal: same as blank with a value returned *)
-type 'a fterm = buf -> int -> 'a * buf * int
+type 'a lexeme = buf -> int -> 'a * buf * int
 type 'a terminal = { n : string    (** name *)
-                   ; f : 'a fterm  (** the terminal itself *)
+                   ; f : 'a lexeme (** the terminal itself *)
                    ; c : Charset.t (** the set of characters accepted
                                        at the beginning of input *) }
 type 'a t = 'a terminal

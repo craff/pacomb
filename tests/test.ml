@@ -1,5 +1,5 @@
+open Pacomb
 open Grammar
-open Combinator
 open Arg
 
 let catalan_max = ref 10
@@ -14,10 +14,10 @@ let _ = Arg.parse spec
           (fun s -> raise (Bad ("don't know what to do with: "^s)))
           "test.exe [options]"
 
-let parse_string c = parse_string c (Lex.blank_charset (Charset.singleton ' '))
+let parse_string c = Comb.parse_string c (Lex.blank_charset (Charset.singleton ' '))
 
 let assert_fail f =
-  try ignore (f ()); assert false with Parse_error _ -> ()
+  try ignore (f ()); assert false with Comb.Parse_error _ -> ()
 
 let char_a = term(Lex.char 'a' 1)
 let char_b = term(Lex.char 'b' 1)
@@ -62,7 +62,7 @@ let test6 = compile test6
 let star_pos g =
   let gseq = seq in
   let galt = alt in
-  let open Position in
+  let open Pos in
   fixpoint
     (fun r -> rpos(lpos(galt (gseq r g
                                 (fun (_,x,_) y lpos rpos -> (lpos.col,x+y,rpos.col)))
@@ -208,7 +208,7 @@ let _ = assert (parse_string test12 "bcacbc" = ())
 
 let parse_all_string g s =
   let s = Input.from_string s in
-  parse_all_buffer g Lex.noblank s
+  Comb.parse_all_buffer g Lex.noblank s
 
 let catalan =
   let memo = Hashtbl.create 128 in

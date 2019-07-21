@@ -1,5 +1,6 @@
+open Pacomb
 open Grammar
-open Combinator
+open Comb
 
 let gamma_gen n =
   let b = Buffer.create (2*n) in

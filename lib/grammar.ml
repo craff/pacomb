@@ -1,6 +1,4 @@
 open Utils
-open Combinator
-open Position
 open Lex
 open Assoc
 
@@ -23,7 +21,7 @@ type 'a grammar =
                               valid from phase PushFactored  *)
   ; mutable cache : bool  (** Does this grammar needs a cache
                               valid from phase PushFactored  *)
-  ; mutable compiled : 'a Combinator.t ref
+  ; mutable compiled : 'a Comb.t ref
                           (** the combinator for the grammar. One needs a ref
                               for recursion.
                               valid from phase Compiled *)
@@ -54,9 +52,9 @@ type 'a grammar =
                                                used to eliminate left recursion.
                                                It can not be exposed as left recursion
                                                under Lr is not supported *)
-   | LPos : (pos -> 'a) t -> 'a grdf       (** read the postion before parsing *)
-   | RPos : (pos -> 'a) t -> 'a grdf       (** read the postion after parsing *)
-   | Read : int * (pos -> 'a) t -> 'a grdf (** read the position from the stack
+   | LPos : (Pos.t -> 'a) t -> 'a grdf     (** read the postion before parsing *)
+   | RPos : (Pos.t -> 'a) t -> 'a grdf     (** read the postion after parsing *)
+   | Read : int * (Pos.t -> 'a) t -> 'a grdf (** read the position from the stack
                                                not accessible by user, but needed
                                                in [elim_let_rec] *)
    | Layout : 'a t * blank * bool * bool * bool * bool -> 'a grdf
@@ -82,8 +80,8 @@ and 'a grne =
                                                to a dedicated stack.
                                                LPos(g) is transformed into
                                                EPush(ERead(g)) *)
-  | ERead : int * (pos -> 'a) grne -> 'a grne
-  | ERPos : (pos -> 'a) grne -> 'a grne
+  | ERead : int * (Pos.t -> 'a) grne -> 'a grne
+  | ERPos : (Pos.t -> 'a) grne -> 'a grne
   | ELayout : 'a grne * blank * bool * bool * bool * bool -> 'a grne
   | ECache : 'a grne -> 'a grne
   | ETmp  : 'a grne
@@ -95,7 +93,7 @@ let give_name n g = { g with n }
 let mkg : ?name:string -> ?recursive:bool -> 'a grdf -> 'a grammar =
   fun ?(name="...") ?(recursive=false) d ->
     let k = new_key () in
-    { e = None; d; n = name; k; recursive; compiled = ref cfail
+    { e = None; d; n = name; k; recursive; compiled = ref Comb.fail
     ; charset = None; phase = Defined; ne = ETmp; push = false; cache = false }
 
 (** A type to store list of grammar keys *)
@@ -379,13 +377,13 @@ let factor_empty g =
     | Lr(g1,g2) -> fn g1; fn g2; g1.e
     | LPos(g1)      -> fn g1; (match g1.e with
                                | None -> None
-                               | Some x -> Some (x phantom)) (* Loose position *)
+                               | Some x -> Some (x Pos.phantom)) (* Loose position *)
     | RPos(g1)      -> fn g1; (match g1.e with
                                | None -> None
-                               | Some x -> Some (x phantom)) (* Loose position *)
+                               | Some x -> Some (x Pos.phantom)) (* Loose position *)
     | Read(_,g1)    -> fn g1; (match g1.e with
                                | None -> None
-                               | Some x -> Some (x phantom)) (* Loose position *)
+                               | Some x -> Some (x Pos.phantom)) (* Loose position *)
     | Layout(g,_,_,_,_,_) -> fn g; g.e
     | Cache(g)      -> fn g; g.e
     | Tmp           -> failwith "grammar compiled before full definition"
@@ -576,31 +574,31 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
   in fn g
 
 (** compilation of a grammar to combinators *)
-let rec compile_ne : type a. a grne -> a Combinator.t = fun g ->
+let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   match g with
-  | EFail -> cfail
-  | ETerm(c) -> cterm c.f
-  | EAlt(g1,g2) -> calt ~cs1:(first_charset g1) ~cs2:(first_charset g2)
+  | EFail -> Comb.fail
+  | ETerm(c) -> Comb.lexeme c.f
+  | EAlt(g1,g2) -> Comb.alt ~cs1:(first_charset g1) ~cs2:(first_charset g2)
                        (compile_ne g1) (compile_ne g2)
-  | ESeq(g1,g2,f) -> cseq (compile_ne g1) (compile g2) f
-  | EDSeq(g1,g2,f) -> cdep_seq (compile_ne g1) (fun x -> compile (g2 x)) f
-  | EAppl(g1,f) -> capp (compile_ne g1) f
-  | ELr(g,s) -> clr ~cs2:(first_charset s.ne) (compile_ne g) (compile_ne s.ne)
+  | ESeq(g1,g2,f) -> Comb.seq (compile_ne g1) (compile g2) f
+  | EDSeq(g1,g2,f) -> Comb.dep_seq (compile_ne g1) (fun x -> compile (g2 x)) f
+  | EAppl(g1,f) -> Comb.app (compile_ne g1) f
+  | ELr(g,s) -> Comb.clr ~cs2:(first_charset s.ne) (compile_ne g) (compile_ne s.ne)
   | ERef g -> compile g
-  | EPush(g) -> cpush (compile_ne g)
-  | ERead(n,g) -> cread n (compile_ne g)
-  | ERPos(g) -> crpos (compile_ne g)
-  | ECache(g) -> ccache (compile_ne g)
-  | ELayout(g,b,ob,nb,na,oa) -> clayout ~old_before:ob ~new_before:nb
+  | EPush(g) -> Comb.push (compile_ne g)
+  | ERead(n,g) -> Comb.read n (compile_ne g)
+  | ERPos(g) -> Comb.right_pos (compile_ne g)
+  | ECache(g) -> Comb.cache (compile_ne g)
+  | ELayout(g,b,ob,nb,na,oa) -> Comb.change_layout ~old_before:ob ~new_before:nb
                                        ~new_after:na ~old_after:oa (compile_ne g) b
   | ETmp -> assert false
 
- and compile : type a. a grammar -> a Combinator.t = fun g ->
+ and compile : type a. a grammar -> a Comb.t = fun g ->
   factor_empty g;
   remove_push g;
   elim_left_rec [] g;
   assert (g.phase >= LeftRecEliminated);
-  let get g = if g.recursive then cref g.compiled else !(g.compiled) in
+  let get g = if g.recursive then Comb.cref g.compiled else !(g.compiled) in
   let cg =
     if g.phase = Compiled then get g
     else
@@ -610,14 +608,14 @@ let rec compile_ne : type a. a grne -> a Combinator.t = fun g ->
         get g
       end
   in
-  let cg = if g.push then cpush cg else cg in
-  let cg = if g.cache then ccache cg else cg in
+  let cg = if g.push then Comb.push cg else cg in
+  let cg = if g.cache then Comb.cache cg else cg in
   match g.e with
   | Some x ->
-     let e = cempty x in
-     if g.ne = EFail then e else calt ~cs2:(first_charset g.ne) e cg
+     let e = Comb.empty x in
+     if g.ne = EFail then e else Comb.alt ~cs2:(first_charset g.ne) e cg
   | None ->
-     if g.ne = EFail then cfail else cg
+     if g.ne = EFail then Comb.fail else cg
 
 (** get some infos *)
 let grammar_info g =

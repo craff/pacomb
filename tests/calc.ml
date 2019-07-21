@@ -1,6 +1,6 @@
-
+open Pacomb
 open Grammar
-open Combinator
+open Comb
 
 let show_sub = Array.length Sys.argv > 1 && Sys.argv.(1) = "-v"
 
@@ -13,7 +13,7 @@ let float =
      atom = (x::FLOAT)        => x
           ; (show_sub=false) '(' (e::expr) ')' => e
           ; (show_sub=true) (l::'(') (e::expr) (r::')') =>
-              let open Position in
+              let open Pos in
               Printf.printf "%d-%d: %f\n" l_lpos.col r_rpos.col e;
               e
  and prod = (a::atom)               => a
