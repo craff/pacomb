@@ -78,7 +78,7 @@ type 'a grammar =
  and 'a t = 'a grammar
 
  (** The various transformation phase before until compilation to combinators *)
- and phase = Defined | EmptyRemoved | PushFactored | LeftRecEliminated | Compiled
+ and phase = Defined | EmptyComputed | EmptyRemoved | PushFactored | LeftRecEliminated | Compiled
 
  (** Grammar constructors at definition *)
  and 'a grdf =
@@ -393,36 +393,9 @@ let factor_empty g =
   let rec fn : type a. a grammar -> unit = fun g ->
     if g.phase = Defined then
       begin
-        g.phase <- EmptyRemoved;
+        g.phase <- EmptyComputed;
         g.e  <- kn g.d;
-        g.ne <- gn g.d;
       end
-
-  and gn : type a. a grdf -> a grne = function
-    | Fail -> EFail
-    | Empty _ -> EFail
-    | Term(x) -> ETerm(x)
-    | Alt(g1,g2) -> ne_alt (get g1) (get g2)
-    | Appl(g,f) -> ne_appl (get g) f
-    | Seq(g1,g2,f) -> let ga = ne_seq (get g1) g2 f in
-                      let gb = match g1.e with
-                        | None   -> EFail
-                        | Some x -> ne_appl (get g2) (fun y -> f x y)
-                      in
-                      ne_alt ga gb
-    | DSeq(g1,g2,f) -> let ga = ne_dseq (get g1) g2 f in
-                       let gb = match g1.e with
-                         | None   -> EFail
-                         | Some x -> let g2 = g2 x in fn g2; ne_appl (get g2) f
-                       in
-                       ne_alt ga gb
-    | Lr(g1,g2) -> ne_lr (get g1) g2
-    | LPos(g1) -> ne_lpos (get g1)
-    | RPos(g1) -> ne_rpos (get g1)
-    | Read(n,g1) -> ne_read n (get g1)
-    | Cache(g1) -> ne_cache(get g1)
-    | Layout(g,b,ob,nb,na,oa) -> ne_layout (get g) b ob nb na oa
-    | Tmp           -> failwith "grammar compiled before full definition"
 
   and kn : type a. a grdf -> a option = function
     | Fail -> None
@@ -458,7 +431,41 @@ let factor_empty g =
     | Layout(g,_,_,_,_,_) -> fn g; g.e
     | Cache(g)      -> fn g; g.e
     | Tmp           -> failwith "grammar compiled before full definition"
-  in fn g
+  in
+  let rec hn : type a. a grammar -> unit = fun g ->
+    if g.phase = EmptyComputed then
+      begin
+        g.phase <- EmptyRemoved;
+        g.ne  <- gn g.d;
+      end
+
+  and gn : type a. a grdf -> a grne = function
+    | Fail -> EFail
+    | Empty _ -> EFail
+    | Term(x) -> ETerm(x)
+    | Alt(g1,g2) -> hn g1; hn g2; ne_alt (get g1) (get g2)
+    | Appl(g,f) -> hn g; ne_appl (get g) f
+    | Seq(g1,g2,f) -> hn g1; hn g2; let ga = ne_seq (get g1) g2 f in
+                      let gb = match g1.e with
+                        | None   -> EFail
+                        | Some x -> ne_appl (get g2) (fun y -> f x y)
+                      in
+                      ne_alt ga gb
+    | DSeq(g1,g2,f) -> hn g1; let ga = ne_dseq (get g1) g2 f in
+                       let gb = match g1.e with
+                         | None   -> EFail
+                         | Some x -> let g2 = g2 x in fn g2; hn g2; ne_appl (get g2) f (* FIXME *)
+                       in
+                       ne_alt ga gb
+    | Lr(g1,g2) -> hn g1; hn g2; ne_lr (get g1) g2
+    | LPos(g1) -> hn g1; ne_lpos (get g1)
+    | RPos(g1) -> hn g1; ne_rpos (get g1)
+    | Read(n,g1) -> hn g1; ne_read n (get g1)
+    | Cache(g1) -> hn g1; ne_cache(get g1)
+    | Layout(g,b,ob,nb,na,oa) -> hn g; ne_layout (get g) b ob nb na oa
+    | Tmp           -> failwith "grammar compiled before full definition"
+
+  in fn g; hn g
 
 (** remove a lpos left prefix and also a cache and move it up
     to the grammar definition.
@@ -567,7 +574,6 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
               s.e <- None;
               s.phase <- LeftRecEliminated;
               if s.ne = EFail then (ERef g, fail()) else (g', s)
-
             end
    in
    assert (g.phase>=PushFactored);
@@ -578,15 +584,7 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
        factor_empty s;
        s.e <- None;
        s.phase <- LeftRecEliminated;
-       if s.ne <> EFail then
-         begin
-           let g1 =
-             match g.e with
-             | None -> ne_lr g1 s
-             | Some x -> ne_lr (ne_alt g1 (ne_appl s.ne (fun f -> f x))) s
-           in
-           g.ne <- g1
-         end;
+       if s.ne <> EFail then g.ne <- ne_lr g1 s;
      end
 
 (** compute the characters set accepted at the beginning of the input *)
