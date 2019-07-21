@@ -42,12 +42,15 @@
 
 (** {1 Main module of Pacomb}
 
-    PaComb implements a representation  of grammar with semantical action.  A
-    semantical action  is a value returned  as result of parsing.  Parsing is
-    performed  by compiling  the grammar  to combinators  implemented in  the
-    [Combinator] module. This library offers  "scanner less" parsing, but the
-    [Lex] module  provide a notion of  terminals and blanks which  allows for
-    easy way to write grammars in two phases as usual.
+    {2 Overview}
+
+    PaComb  implements a  representation of  grammars with  semantical action
+    (i.e. a value  returned as result of parsing).  A  semantical action is a
+    value returned as  result of parsing.  Parsing is  performed by compiling
+    the grammar to  combinators implemented in the  [Combinator] module. This
+    library offers  "scanner less"  parsing, but the  [Lex] module  provide a
+    notion  of terminals  and  blanks  which allows  for  easy  way to  write
+    grammars in two phases as usual.
 
     Defining languages using directly the  Grammar module leads to cumbersome
     code. This is  why Pacomb propose a  ppx extension that can  be used with
@@ -102,7 +105,29 @@
     example  above.   A  mutually  recursive   definition  can  also  mix  te
     definition of grammars (parametric of  not) with the definition of normal
     ocaml values.
- *)
+
+
+    Pacomb  must  eliminate  left  recursion  in grammars  in  order  to  use
+    combinators that  would loop  otherwise. However,  left recursion  is not
+    support it it traverses:
+
+    - A [Grammar.layout]  contructor to  change blanks (probably  possible to
+      solve this, but probably not woth it.
+
+    - A [Grammar.desq] constructor that  provides dependent sequence. Solving
+      this is an open problem.
+
+    - Grammars are not left factorised automatically: (A B) | (A C) may parse
+      A twice.  two solutions
+
+      - left factorise your grammar yourself,
+      - Use Grammar.cache for A trading memory for speed.
+
+    - The ppx  extension is not  not too bad but  still suffer from  the fact
+      that is uses  a sublanguage of OCaml to describe  grammar. For instance
+      [%grammar (_::INT) => 0] is not legal because "_" can not be used in an
+      Ocaml expression.
+*)
 
 (** {2 Type} *)
 
