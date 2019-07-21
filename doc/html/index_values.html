@@ -1,0 +1,957 @@
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="Start" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Grammar" rel="Chapter" href="Grammar.html">
+<link title="Combinator" rel="Chapter" href="Combinator.html">
+<link title="Lex" rel="Chapter" href="Lex.html">
+<link title="Regexp" rel="Chapter" href="Regexp.html">
+<link title="Input" rel="Chapter" href="Input.html">
+<link title="Position" rel="Chapter" href="Position.html">
+<link title="Earley" rel="Chapter" href="Earley.html"><title>Index of values</title>
+</head>
+<body>
+<div class="navbar">&nbsp;<a class="up" href="index.html" title="Index">Up</a>
+&nbsp;</div>
+<h1>Index of values</h1>
+<table>
+<tr><td align="left"><div>A</div></td></tr>
+<tr><td><a href="Earley.html#VALaccept_empty">accept_empty</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">accept_empty g</code> returns <code class="code">true</code> if the grammar <code class="code">g</code> accepts the empty input
+    and <code class="code">false</code> otherwise.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Regexp.html#VALaccept_empty">accept_empty</a> [<a href="Regexp.html">Regexp</a>]</td>
+<td></td></tr>
+<tr><td><a href="Lex.html#VALaccept_empty">accept_empty</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Test wether a terminal accept the empty string.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Regexp.html#VALaccepted_first_chars">accepted_first_chars</a> [<a href="Regexp.html">Regexp</a>]</td>
+<td></td></tr>
+<tr><td><a href="Input.Tbl.html#VALadd">add</a> [<a href="Input.Tbl.html">Input.Tbl</a>]</td>
+<td></td></tr>
+<tr><td><a href="Lex.html#VALalt">alt</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p><code class="code">alt t1 t2</code> parses the input with <code class="code">t1</code> or <code class="code">t2</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALalt">alt</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">alt g1 g2</code> parses with <code class="code">g1</code> and if it fails then <code class="code">g2</code></p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALalternatives">alternatives</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">alternatives [g1;...;gn]</code> tries to parse using all the grammars
+    <code class="code">[g1;...;gn]</code> and keeps only the first success.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALany">any</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">any</code> is a grammar that accepts a single character (but fails on the
+    end of file) and returns its value.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALappl">appl</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Applies a function to the result of the given terminal.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALappl">appl</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">appl g f</code> parses with <code class="code">g</code> and apply <code class="code">f</code> to the resulting semantics</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALapply">apply</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">apply f g</code> applies function <code class="code">f</code> to the value returned by the grammar
+    <code class="code">g</code>.</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>B</div></td></tr>
+<tr><td><a href="Lex.html#VALblank_charset">blank_charset</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Blank from a charset</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALblank_terminal">blank_terminal</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Blank from a terminal</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALbuffer_before">buffer_before</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">leq_bug b1 i1 b2 i2</code> returns true if the position <code class="code">b1, i1</code> is before
+    <code class="code">b2, i2</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALbuffer_compare">buffer_compare</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">buffer_compare b1 b2</code> compares <code class="code">b1</code> and <code class="code">b2</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALbuffer_equal">buffer_equal</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">buffer_eq b1 b2</code> tests the equality of <code class="code">b1</code> and <code class="code">b2</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALbuffer_uid">buffer_uid</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">buffer_uid buf</code> returns a unique identifier for <code class="code">buf</code>.</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>C</div></td></tr>
+<tr><td><a href="Grammar.html#VALcache">cache</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">cache g</code> avoid to parse twice the same input with g by memoizing the result
+    of the first parsing.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALcalt">calt</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Combinator parsing with the first combinator and in case
+    of failure with the second from the same position.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALcapp">capp</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Parses with the given combinator and transforms the semantics with
+    the given function</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALccache">ccache</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Combinator that caches a grammar to avoid exponential behavior.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALcdep_seq">cdep_seq</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p><code class="code">sdep_seq c1 c2 f</code> is a dependant sequence, contrary to <code class="code">seq c1 c2 f</code>,
+    the combinator used to parse after <code class="code">c1</code> depends upon the value
+    returned by <code class="code">c1</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALcempty">cempty</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Accepting the empty input only</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALcfail">cfail</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Always fails</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALchar">char</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">char ~name c v</code> is a grammar that accepts only the  character  <code class="code">c</code>,
+    and returns <code class="code">v</code> as a semantic value.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALchar">char</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Terminal accepting a given char, remark: <code class="code">char '\255'</code> is equivalent to
+    <code class="code">eof</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALcharset">charset</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Accept a character in the given charset.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.Preprocessor.html#VALcheck_final">check_final</a> [<a href="Input.Preprocessor.html">Input.Preprocessor</a>]</td>
+<td><div class="info">
+<p><code class="code">check_final st name</code> check that <code class="code">st</code> indeed is a correct  state
+        of the preprocessor for the end of input of file <code class="code">name</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALclayout">clayout</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Change the blank function used to parse with the given combinator.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.Tbl.html#VALclear">clear</a> [<a href="Input.Tbl.html">Input.Tbl</a>]</td>
+<td></td></tr>
+<tr><td><a href="Combinator.html#VALclpos">clpos</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Parses as the given combinator and give the position
+    to the left of the parsing input as argument to the action</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALclr">clr</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p><code class="code">cls c1 c2</code> is an optimized version of <code class="code">let rec r = seq c1 (seq r c2)</code>
+    which is illegal as it is left recursive and loops.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALcompile">compile</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">compile g</code> produces a combinator that can be used to actually do the parsing
+    see the <code class="code">Combinator</code> module</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Position.html#VALcompute_utf8_col">compute_utf8_col</a> [<a href="Position.html">Position</a>]</td>
+<td><div class="info">
+<p>if false (the default) <code class="code">utf8_col</code> field is set to <code class="code">-1</code> by <code class="code">get_pos</code></p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALcpush">cpush</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>To eliminate left recursion, lpos has to be left factored.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALcread">cread</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td></td></tr>
+<tr><td><a href="Input.Tbl.html#VALcreate">create</a> [<a href="Input.Tbl.html">Input.Tbl</a>]</td>
+<td></td></tr>
+<tr><td><a href="Combinator.html#VALcref">cref</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Access to a reference to a combinator, use by Grammar.compile
+    for recursive grammars (not for left recursion</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALcrpos">crpos</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Same as above with the position to the right</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALcseq">cseq</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Sequence of two combinators, parses with the first and then parses the
+    rest of the input with the second combinator.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALcterm">cterm</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Accepts a given terminal</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>D</div></td></tr>
+<tr><td><a href="Earley.html#VALdebug_lvl">debug_lvl</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">debug_lvl</code> is a flag that can be set for <code class="code">Earley</code> to display  debug
+    data on <code class="code">stderr</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALdeclare_grammar">declare_grammar</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">declare_grammar name</code> returns a new grammar that can be used in the
+    definition of other grammars, but that cannot be run on input before
+    it has been initialized with <code class="code">set_grammar</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALdeclare_grammar">declare_grammar</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p>to define recursive grammars, one may declare the grammar first and then
+    gives its value.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALdseq">dseq</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">dseq g1 g2 f)</code> is a dependant sequence, the grammar <code class="code">g2</code> used after <code class="code">g1</code> may
+    depend upon the semantics of <code class="code">g1</code>.</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>E</div></td></tr>
+<tr><td><a href="Earley.html#VALempty">empty</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">empty v</code> is a grammar that does not parse anything and returns  <code class="code">v</code>
+    as a semantic value.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALempty">empty</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">empty a</code> accepts the empty input and returns <code class="code">a</code></p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALeof">eof</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">eof v</code> is a grammar that only accepts the end of file  and  returns
+    <code class="code">v</code> as a semantic value.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALeof">eof</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Terminal accepting then end of a buffer only.</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>F</div></td></tr>
+<tr><td><a href="Earley.html#VALfail">fail</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">fail ()</code> is a grammar that always fail, whatever the input.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALfail">fail</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">fail ()</code> is a grammar that parses nothing (always fails)</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALfilename">filename</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">filename buf</code> returns the file name associated to the <code class="code">buf</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.Tbl.html#VALfind">find</a> [<a href="Input.Tbl.html">Input.Tbl</a>]</td>
+<td></td></tr>
+<tr><td><a href="Earley.html#VALfixpoint">fixpoint</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">fixpoint v g</code> parses a repetition of one or more times the input parsed
+    by <code class="code">g</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALfixpoint">fixpoint</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">fixpoint g</code> compute the fixpoint of <code class="code">g</code>, that is a grammar <code class="code">g0</code> such that
+    <code class="code">g0 = g g0</code></p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALfloat">float</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Parses a float in base 10.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.WithPP.html#VALfrom_channel">from_channel</a> [<a href="Input.WithPP.html">Input.WithPP</a>]</td>
+<td><div class="info">
+<p>Same as <code class="code">Input.from_channel</code> but uses the preprocessor.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALfrom_channel">from_channel</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">from_channel ~filename ch</code> returns a buffer constructed  using  the
+    channel <code class="code">ch</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.WithPP.html#VALfrom_file">from_file</a> [<a href="Input.WithPP.html">Input.WithPP</a>]</td>
+<td><div class="info">
+<p>Same as <code class="code">Input.from_file</code> but uses the preprocessor.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALfrom_file">from_file</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">from_file fn</code> returns a buffer constructed using the file <code class="code">fn</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.WithPP.html#VALfrom_fun">from_fun</a> [<a href="Input.WithPP.html">Input.WithPP</a>]</td>
+<td><div class="info">
+<p>Same as <code class="code">Input.from_fun</code> but uses the preprocessor.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALfrom_fun">from_fun</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">from_fun finalise name get data</code> returns a buffer constructed  from
+    the object <code class="code">data</code> using the <code class="code">get</code> function.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.WithPP.html#VALfrom_string">from_string</a> [<a href="Input.WithPP.html">Input.WithPP</a>]</td>
+<td><div class="info">
+<p>Same as <code class="code">Input.from_string</code> but uses the preprocessor.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALfrom_string">from_string</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">from_string ~filename str</code> returns a buffer constructed  using  the
+    string <code class="code">str</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Regexp.html#VALfrom_string">from_string</a> [<a href="Regexp.html">Regexp</a>]</td>
+<td></td></tr>
+<tr><td><a href="Earley.html#VALfsequence">fsequence</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">fsequence g1 g2</code> is a grammar that first parses using <code class="code">g1</code>, and then
+    parses using <code class="code">g2</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALfsequence_ignore">fsequence_ignore</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p>same as fsequence, but the result of <code class="code">g2</code> receives nothing, meaning
+    we forget the result of <code class="code">g1</code>.</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>G</div></td></tr>
+<tr><td><a href="Input.html#VALget">get</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">get buf pos</code> returns the character at position <code class="code">pos</code> in the  buffer
+    <code class="code">buf</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Position.html#VALget_pos">get_pos</a> [<a href="Position.html">Position</a>]</td>
+<td><div class="info">
+<p>Get a position from an input buffer and a column number</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALgive_name">give_name</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p>give a name to the grammar.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALgive_name">give_name</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p>allows to rename a grammar</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALgive_up">give_up</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">give_up ()</code> can be called by the user to force the parser to reject
+    a possible parsing rule.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALgive_up">give_up</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p><code class="code">give_up ()</code> will reject the current parsing rule from the action code</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALgrammar_family">grammar_family</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">grammar_family to_str name</code> returns a pair <code class="code">(gs, set_gs)</code>, where <code class="code">gs</code>
+    is a finite family of grammars parametrized by a value of type <code class="code">'a</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALgrammar_family">grammar_family</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">grammar_family to_str name</code> returns a pair <code class="code">(gs, set_gs)</code>, where <code class="code">gs</code>
+    is a finite family of grammars parametrized by a value of type <code class="code">'a</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALgrammar_info">grammar_info</a> [<a href="Earley.html">Earley</a>]</td>
+<td></td></tr>
+<tr><td><a href="Grammar.html#VALgrammar_info">grammar_info</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">grammar_info g</code> returns <code class="code">(b,cs)</code> where <code class="code">b</code> is true is the grammar accepts
+    the empty input and where <code class="code">cs</code> is the characters set accepted at the beginnning
+    of the input.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALgrammar_name">grammar_name</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p>gives the grammar name</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALgrammar_prio">grammar_prio</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p>Similar to the previous one, with an optimization.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALgrammar_prio_family">grammar_prio_family</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p>A mixture of the two above</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALgreedy">greedy</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">greedy g</code> parses g in a greedy way: only the longest match is considered.</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>H</div></td></tr>
+<tr><td><a href="Earley.html#VALhandle_exception">handle_exception</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">handle_exception fn v</code> applies the function <code class="code">fn</code> to <code class="code">v</code> and handles
+    the <code class="code">Parse_error</code> exception.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALhandle_exception">handle_exception</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p><code class="code">handle_exception fn v</code> applies the function <code class="code">fn</code> to <code class="code">v</code> and handles
+    the <code class="code">Parse_error</code> exception.</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>I</div></td></tr>
+<tr><td><a href="Earley.html#VALin_charset">in_charset</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">in_charset cs</code> is a grammar that parses any character of  the  <code class="code">cs</code>
+    charset, and returns its value.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.Preprocessor.html#VALinitial_state">initial_state</a> [<a href="Input.Preprocessor.html">Input.Preprocessor</a>]</td>
+<td><div class="info">
+<p>Initial state of the preprocessor.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALint">int</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Parses an integer in base 10.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALis_empty">is_empty</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">is_empty buf</code> test whether the buffer <code class="code">buf</code> is empty.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.Tbl.html#VALiter">iter</a> [<a href="Input.Tbl.html">Input.Tbl</a>]</td>
+<td></td></tr>
+<tr><td align="left"><div>K</div></td></tr>
+<tr><td><a href="Earley.html#VALkeyword">keyword</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">keyword s forbidden v</code> is simalar to string, but the parsing fails
+    if <code class="code">forbidden c</code> returns <code class="code">true</code> when <code class="code">c</code> is the next available
+    character.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALkeyword">keyword</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p><code class="code">keyword ~name k cs x =
+     seq ~name (string k ()) (test f ()) (fun _ _ -&gt; x)</code>
+    usefull to accept a keyword only when not followed by an alpha-numeric char</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>L</div></td></tr>
+<tr><td><a href="Grammar.html#VALlayout">layout</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">layout g b</code> changes the blank function to parse the input with the
+    grammar <code class="code">g</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALline">line</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">line buf</code> returns the current line in the buffer <code class="code">buf</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALline_length">line_length</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">line_length buf</code> returns the length of  the  current  line  in  the
+    buffer <code class="code">buf</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALline_num">line_num</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">line_num buf</code> returns the current line number of <code class="code">buf</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALline_offset">line_offset</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">line_beginning buf</code> returns the offset of the current line  in  the
+    buffer <code class="code">buf</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALlpos">lpos</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">lpos g</code> is identical to <code class="code">g</code> but passes the position just before parsing with
+    <code class="code">g</code> to the semantical action of <code class="code">g</code></p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>M</div></td></tr>
+<tr><td><a href="Position.html#VALmax_pos">max_pos</a> [<a href="Position.html">Position</a>]</td>
+<td><div class="info">
+<p>the max of to position (further in the file</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>N</div></td></tr>
+<tr><td><a href="Earley.html#VALno_blank">no_blank</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">no_blank</code> is a <code class="code">blank</code> function that does not discard any character
+    of the input buffer.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALnoblank">noblank</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Use when you have no blank chars</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALnormalize">normalize</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">normalize buf pos</code> ensures that <code class="code">pos</code> is less than  the  length  of
+    the current line in <code class="code">str</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALnot_charset">not_charset</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Reject the input (raises <code class="code">Noparse</code>) if the first character of the input
+    is in the charset.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALnot_test">not_test</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Reject the input (raises <code class="code">Noparse</code>) if the first character of the input
+    passed the test.</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>O</div></td></tr>
+<tr><td><a href="Lex.html#VALoption">option</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p><code class="code">option x t</code> parses the given terminal 0 or 1 time.</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>P</div></td></tr>
+<tr><td><a href="Earley.html#VALparse_buffer">parse_buffer</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">parse_buffer gr bl buf</code> parses the buffer <code class="code">buf</code> using  the  grammar
+    <code class="code">gr</code> and the blank function <code class="code">bl</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALparse_buffer">parse_buffer</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Parse a whole input buffer.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALparse_channel">parse_channel</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">parse_channel ~filename gr bl ch</code> parses the contenst of  the  input
+    channel <code class="code">ch</code> using the grammar <code class="code">gr</code> and the blank  function  <code class="code">bl</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALparse_channel">parse_channel</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Parse a whole input channel</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALparse_file">parse_file</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">parse_file gr bl fn</code> parses the file <code class="code">fn</code> using the grammar <code class="code">gr</code> and
+    the blank function <code class="code">bl</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALparse_string">parse_string</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">parse_string ~filename gr bl str</code> parses the string <code class="code">str</code> using the
+    grammar <code class="code">gr</code> and the blank function <code class="code">bl</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALparse_string">parse_string</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Parse a whole string</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALpartial_parse_buffer">partial_parse_buffer</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">partial_parse_buffer gr bl buf pos</code> parses  input  from  the  buffer
+    <code class="code">buf</code> starting a position <code class="code">pos</code>, using the grammar <code class="code">gr</code> and the blank
+    function <code class="code">bl</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Combinator.html#VALpartial_parse_buffer">partial_parse_buffer</a> [<a href="Combinator.html">Combinator</a>]</td>
+<td><div class="info">
+<p>Partial parsing.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Position.html#VALphantom">phantom</a> [<a href="Position.html">Position</a>]</td>
+<td><div class="info">
+<p>a phantom position, used for grammar accepting the empty input</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALplus">plus</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Same as above but parses at least once .</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALpp_error">pp_error</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">pp_error name msg</code> raises <code class="code">Preprocessor_error(name,msg)</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Regexp.html#VALprint">print</a> [<a href="Regexp.html">Regexp</a>]</td>
+<td></td></tr>
+<tr><td><a href="Grammar.html#VALprint_grammar">print_grammar</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">print_grammar ch g</code> prints the grammar <code class="code">g</code> of the given output channel.</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>R</div></td></tr>
+<tr><td><a href="Input.html#VALread">read</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">read buf pos</code> returns the character at position <code class="code">pos</code> in the buffer
+    <code class="code">buf</code>, together with the new buffer and position.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Regexp.html#VALread">read</a> [<a href="Regexp.html">Regexp</a>]</td>
+<td><div class="info">
+<p><code class="code">read re buf pos</code> attempts to parse using the buffer <code class="code">buf</code> at
+    position <code class="code">pos</code> using the regular expression <code class="code">re</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALregexp">regexp</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">regexp ?name re</code> is a grammar that uses the regexp <code class="code">re</code> to parse
+    the input buffer.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALregexp">regexp</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>create a terminal from a regexp.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALregexp_grps">regexp_grps</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>create a terminal from a regexp.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALrpos">rpos</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">rpos g</code> is identical to <code class="code">g</code> but passes the position just after parsing with
+    <code class="code">g</code> to the semantical action of <code class="code">g</code></p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>S</div></td></tr>
+<tr><td><a href="Lex.html#VALseq">seq</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Compose two terminals in sequence.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALseq">seq</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">seq g1 g2 f</code> parse with g1 and then with g2 for the rest of the input, uses <code class="code">f</code>
+    to combine both semantics</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALseq1">seq1</a> [<a href="Lex.html">Lex</a>]</td>
+<td></td></tr>
+<tr><td><a href="Grammar.html#VALseq1">seq1</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p>usefull derivations from <code class="code">seq</code></p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALseq2">seq2</a> [<a href="Lex.html">Lex</a>]</td>
+<td></td></tr>
+<tr><td><a href="Grammar.html#VALseq2">seq2</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td></td></tr>
+<tr><td><a href="Grammar.html#VALseq2_lpos">seq2_lpos</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td></td></tr>
+<tr><td><a href="Grammar.html#VALseq2_pos">seq2_pos</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p>variants of seq2 with the position of the first iterm</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALseq2_rpos">seq2_rpos</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td></td></tr>
+<tr><td><a href="Grammar.html#VALseqf">seqf</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td></td></tr>
+<tr><td><a href="Grammar.html#VALseqf_lpos">seqf_lpos</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td></td></tr>
+<tr><td><a href="Grammar.html#VALseqf_pos">seqf_pos</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p>variants of seqf with the position of the first iterm</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALseqf_rpos">seqf_rpos</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td></td></tr>
+<tr><td><a href="Earley.html#VALsequence">sequence</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">sequence g1 g2 f</code> is a grammar that first parses using <code class="code">g1</code>, and then
+    parses using <code class="code">g2</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALsequence3">sequence3</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">sequence3</code> is similar to <code class="code">sequence</code>, but it composes three grammars into
+    a sequence.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALset_grammar">set_grammar</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">set_grammar gr grdef</code> set the definiton of grammar <code class="code">gr</code> (previously
+    declared with <code class="code">declare_grammar</code>) to be  <code class="code">grdef</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALset_grammar">set_grammar</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">set_grammar g1 g2</code> set the value of <code class="code">g1</code> declared with <code class="code">declare_grammar</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALsimple_dependent_sequence">simple_dependent_sequence</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">simple_dependent_sequence g1 g2</code> is a grammar that first parses using <code class="code">g1</code>,
+    which returns a value <code class="code">a</code>, and then continues to parse with <code class="code">g2 a</code> and
+    return its result.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALstar">star</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p><code class="code">star t a f</code> Repetition of a given terminal 0,1 or more times.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Earley.html#VALstring">string</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">string s v</code> is a grammar that accepts only the  string  <code class="code">str</code>,  and
+    returns <code class="code">v</code> as a semantic value.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALstring">string</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p><code class="code">string s</code> Accepts only the given string.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALsub">sub</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">sub b i len</code> returns <code class="code">len</code> characters from position <code class="code">pos</code>.</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>T</div></td></tr>
+<tr><td><a href="Grammar.html#VALterm">term</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">term t</code> accepts the terminal <code class="code">t</code> and returns its semantics.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Lex.html#VALtest">test</a> [<a href="Lex.html">Lex</a>]</td>
+<td><div class="info">
+<p>Accept a character for which the test returns <code class="code">true</code>.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Grammar.html#VALtest">test</a> [<a href="Grammar.html">Grammar</a>]</td>
+<td><div class="info">
+<p><code class="code">test b</code> is <code class="code">if b then empty () else fail ()</code>.</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>U</div></td></tr>
+<tr><td><a href="Input.Preprocessor.html#VALupdate">update</a> [<a href="Input.Preprocessor.html">Input.Preprocessor</a>]</td>
+<td><div class="info">
+<p><code class="code">update st name lnum line</code> takes as input the state <code class="code">st</code> of  the
+        preprocessor, the file name <code class="code">name</code>, the number of the next input
+        line <code class="code">lnum</code> and the next input line <code class="code">line</code> itself.</p>
+
+</div>
+</td></tr>
+<tr><td><a href="Input.html#VALutf8_col_num">utf8_col_num</a> [<a href="Input.html">Input</a>]</td>
+<td><div class="info">
+<p><code class="code">utf8_col_num buf pos</code> returns the utf8 column number  corresponding
+    to the position <code class="code">pos</code> in <code class="code">buf</code>.</p>
+
+</div>
+</td></tr>
+<tr><td align="left"><div>W</div></td></tr>
+<tr><td><a href="Earley.html#VALwarn_merge">warn_merge</a> [<a href="Earley.html">Earley</a>]</td>
+<td><div class="info">
+<p><code class="code">warn_merge</code> is a flag that is used to choose whether  warnings  are
+    displayed or not when an ambiguity is encountered while parsing.</p>
+
+</div>
+</td></tr>
+</table>
+</body>
+</html>

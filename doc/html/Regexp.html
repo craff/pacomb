@@ -1,0 +1,126 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="Start" href="index.html">
+<link rel="previous" href="Lex.html">
+<link rel="next" href="Input.html">
+<link rel="Up" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Grammar" rel="Chapter" href="Grammar.html">
+<link title="Combinator" rel="Chapter" href="Combinator.html">
+<link title="Lex" rel="Chapter" href="Lex.html">
+<link title="Regexp" rel="Chapter" href="Regexp.html">
+<link title="Input" rel="Chapter" href="Input.html">
+<link title="Position" rel="Chapter" href="Position.html">
+<link title="Earley" rel="Chapter" href="Earley.html"><title>Regexp</title>
+</head>
+<body>
+<div class="navbar"><a class="pre" href="Lex.html" title="Lex">Previous</a>
+&nbsp;<a class="up" href="index.html" title="Index">Up</a>
+&nbsp;<a class="post" href="Input.html" title="Input">Next</a>
+</div>
+<h1>Module <a href="type_Regexp.html">Regexp</a></h1>
+
+<pre><span id="MODULERegexp"><span class="keyword">module</span> Regexp</span>: <code class="code">sig</code> <a href="Regexp.html">..</a> <code class="code">end</code></pre><div class="info module top">
+<div class="info-desc">
+<p>A small module for efficient regular expressions.</p>
+</div>
+</div>
+<hr width="100%">
+
+<pre><code><span id="TYPEregexp"><span class="keyword">type</span> <code class="type"></code>regexp</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTregexp.Chr"><span class="constructor">Chr</span></span> <span class="keyword">of</span> <code class="type">char</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTregexp.Set"><span class="constructor">Set</span></span> <span class="keyword">of</span> <code class="type">Charset.t</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTregexp.Seq"><span class="constructor">Seq</span></span> <span class="keyword">of</span> <code class="type"><a href="Regexp.html#TYPEregexp">regexp</a> list</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTregexp.Alt"><span class="constructor">Alt</span></span> <span class="keyword">of</span> <code class="type"><a href="Regexp.html#TYPEregexp">regexp</a> list</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTregexp.Opt"><span class="constructor">Opt</span></span> <span class="keyword">of</span> <code class="type"><a href="Regexp.html#TYPEregexp">regexp</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTregexp.Str"><span class="constructor">Str</span></span> <span class="keyword">of</span> <code class="type"><a href="Regexp.html#TYPEregexp">regexp</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTregexp.Pls"><span class="constructor">Pls</span></span> <span class="keyword">of</span> <code class="type"><a href="Regexp.html#TYPEregexp">regexp</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTregexp.Sav"><span class="constructor">Sav</span></span> <span class="keyword">of</span> <code class="type"><a href="Regexp.html#TYPEregexp">regexp</a></code></code></td>
+
+</tr></table>
+
+<div class="info ">
+<div class="info-desc">
+<p>Type of a regular expression.</p>
+</div>
+</div>
+
+
+<pre><span id="TYPEt"><span class="keyword">type</span> <code class="type"></code>t</span> = <code class="type"><a href="Regexp.html#TYPEregexp">regexp</a></code> </pre>
+
+
+<pre><span id="EXCEPTIONRegexp_error"><span class="keyword">exception</span> Regexp_error</span> <span class="keyword">of</span> <code class="type"><a href="Input.html#TYPEbuffer">Input.buffer</a> * int</code></pre>
+<div class="info ">
+<div class="info-desc">
+<p>Exception that is raised when a regexp cannot be read.</p>
+</div>
+</div>
+
+<pre><span id="VALprint"><span class="keyword">val</span> print</span> : <code class="type">Stdlib.out_channel -> <a href="Regexp.html#TYPEregexp">regexp</a> -> unit</code></pre>
+<pre><span id="VALaccept_empty"><span class="keyword">val</span> accept_empty</span> : <code class="type"><a href="Regexp.html#TYPEregexp">regexp</a> -> bool</code></pre>
+<pre><span id="VALaccepted_first_chars"><span class="keyword">val</span> accepted_first_chars</span> : <code class="type"><a href="Regexp.html#TYPEregexp">regexp</a> -> Charset.t</code></pre>
+<pre><span id="VALfrom_string"><span class="keyword">val</span> from_string</span> : <code class="type">string -> <a href="Regexp.html#TYPEregexp">regexp</a></code></pre>
+<pre><span id="VALread"><span class="keyword">val</span> read</span> : <code class="type"><a href="Regexp.html#TYPEregexp">regexp</a> -> <a href="Input.html#TYPEbuffer">Input.buffer</a> -> int -> string list * <a href="Input.html#TYPEbuffer">Input.buffer</a> * int</code></pre><div class="info ">
+<div class="info-desc">
+<p><code class="code">read re buf pos</code> attempts to parse using the buffer <code class="code">buf</code> at
+    position <code class="code">pos</code> using the regular expression <code class="code">re</code>. The return value is
+    a triple of the parsed string, the buffer after parsing and the
+    position after parsing. The exception <code class="code">Regexp_error(err_buf, err_pos</code>
+    is raised in case of failure at the given position.</p>
+</div>
+</div>
+</body></html>

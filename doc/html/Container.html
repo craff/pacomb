@@ -1,0 +1,209 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="Start" href="index.html">
+<link rel="previous" href="Combinator.html">
+<link rel="next" href="Earley.html">
+<link rel="Up" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Assoc" rel="Chapter" href="Assoc.html">
+<link title="Charset" rel="Chapter" href="Charset.html">
+<link title="Combinator" rel="Chapter" href="Combinator.html">
+<link title="Container" rel="Chapter" href="Container.html">
+<link title="Earley" rel="Chapter" href="Earley.html">
+<link title="Grammar" rel="Chapter" href="Grammar.html">
+<link title="Input" rel="Chapter" href="Input.html">
+<link title="Lex" rel="Chapter" href="Lex.html">
+<link title="Regexp" rel="Chapter" href="Regexp.html">
+<link title="Utils" rel="Chapter" href="Utils.html"><title>Container</title>
+</head>
+<body>
+<div class="navbar"><a class="pre" href="Combinator.html" title="Combinator">Previous</a>
+&nbsp;<a class="up" href="index.html" title="Index">Up</a>
+&nbsp;<a class="post" href="Earley.html" title="Earley">Next</a>
+</div>
+<h1>Module <a href="type_Container.html">Container</a></h1>
+
+<pre><span id="MODULEContainer"><span class="keyword">module</span> Container</span>: <code class="code">sig</code> <a href="Container.html">..</a> <code class="code">end</code></pre><div class="info module top">
+<div class="info-desc">
+<p>This library provide a type <code class="code">Container.t</code>, which can be used as a
+    list of polymorphic references.</p>
+
+<p>Another way to see it, is map with access time in O(N) where
+    N is the number of tables! Note: O(1) is possible, but usually
+    there are very few table at the same time.</p>
+
+<p>The typical use case is to have a record with a field of type
+    <code class="code">Container.t</code>. Then when you want to store some information in
+    that field of type <code class="code">a</code>, you create with <code class="code">Container.create_table</code>,
+    a value of type <code class="code">a Container.table</code>. The with <code class="code">Container.add</code>
+    and <code class="code">Container.find</code>, you can store value in your field of
+    type <code class="code">Container.t</code>.</p>
+
+<p>More precisely, consider the following type for oriented graphs:</p>
+<pre class="codepre"><code class="code">    type node = { name: string;
+                  mutable next: node list;
+                  ptrs : Container.t }
+    type graph = node list (* at least on node per component *)
+</code></pre><p>If you want to traverse the graphe, you create a table
+    to associate a boolean to each note:</p>
+<pre class="codepre"><code class="code">    let iter graph f =
+      let visited : bool Container.table = Container.create_table 101 in
+      ....
+      (* the table is automatically freed when visited is collected *)
+</code></pre><p>If you want to compute the distance between two nodes:</p>
+<pre class="codepre"><code class="code">    let distance a b =
+      let distance_to_a : int Container.table = Container.create_table 101 in
+      ....
+</code></pre>
+<p>The functorial interface is useful when you have a parametric
+    type.  Considier a record type <code class="code"> 'a t </code> to which you want to
+    associate values of type <code class="code"> ('b,'a) v </code>. It is enough for this to
+    call the functor with</p>
+
+<p><code class="code"> module M = Constainer.Make(struct type ('a,'b) v end) </code></p>
+
+<p>and have a field of type <code class="code"> 'a M.container </code> inside your record.
+    Then, you use the type <code class="code"> 'b M.table </code> when you want to start to
+    associate values of type <code class="code"> ('a,'b) v </code> to the record. The same
+    module <code class="code"> M </code> can be used for many types <code class="code"> 'b </code>.</p>
+
+<p>Remark: the non funtorial version is just defined by:
+      <code class="code"> Container.Make(struct type ('a, 'b) elt = 'a end </code></p>
+</div>
+</div>
+<hr width="100%">
+
+<pre><span id="TYPEt"><span class="keyword">type</span> <code class="type"></code>t</span> </pre>
+<div class="info ">
+<div class="info-desc">
+<p>Type of a container cell</p>
+</div>
+</div>
+
+
+<pre><span id="TYPEtable"><span class="keyword">type</span> <code class="type">'a</code> table</span> </pre>
+<div class="info ">
+<div class="info-desc">
+<p>Type of a container table. You must create a container table of
+    type <code class="code"> a table </code> to store value of type <code class="code"> a </code> in a container
+    cell. Many table can have the same type, the value are associated
+    to the pair (cell, table), not just to the cell.</p>
+</div>
+</div>
+
+
+<pre><span id="VALcreate"><span class="keyword">val</span> create</span> : <code class="type">unit -> <a href="Container.html#TYPEt">t</a></code></pre><div class="info ">
+<div class="info-desc">
+<p><code class="code"> create () </code> creates a new container cell</p>
+</div>
+</div>
+
+<pre><span id="VALadd"><span class="keyword">val</span> add</span> : <code class="type">'a <a href="Container.html#TYPEtable">table</a> -> <a href="Container.html#TYPEt">t</a> -> 'a -> unit</code></pre><div class="info ">
+<div class="info-desc">
+<p><code class="code"> add tab cell v </code> associates the value v to the pair (tab, cell).
+    complexity if O(N) where N is the number of tables with a value
+    associated to this cell.</p>
+</div>
+</div>
+
+<pre><span id="VALfind"><span class="keyword">val</span> find</span> : <code class="type">'a <a href="Container.html#TYPEtable">table</a> -> <a href="Container.html#TYPEt">t</a> -> 'a</code></pre><div class="info ">
+<div class="info-desc">
+<p><code class="code"> find tab cell </code> return the value associated to (tab, cell).
+    raises Not_found if the are no such value</p>
+</div>
+</div>
+
+<pre><span id="VALclear"><span class="keyword">val</span> clear</span> : <code class="type">'a <a href="Container.html#TYPEtable">table</a> -> unit</code></pre><div class="info ">
+<div class="info-desc">
+<p><code class="code"> clear tab </code> removed all value associated to a table.</p>
+</div>
+</div>
+
+<pre><span id="VALcreate_table"><span class="keyword">val</span> create_table</span> : <code class="type">unit -> 'a <a href="Container.html#TYPEtable">table</a></code></pre><div class="info ">
+<div class="info-desc">
+<p><code class="code"> create_table () </code> creates a new table</p>
+</div>
+</div>
+
+<pre><span id="TYPEtag"><span class="keyword">type</span> <code class="type">'_</code> tag</span> = ..</pre>
+<div class="info ">
+<div class="info-desc">
+<p>GADT to represent types in the syntax (extended when needed).</p>
+</div>
+</div>
+
+
+<pre><span id="VALaddress"><span class="keyword">val</span> address</span> : <code class="type"><a href="Container.html#TYPEt">t</a> -> unit <a href="Container.html#TYPEtag">tag</a></code></pre><div class="info ">
+<div class="info-desc">
+<p><code class="code"> address n </code> return a unique id of each cell</p>
+</div>
+</div>
+
+<pre><code><span id="TYPEeq"><span class="keyword">type</span> <code class="type">('a, 'b)</code> eq</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTeq.Y"><span class="constructor">Y</span></span> <span class="keyword">:</span> <code class="type">('a0, 'a0) <a href="Container.html#TYPEeq">eq</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTeq.N"><span class="constructor">N</span></span> <span class="keyword">:</span> <code class="type">('a1, 'b0) <a href="Container.html#TYPEeq">eq</a></code></code></td>
+
+</tr></table>
+
+<div class="info ">
+<div class="info-desc">
+<p>Standard eq-type.</p>
+</div>
+</div>
+
+
+<pre><span id="MODULETYPEParam"><span class="keyword">module type</span> <a href="Container.Param.html">Param</a></span> = <code class="code">sig</code> <a href="Container.Param.html">..</a> <code class="code">end</code></pre>
+<pre><span id="VALeq"><span class="keyword">val</span> eq</span> : <code class="type"><a href="Container.html#TYPEt">t</a> -> <a href="Container.html#TYPEt">t</a> -> bool</code></pre>
+<pre><span id="MODULEMake"><span class="keyword">module</span> <a href="Container.Make.html">Make</a></span>: <div class="sig_block"><code class="code">functor (</code><code class="code">T</code><code class="code"> : </code><code class="code">sig</code></pre><div class="sig_block">
+<pre><span id="TYPEelt"><span class="keyword">type</span> <code class="type">('a, 'b)</code> elt</span> </pre>
+
+</div><pre><code class="code">end</code><code class="code">) -&gt; </code><code class="type"><a href="Container.Param.html">Param</a></code><code class="type"> 
+       with type ('a, 'b) elt = ('a,'b) T.elt</code></div></pre>
+<pre><span id="TYPEelt"><span class="keyword">type</span> <code class="type">('a, 'b)</code> elt</span> = <code class="type">'a</code> </pre>
+
+
+<pre><code><span id="TYPEiter"><span class="keyword">type</span> <code class="type">'a</code> iter</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTiter.f">f</span>&nbsp;: <code class="type">'b. ('a, 'b) <a href="Container.html#TYPEelt">elt</a> -> unit</code>;</code></td>
+
+</tr></table>
+}
+
+
+
+<pre><span id="VALiter"><span class="keyword">val</span> iter</span> : <code class="type">'a <a href="Container.html#TYPEiter">iter</a> -> 'a <a href="Container.html#TYPEtable">table</a> -> unit</code></pre>
+<pre><code><span id="TYPEfold"><span class="keyword">type</span> <code class="type">('a, 'c)</code> fold</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTfold.f">f</span>&nbsp;: <code class="type">'b. ('a, 'b) <a href="Container.html#TYPEelt">elt</a> -> 'c -> 'c</code>;</code></td>
+
+</tr></table>
+}
+
+
+
+<pre><span id="VALfold"><span class="keyword">val</span> fold</span> : <code class="type">('a, 'c) <a href="Container.html#TYPEfold">fold</a> -> 'a <a href="Container.html#TYPEtable">table</a> -> 'c -> 'c</code></pre>
+<pre><span id="MODULERef"><span class="keyword">module</span> <a href="Container.Ref.html">Ref</a></span>: <code class="type"><a href="Container.Param.html">Param</a></code><code class="type">  with type ('a,'b) elt = 'b</code></pre></body></html>

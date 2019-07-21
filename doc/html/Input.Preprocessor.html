@@ -1,0 +1,70 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="Start" href="index.html">
+<link rel="Up" href="Input.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Grammar" rel="Chapter" href="Grammar.html">
+<link title="Combinator" rel="Chapter" href="Combinator.html">
+<link title="Lex" rel="Chapter" href="Lex.html">
+<link title="Regexp" rel="Chapter" href="Regexp.html">
+<link title="Input" rel="Chapter" href="Input.html">
+<link title="Position" rel="Chapter" href="Position.html">
+<link title="Earley" rel="Chapter" href="Earley.html"><title>Input.Preprocessor</title>
+</head>
+<body>
+<div class="navbar">&nbsp;<a class="up" href="Input.html" title="Input">Up</a>
+&nbsp;</div>
+<h1>Module type <a href="type_Input.Preprocessor.html">Input.Preprocessor</a></h1>
+
+<pre><span id="MODULETYPEPreprocessor"><span class="keyword">module type</span> Preprocessor</span> = <code class="code">sig</code> <a href="Input.Preprocessor.html">..</a> <code class="code">end</code></pre><div class="info modtype top">
+<div class="info-desc">
+<p>Specification of a preprocessor.</p>
+</div>
+</div>
+<hr width="100%">
+
+<pre><span id="TYPEstate"><span class="keyword">type</span> <code class="type"></code>state</span> </pre>
+<div class="info ">
+<div class="info-desc">
+<p>Type for the internal state of the preprocessor.</p>
+</div>
+</div>
+
+
+<pre><span id="VALinitial_state"><span class="keyword">val</span> initial_state</span> : <code class="type"><a href="Input.Preprocessor.html#TYPEstate">state</a></code></pre><div class="info ">
+<div class="info-desc">
+<p>Initial state of the preprocessor.</p>
+</div>
+</div>
+
+<pre><span id="VALupdate"><span class="keyword">val</span> update</span> : <code class="type"><a href="Input.Preprocessor.html#TYPEstate">state</a> -><br>       string -> int -> string -> <a href="Input.Preprocessor.html#TYPEstate">state</a> * string * int * bool</code></pre><div class="info ">
+<div class="info-desc">
+<p><code class="code">update st name lnum line</code> takes as input the state <code class="code">st</code> of  the
+        preprocessor, the file name <code class="code">name</code>, the number of the next input
+        line <code class="code">lnum</code> and the next input line <code class="code">line</code> itself. It returns  a
+        tuple of the new state, the new file name, the new line  number,
+        and a boolean. The new file name and line number can be used  to
+        implement line number directives. The boolean is <code class="code">true</code>  if  the
+        line should be part of the input (i.e.  it  is  not  a  specific
+        preprocessor line) and <code class="code">false</code> if  it  should  be  ignored.  The
+        function may raise <code class="code">Preprocessor_error</code> in case of error.</p>
+</div>
+</div>
+
+<pre><span id="VALcheck_final"><span class="keyword">val</span> check_final</span> : <code class="type"><a href="Input.Preprocessor.html#TYPEstate">state</a> -> string -> unit</code></pre><div class="info ">
+<div class="info-desc">
+<p><code class="code">check_final st name</code> check that <code class="code">st</code> indeed is a correct  state
+        of the preprocessor for the end of input of file <code class="code">name</code>.  If  it
+        is not the  case, then  the  exception  <code class="code">Preprocessor_error</code>  is
+        raised.</p>
+</div>
+</div>
+</body></html>
