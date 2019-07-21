@@ -7,9 +7,9 @@
 (test
   (name hard)
   (modules hard)
-  (flags -ppx "./ppx/pacombPpx.exe")
+  (flags -ppx "./ppx/ppx_pacomb.exe")
   (libraries unix pacomb)
-  (deps ../ppx/pacombPpx.exe hard.exe)
+  (deps ../ppx/ppx_pacomb.exe hard.exe)
   (action (run ./hard.exe 1000)))
 
 (executable
@@ -20,17 +20,17 @@
 (test
   (name calc)
   (modules calc)
-  (flags -ppx "./ppx/pacombPpx.exe")
+  (flags -ppx "./ppx/ppx_pacomb.exe")
   (libraries unix pacomb)
-  (deps ../ppx/pacombPpx.exe big_expr.exe calc.exe)
+  (deps ../ppx/ppx_pacomb.exe big_expr.exe calc.exe)
   (action
     (system "./big_expr.exe 4 4 4 | ./calc.exe")))
 
 (test
   (name calc_prio)
   (modules calc_prio)
-  (flags -ppx "./ppx/pacombPpx.exe")
+  (flags -ppx "./ppx/ppx_pacomb.exe")
   (libraries unix pacomb)
-  (deps ../ppx/pacombPpx.exe big_expr.exe calc_prio.exe)
+  (deps ../ppx/ppx_pacomb.exe big_expr.exe calc_prio.exe)
   (action
     (system "./big_expr.exe 4 4 4 | ./calc_prio.exe")))
