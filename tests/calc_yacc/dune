@@ -1,7 +1,7 @@
 (executable
   (name calc)
   (modules :standard)
-  (libraries unix grammar))
+  (libraries unix))
 
 (rule
  (targets lexer.ml)
