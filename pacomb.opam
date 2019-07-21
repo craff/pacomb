@@ -1,22 +1,21 @@
 synopsis: "Parsing library based on Earley Algorithm"
 description:
 """
-Earley is a parser combinator library base on Earley's algorithm. It
-is intended to be used in conjunction with an OCaml syntax extension
-which allows the definition of parsers inside the language. There is
-also support for writing OCaml syntax extensions in a camlp4 style.
+Pacomb is a tool to build grammars and compile them to combinators before
+parsing.  It also provides a ppx extension to write parsers. Grammars as
+first class ocaml values together with good performaces and concise code make
+Pacomb a very promising solution to write languages in OCaml.
 """
 
 opam-version: "2.0"
-maintainer: "Rodolphe Lepigre <rodolphe.lepigre@inria.fr>"
-bug-reports: "https://github.com/rlepigre/ocaml-earley/issues"
-homepage: "https://github.com/rlepigre/ocaml-earley"
-dev-repo: "git+https://github.com/rlepigre/ocaml-earley.git"
+maintainer: "Christophe Raffalli <christophe@raffalli.eu>"
+bug-reports: "https://github.com/craff/pacomb/issues"
+homepage: "https://github.com/craff/pacomb"
+dev-repo: "git+https://github.com/craff/pacomb.git"
 authors: [
   "Christophe Raffalli <christophe@raffalli.eu>"
   "Rodolphe Lepigre <rodolphe.lepigre@inria.fr>" ]
 license: "CeCILL-B_V1"
-doc: "https://rlepigre.github.io/ocaml-earley/"
 
 depends: [
   "ocaml" { >= "4.03.0" }
