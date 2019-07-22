@@ -204,11 +204,12 @@ let str_to_parser items =
        | Nonrecursive ->
          let definitions =
            let gn (name, param, rules) =
-             if param <> None then
-               warn item.pstr_loc
-                             "Parametric grammar must use the rec keyword";
-             Str.value Nonrecursive
-               [Vb.mk (Pat.var name) rules]
+             match param with
+               None -> Str.value Nonrecursive [Vb.mk (Pat.var name) rules]
+             | Some name ->
+                Str.value Nonrecursive
+                  [Vb.mk (Pat.var name)
+                     (Exp.fun_ Nolabel None (Pat.var name) rules)]
            in
            List.map gn ls
          in
