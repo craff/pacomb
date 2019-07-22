@@ -11,9 +11,12 @@ let int () =
 
 let rec expr n p s =
   if n <= 0 then int ()
-  else seq "+" s (fun () -> seq "*" p (fun () ->
-                                  if n = 1 then int () else
-                                  paren (fun () -> expr (n - 1) p s)))
+  else seq (if Random.bool () then "+" else "-")
+         s (fun () -> seq
+                        (if Random.bool () then "*" else "/")
+                        p (fun () ->
+                          if n = 1 then int () else
+                            paren (fun () -> expr (n - 1) p s)))
 
 let n = int_of_string (Sys.argv.(1))
 let p = int_of_string (Sys.argv.(2))
