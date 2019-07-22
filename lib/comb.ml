@@ -193,7 +193,9 @@ let right_pos : (Pos.t -> 'a) t -> 'a t = fun g ->
   in
   { comb }
 
-(** [lr g gf] is an optimized version of [let rec r = seq g (seq r gf)]. *)
+(** [lr g gf] is the combinator used to eliminate left recursion.  its
+    meaning is [g gf*] using an EBNF syntax or using a recursive combinator
+    which is illegal : [seq g (let rec r = seq r gf in r)]. *)
 let lr : 'a t -> Charset.t -> ('a -> 'a) t -> 'a t = fun g cs gf ->
   let comb : type r. ('a, r) comb = fun env k err ->
     let rec lr env err v =
