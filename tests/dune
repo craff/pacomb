@@ -34,3 +34,12 @@
   (deps ../ppx/ppx_pacomb.exe big_expr.exe calc_prio.exe)
   (action
     (system "./big_expr.exe 4 4 4 | ./calc_prio.exe")))
+
+(test
+  (name calc_factor)
+  (modules calc_factor)
+  (flags -ppx "./ppx/ppx_pacomb.exe")
+  (libraries unix pacomb)
+  (deps ../ppx/ppx_pacomb.exe big_expr.exe calc_factor.exe)
+  (action
+    (system "./big_expr.exe 4 4 4 | ./calc_factor.exe")))

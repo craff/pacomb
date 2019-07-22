@@ -28,7 +28,7 @@ let has_ident id e =
   let _ = mapper.expr mapper e in
   !found
 
-let exp_to_grammar ?name_param exp =
+let rec exp_to_grammar ?name_param ?(fn=(fun exp -> exp)) exp =
   let lexify exp =
     match exp.pexp_desc with
     | Pexp_constant (Pconst_char _) ->
@@ -70,33 +70,36 @@ let exp_to_grammar ?name_param exp =
       ( { pexp_desc = Pexp_ident {txt = Lident "=>"; _}; _ }
       , [(Nolabel,rule);(Nolabel,action)]) ->
        let rule = items rule in
-       let fn (exp, rule) (name, item) = match name with
-         | None    -> (exp, (false, false, false, item) :: rule)
+       let gn (fn, rule) (name, item) = match name with
+         | None    -> (fn, (false, false, false, item) :: rule)
          | Some id ->
             let id_rpos = mkloc (id.txt ^ "_rpos") id.loc in
-            let (exp,rpos) =
+            let (fn,rpos) =
               if has_ident id_rpos.txt action then
-                (Exp.fun_ Nolabel None (Pat.var id_rpos) exp, true)
-              else (exp, false)
+                ((fun exp -> Exp.fun_ Nolabel None (Pat.var id_rpos) (fn exp)), true)
+              else (fn, false)
             in
-            let (exp,has_id) =
+            let (fn,has_id) =
               if has_ident id.txt action then
-                (Exp.fun_ Nolabel None (Pat.var id) exp, true)
+                ((fun exp -> Exp.fun_ Nolabel None (Pat.var id) (fn exp)), true)
               else
-                (exp, false)
+                (fn, false)
             in
             let id_lpos = mkloc (id.txt ^ "_lpos") id.loc in
-            let (exp,lpos) =
+            let (fn,lpos) =
               if has_ident id_lpos.txt action then
-                (Exp.fun_ Nolabel None (Pat.var id_lpos) exp, true)
+                ((fun exp -> Exp.fun_ Nolabel None (Pat.var id_lpos) (fn exp)), true)
               else
-                (exp, false)
+                (fn, false)
             in
-            (exp, (lpos,has_id,rpos,item) :: rule)
+            (fn, (lpos,has_id,rpos,item) :: rule)
        in
-       let (action, rule) = List.fold_left fn (action, []) rule in
+       let (fn, rule) = List.fold_left gn (fn, []) rule in
        let rule = List.rev rule in
-       let action = app  (grmod "empty") action in
+       let action =
+         try exp_to_grammar ~fn action
+         with Exit -> app (grmod "empty") (fn action)
+       in
        let fn (lpos,has_id,rpos,item) exp =
          let f = match (lpos,has_id,rpos) with
            | false, false, false -> "seq2"
@@ -145,7 +148,10 @@ let exp_to_grammar ?name_param exp =
   in
   let fail = app (grmod "fail") unit_ in
   let fn rule exp = app2 (grmod "alt") rule exp in
-  try List.fold_right fn (rules exp) fail
+  List.fold_right fn (rules exp) fail
+
+let exp_to_grammar ?name_param exp =
+  try exp_to_grammar ?name_param exp
   with Exit -> exp
 
 let str_to_grammar str =
