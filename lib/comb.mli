@@ -71,7 +71,7 @@ val dep_seq: 'a t -> ('a -> 'b t) -> ('b -> 'c) -> 'c t
     at the beginning of the input for each combinators.
     The charset must be Charset.full if the corresponding combinator
     accept the empty input *)
-val alt : ?cs1:Charset.t -> ?cs2:Charset.t -> 'a t ->  'a t -> 'a t
+val alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t
 
 (** Parses with the given combinator and transforms the semantics with
     the given function *)
@@ -92,14 +92,14 @@ val read : int -> (Pos.t -> 'a) t -> 'a t
 (** Same as above with the position to the right *)
 val right_pos : (Pos.t -> 'a) t -> 'a t
 
-(** [cls c1 c2] is an optimized version of [let rec r = seq c1 (seq r c2)]
+(** [lr c1 c2] is an optimized version of [let rec r = seq c1 (seq r c2)]
     which is illegal as it is left recursive and loops. The optional charset indicates
     the characteres accepted by [c2] at the beginning of input. *)
-val clr : ?cs2:Charset.t -> 'a t -> ('a -> 'a) t -> 'a t
+val lr : 'a t -> Charset.t -> ('a -> 'a) t -> 'a t
 
 (** Access to a reference to a combinator, use by Grammar.compile
     for recursive grammars (not for left recursion *)
-val cref : 'a t ref -> 'a t
+val deref : 'a t ref -> 'a t
 
 (** Change the blank function used to parse with the given combinator.
     we can choose which blank to use at the boundary with the optional

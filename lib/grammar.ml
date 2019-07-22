@@ -578,12 +578,12 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   match g with
   | EFail -> Comb.fail
   | ETerm(c) -> Comb.lexeme c.f
-  | EAlt(g1,g2) -> Comb.alt ~cs1:(first_charset g1) ~cs2:(first_charset g2)
-                       (compile_ne g1) (compile_ne g2)
+  | EAlt(g1,g2) -> Comb.alt (first_charset g1) (compile_ne g1)
+                            (first_charset g2) (compile_ne g2)
   | ESeq(g1,g2,f) -> Comb.seq (compile_ne g1) (compile g2) f
   | EDSeq(g1,g2,f) -> Comb.dep_seq (compile_ne g1) (fun x -> compile (g2 x)) f
   | EAppl(g1,f) -> Comb.app (compile_ne g1) f
-  | ELr(g,s) -> Comb.clr ~cs2:(first_charset s.ne) (compile_ne g) (compile_ne s.ne)
+  | ELr(g,s) -> Comb.lr (compile_ne g) (first_charset s.ne) (compile_ne s.ne)
   | ERef g -> compile g
   | EPush(g) -> Comb.push (compile_ne g)
   | ERead(n,g) -> Comb.read n (compile_ne g)
@@ -598,7 +598,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   remove_push g;
   elim_left_rec [] g;
   assert (g.phase >= LeftRecEliminated);
-  let get g = if g.recursive then Comb.cref g.compiled else !(g.compiled) in
+  let get g = if g.recursive then Comb.deref g.compiled else !(g.compiled) in
   let cg =
     if g.phase = Compiled then get g
     else
@@ -613,7 +613,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   match g.e with
   | Some x ->
      let e = Comb.empty x in
-     if g.ne = EFail then e else Comb.alt ~cs2:(first_charset g.ne) e cg
+     if g.ne = EFail then e else Comb.alt Charset.full e (first_charset g.ne) cg
   | None ->
      if g.ne = EFail then Comb.fail else cg
 

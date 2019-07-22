@@ -38,16 +38,16 @@ type 'a env =
 type 'b err = unit -> 'b
 
 (** Type of a parsing continuation. *)
-type ('a,'b) cont = 'b env -> 'b err -> 'a -> 'b
+type ('a, 'b) cont = 'b env -> 'b err -> 'a -> 'b
 
 (** Type of a parser combinator with a semantic action of type ['a]. They type
-    ['b] represents the type of the continuation, it is universally quantified
+    ['r] represents the type of the continuation, it is universally quantified
     in the the definition of the type ['a t] below. *)
-type ('a, 'b) comb = 'b env -> ('a,'b) cont -> 'b err -> 'b
+type ('a, 'r) comb = 'r env -> ('a, 'r) cont -> 'r err -> 'r
 
 (** Type of a parser combinaton, with universally quantified continuation type
     parameter. *)
-type 'a t = { comb : 'b. ('a,'b) comb } [@@unboxed]
+type 'a t = { comb : 'r. ('a, 'r) comb } [@@unboxed]
 
 (** [next env err] updates the current maximum position [env.max_pos] and then
     calls the [err] function. *)
@@ -77,7 +77,7 @@ let empty : 'a -> 'a t = fun x ->
 
 (** Combinator accepting the given lexeme (or terminal). *)
 let lexeme : 'a Lex.lexeme -> 'a t = fun lex ->
-  let comb : type b. ('a, b) comb = fun env k err ->
+  let comb : type r. ('a, r) comb = fun env k err ->
     (try
        let (v, buf_before_blanks, col_before_blanks) =
          lex env.current_buf env.current_col
@@ -95,9 +95,9 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex ->
   in
   { comb }
 
-(** sequence *)
+(** Sequence combinator. *)
 let seq : 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t = fun g1 g2 fn ->
-  let comb : type b. b env -> ('c, b) cont -> b err -> b = fun env k err ->
+  let comb : type r. ('c, r) comb = fun env k err ->
     g1.comb env (fun env err v1 ->
       g2.comb env (fun env err v2 ->
         (try fun () -> k env err (fn v1 v2)
@@ -105,108 +105,114 @@ let seq : 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t = fun g1 g2 fn ->
   in
   { comb }
 
-(** dependant sequence *)
-let dep_seq: 'a t -> ('a -> 'b t) -> ('b -> 'c) -> 'c t = fun g1 g2 fn ->
-    { comb = fun e k f -> g1.comb e
-            (fun e f x ->
-              (try let g = g2 x in
-                   fun () -> g.comb e
-                               (fun e f y ->
-                                 (try
-                                    let z = fn y in
-                                    fun () -> k e f z
-                                  with Lex.NoParse ->
-                                    fun () -> next e f) ()) f
-               with Lex.NoParse ->
-                 fun () -> next e f) ()) f }
+(** Dependant sequence combinator. *)
+let dep_seq : 'a t -> ('a -> 'b t) -> ('b -> 'c) -> 'c t = fun g1 g2 fn ->
+  let comb : type r. ('c, r) comb = fun env k err ->
+    g1.comb env (fun env err v1 ->
+      (try
+         let g = g2 v1 in
+         fun () -> g.comb env (fun env err v2 ->
+           (try
+              let v = fn v2 in
+              fun () -> k env err v
+            with Lex.NoParse -> fun () -> next env err) ()) err
+       with Lex.NoParse -> fun () -> next env err) ()) err
+  in
+  { comb }
 
-(** alternatives *)
-let alt : ?cs1:Charset.t -> ?cs2:Charset.t -> 'a t -> 'a t -> 'a t =
-  fun ?(cs1=Charset.full) ?(cs2=Charset.full) g1 g2 ->
-    { comb = fun e k f ->
-          match test cs1 e, test cs2 e with
-          | false, false -> next e f
-          | true, false  -> g1.comb e k f
-          | false, true  -> g2.comb e k f
-          | true, true   ->
-             g1.comb e k (fun () -> g2.comb e k f)
-    }
+(** Alternatives combinator. *)
+let alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t =
+    fun cs1 g1 cs2 g2 ->
+  let comb : type r. ('a, r) comb = fun env k err ->
+    match (test cs1 env, test cs2 env) with
+    | (false, false) -> next env err
+    | (true , false) -> g1.comb env k err
+    | (false, true ) -> g2.comb env k err
+    | (true , true ) -> g1.comb env k (fun () -> g2.comb env k err)
+  in
+  { comb }
 
-(** application *)
-let app : 'a t -> ('a -> 'b) -> 'b t =
-  fun g1 fn -> { comb = fun e k f ->
-                    g1.comb e (fun e f x ->
-                        (try
-                          let y = fn x in
-                          fun () -> k e f y
-                         with Lex.NoParse ->
-                           fun () -> next e f) ()) f }
+(** Application of a semantic function to alter a combinator. *)
+let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn ->
+  let comb : type r. ('b, r) comb = fun env k err ->
+    g.comb env (fun env err v ->
+      (try let v = fn v in fun () -> k env err v
+       with Lex.NoParse -> fun () -> next env err) ()) err
+  in
+  { comb }
 
-let head_pos n e =
-  let rec fn n = function
-  | [] -> assert false
-  | x::l -> if n <= 0 then x else fn (n-1) l
-  in fn n e.left_pos_stack
+let head_pos n env =
+  let rec fn n stack =
+    match stack with
+    | []                     -> assert false
+    | p :: _     when n <= 0 -> p
+    | _ :: stack             -> fn (n - 1) stack
+  in
+  fn n env.left_pos_stack
 
-let tail_pos e = match e.left_pos_stack with
-  | [] -> assert false
-  | _::l -> l
+let tail_pos env =
+  match env.left_pos_stack with
+  | []         -> assert false
+  | _ :: stack -> stack
 
-(** push the current position to a stack *)
-let push : 'a t -> 'a t =
-  fun g ->
-  { comb = fun e k f ->
-        let pos = Pos.get_pos e.current_buf e.current_col in
-        let e = { e with left_pos_stack = pos::e.left_pos_stack } in
-        g.comb e ( fun e f x -> k { e with left_pos_stack = tail_pos e} f x) f }
+(** Pushes the current position to the (left position) stack. *)
+let push : 'a t -> 'a t = fun g ->
+  let comb : type r. ('a, r) comb = fun env k err ->
+    let pos = Pos.get_pos env.current_buf env.current_col in
+    let env = { env with left_pos_stack = pos :: env.left_pos_stack } in
+    let k env err v = k { env with left_pos_stack = tail_pos env } err v in
+    g.comb env k err
+  in
+  { comb }
 
-(** read the position from the stack *)
-let read : int -> (Pos.t -> 'a) t -> 'a t =
-  fun n g ->
-  { comb = fun e k f ->
-        let pos = head_pos n e in
-        g.comb e (fun e f fn ->
-            (try
-               let x = fn pos in
-               fun () -> k e f x
-             with
-               Lex.NoParse -> fun () -> next e f) ()) f }
+(** Read the n-th position from the (left position) stack. *)
+let read : int -> (Pos.t -> 'a) t -> 'a t = fun n g ->
+  let comb : type r. ('a, r) comb = fun env k err ->
+    let pos = head_pos n env in
+    let k env err fn =
+      (try let v = fn pos in fun () -> k env err v
+       with Lex.NoParse -> fun () -> next env err) ()
+    in
+    g.comb env k err
+  in
+  { comb }
 
-(** read the position at the left of the input to be parsed *)
+(** Read the position at the left of the input to be parsed. *)
 let left_pos : (Pos.t -> 'a) t -> 'a t = fun g -> push (read 0 g)
 
-(** read the position after parsing *)
-let right_pos : (Pos.t -> 'a) t -> 'a t =
-  fun g ->
-    { comb = fun e k f ->
-          g.comb e (fun e f fn ->
-              (try
-                 let pos = Pos.get_pos e.buf_before_blanks e.col_before_blanks in
-                 let x = fn pos in
-                 fun () -> k e f x
-               with Lex.NoParse -> fun () -> next e f) ()) f }
-
-(** [cls c1 c2] is an optimized version of [let rec r = seq c1 (seq r c2)] *)
-let clr : ?cs2:Charset.t -> 'a t -> ('a -> 'a) t -> 'a t =
-  fun ?(cs2=Charset.full) g0 gf -> { comb = fun e k f ->
-    let rec clr e f x =
-      if test cs2 e then
-        k e
-          (fun () ->
-            gf.comb e (fun e f fn ->
-                (try
-                  let y = fn x in
-                  fun () -> clr e f y
-                with Lex.NoParse ->
-                  fun () -> next e f) ()) f)
-          x
-      else k e f x
+(** Read the position after parsing. *)
+let right_pos : (Pos.t -> 'a) t -> 'a t = fun g ->
+  let comb : type r. ('a, r) comb = fun env k err ->
+    let k env err fn =
+      (try
+         let pos = Pos.get_pos env.buf_before_blanks env.col_before_blanks in
+         let v = fn pos in fun () -> k env err v
+       with Lex.NoParse -> fun () -> next env err) ()
     in
-    g0.comb e clr f}
+    g.comb env k err
+  in
+  { comb }
 
-(** combinator under a ref to implement recursive grammars *)
-let cref : 'a t ref -> 'a t = fun ptr ->
-  { comb = fun e k f -> !ptr.comb e k f }
+(** [lr g gf] is an optimized version of [let rec r = seq g (seq r gf)]. *)
+let lr : 'a t -> Charset.t -> ('a -> 'a) t -> 'a t = fun g cs gf ->
+  let comb : type r. ('a, r) comb = fun env k err ->
+    let rec lr env err v =
+      if test cs env then
+        let err () =
+          gf.comb env (fun env err fn ->
+            (try let y = fn v in fun () -> lr env err y
+             with Lex.NoParse -> fun () -> next env err) ()) err
+        in
+        k env err v
+      else k env err v
+    in
+    g.comb env lr err
+  in
+  { comb }
+
+(** Combinator under a refrerence used to implement recursive grammars. *)
+let deref : 'a t ref -> 'a t = fun gref ->
+  { comb = fun env k err -> !gref.comb env k err }
 
 (** changes the blank function *)
 let change_layout
