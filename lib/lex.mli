@@ -114,9 +114,17 @@ val string : ?name:string -> string -> 'a -> 'a t
     [name] defaults to ["INT"] *)
 val int : ?name:string -> unit -> int t
 
-(** Parses a float in base 10. [".1"] is not accepted ["0.1"] is.
+(** Parses a float in base 10. [".1"] is accepted as ["0.1"]
     [name] defaults to ["FLOAT"] *)
 val float : ?name:string -> unit -> float t
+
+(** Parses a char litteral 'c' using ocaml escaping convention
+    [name] defaults to ["CHARLIT"] *)
+val char_lit : ?name:string -> unit -> char t
+
+(** Parses a string litteral "cccc" using ocaml escaping convention
+    [name] defaults to ["STRINGLIT"] *)
+val string_lit : ?name:string -> unit -> string t
 
 (** [keyword ~name k cs x =
      seq ~name (string k ()) (test f ()) (fun _ _ -> x)]

@@ -269,6 +269,109 @@ let float : ?name:string -> unit -> float t = fun ?name () ->
         in
         (float_of_string (Buffer.contents b), s0, n0) }
 
+let escaped = fun c s n ->
+  if c = '\\' then
+    let (c,s,n) = Input.read s n in
+    match c with
+    | '\\' -> ('\\', s, n)
+    | '\'' -> ('\'', s, n)
+    | '\"' -> ('"', s, n)
+    | 'n'  -> ('\n', s, n)
+    | 'r'  -> ('\r', s, n)
+    | 't'  -> ('\t', s, n)
+    | 'b'  -> ('\b', s, n)
+    | '0'..'2' ->
+       let (c1,s,n) = Input.read s n in
+       let (c2,s,n) = Input.read s n in
+       if (c1 >= '0' && c1 <= '9' && c2 >= '0' && c2 <= '9') then
+         begin
+           let c = (  (Char.code c  - Char.code '0') * 100
+                      + (Char.code c1 - Char.code '0') * 10
+                      + (Char.code c2 - Char.code '0'))
+           in
+           if c < 256 then (Char.chr c, s, n) else
+             raise NoParse
+         end
+       else raise NoParse
+    | 'o' ->
+       let (c1,s,n) = Input.read s n in
+       let (c2,s,n) = Input.read s n in
+       let (c3,s,n) = Input.read s n in
+       if (c1 >= '0' && c1 <= '3' && c2 >= '0' && c2 <= '7'
+           && c3 >= '0' && c3 <= '7') then
+         let c = (  (Char.code c1 - Char.code '0') * 64
+                  + (Char.code c2 - Char.code '0') * 8
+                  + (Char.code c3 - Char.code '0'))
+         in
+         (Char.chr c, s, n)
+       else raise NoParse
+    | 'x' ->
+       let (c1,s,n) = Input.read s n in
+       let (c2,s,n) = Input.read s n in
+       let x1 = match c1 with
+         | '0'..'9' -> Char.code c1 - Char.code '0'
+         | 'a'..'f' -> Char.code c1 - Char.code 'a' + 10
+         | 'A'..'F' -> Char.code c1 - Char.code 'A' + 10
+         | _       -> raise NoParse
+       in
+       let x2 = match c2 with
+         | '0'..'9' -> Char.code c2 - Char.code '0'
+         | 'a'..'f' -> Char.code c2 - Char.code 'a' + 10
+         | 'A'..'F' -> Char.code c2 - Char.code 'A' + 10
+         | _       -> raise NoParse
+       in
+      (Char.chr (x1 * 16 + x2), s, n)
+    | _ -> raise NoParse
+  else raise Exit
+
+let char_lit : ?name:string -> unit -> char t = fun ?name () ->
+  { n = Option.get "CHARLIT" name
+  ; c = Charset.singleton '\''
+  ; f = fun s n ->
+        let (c,s,n) = Input.read s n in
+        if c <> '\'' then raise NoParse;
+        let (c,s,n as r) = Input.read s n in
+        if c = '\'' || c = '\255' then raise NoParse;
+        let (cr,s,n) = try escaped c s n with Exit -> r in
+        let (c,s,n) = Input.read s n in
+        if c <> '\'' then raise NoParse;
+        (cr,s,n)
+  }
+
+let rec skip_newline c s0 n0 =
+  let rec fn s0 n0 =
+    let (c,s,n) = Input.read s0 n0 in
+    if c = ' ' || c = '\t' then fn s n
+    else skip_newline c s n
+  in
+  if c = '\\' then
+    let (c1,s,n) = Input.read s0 n0 in
+    if c1 = '\n' then fn s n else (c,s0, n0)
+  else (c,s0,n0)
+
+let string_lit : ?name:string -> unit -> string t = fun ?name () ->
+  { n = Option.get "STRINTLIT" name
+  ; c = Charset.singleton '"'
+  ; f = fun s n ->
+        let (c,s,n) = Input.read s n in
+        if c <> '"' then raise NoParse;
+        let b = Buffer.create 64 in
+        let rec fn s n =
+          let (c,s,n) = Input.read s n in
+          let (c,s,n as r) = skip_newline c s n in
+          if c = '"' then (s,n)
+          else if c = '\255' then raise NoParse
+          else
+            begin
+              let (cr,s,n) = try escaped c s n with Exit -> r in
+              Buffer.add_char b cr;
+              fn s n
+            end
+        in
+        let (s,n) = fn s n in
+        (Buffer.contents b,s,n)
+  }
+
 let rec alts : 'a t list -> 'a t = function
   | [] -> invalid_arg "alts: empty list"
   | [r] -> r

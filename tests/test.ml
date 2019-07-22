@@ -137,6 +137,8 @@ let test13 = compile test13
 
 let test14 = compile (term (Lex.int ()))
 let test15 = compile (term (Lex.float ()))
+let test16 = compile (term (Lex.char_lit ()))
+let test17 = compile (term (Lex.string_lit ()))
 
 let _ = assert (parse_string test0 "a" = 1)
 let _ = assert_fail (fun () -> parse_string test0 "")
@@ -249,6 +251,39 @@ let _ = assert_fail (fun () -> parse_string test15 "e5")
 let _ = assert_fail (fun () -> parse_string test15 "E5")
 let _ = assert_fail (fun () -> parse_string test15 ".e5")
 let _ = assert_fail (fun () -> parse_string test15 "-E5")
+
+let _ = assert (parse_string test16 "'a'" = 'a')
+let _ = assert (parse_string test16 "'\"'" = '"')
+let _ = assert (parse_string test16 "'\\\\'" = '\\')
+let _ = assert (parse_string test16 "'\\''" = '\'')
+let _ = assert (parse_string test16 "'\\\"'" = '"')
+let _ = assert (parse_string test16 "'\\n'" = '\n')
+let _ = assert (parse_string test16 "'\\t'" = '\t')
+let _ = assert (parse_string test16 "'\\r'" = '\r')
+let _ = assert (parse_string test16 "'\\b'" = '\b')
+let _ = assert (parse_string test16 "'\\048'" = '\048')
+let _ = assert (parse_string test16 "'\\255'" = '\255')
+let _ = assert (parse_string test16 "'\\x48'" = '\x48')
+let _ = assert (parse_string test16 "'\\xFF'" = '\xFF')
+let _ = assert (parse_string test16 "'\\o033'" = '\o033')
+let _ = assert (parse_string test16 "'\\o377'" = '\o377')
+let _ = assert_fail (fun () -> parse_string test16 "")
+let _ = assert_fail (fun () -> parse_string test16 "'")
+let _ = assert_fail (fun () -> parse_string test16 "''")
+let _ = assert_fail (fun () -> parse_string test16 "'''")
+let _ = assert_fail (fun () -> parse_string test16 "'\\256'")
+let _ = assert_fail (fun () -> parse_string test16 "'\\o400'")
+
+let _ = assert (parse_string test17 "\"\"" = "")
+let _ = assert (parse_string test17 "\"toto\"" = "toto")
+let _ = assert (parse_string test17 "\"\\ttoto\\n\"" = "\ttoto\n")
+let _ = assert (parse_string test17 "\"\\ttoto\\t\\
+                                     coucou\"" = "\ttoto\tcoucou")
+let _ = assert (parse_string test17 "\"\\ttoto\\t\\
+                                     \\
+                                     coucou\"" = "\ttoto\tcoucou")
+let _ = assert_fail (fun () -> parse_string test17 "\"")
+
 
 let parse_all_string g s =
   let s = Input.from_string s in
