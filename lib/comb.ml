@@ -1,4 +1,4 @@
-(** Combinator library *)
+(** Parser combinator library *)
 
 (** Combinators are a standard approach to parsing in functional language. The
     major advantage of combinators is that they allow manipulating grammars as
@@ -31,7 +31,7 @@ type 'a env =
   (** Input buffer before reading the blanks. *)
   ; col_before_blanks : int
   (** Column number in [buf_before_blanks] before reading the blanks. *)
-  ; key : 'a Assoc.key
+  ; key               : 'a Assoc.key
   (** Type repr. for keeping the type of the global result after parsing. *) }
 
 (** Type of a function called in case of error. *)
@@ -40,8 +40,14 @@ type 'b err = unit -> 'b
 (** Type of a parsing continuation. *)
 type ('a,'b) cont = 'b env -> 'b err -> 'a -> 'b
 
-(** Type of a parser combinator, with continuation. *)
-type 'a t = { comb : 'b. 'b env -> ('a,'b) cont -> 'b err -> 'b } [@@unboxed]
+(** Type of a parser combinator with a semantic action of type ['a]. They type
+    ['b] represents the type of the continuation, it is universally quantified
+    in the the definition of the type ['a t] below. *)
+type ('a, 'b) comb = 'b env -> ('a,'b) cont -> 'b err -> 'b
+
+(** Type of a parser combinaton, with universally quantified continuation type
+    parameter. *)
+type 'a t = { comb : 'b. ('a,'b) comb } [@@unboxed]
 
 (** [next env err] updates the current maximum position [env.max_pos] and then
     calls the [err] function. *)
@@ -62,14 +68,16 @@ let give_up : unit -> 'a =
 let test cs e = Charset.mem cs (Input.get e.current_buf e.current_col)
 
 (** Combinator that always fails. *)
-let fail : 'a t = { comb = fun _ _ err -> err () }
+let fail : 'a t =
+  { comb = fun _ _ err -> err () }
 
 (** Combinator accepting the empty input only. *)
-let empty : 'a -> 'a t = fun x -> { comb = fun env k err -> k env err x }
+let empty : 'a -> 'a t = fun x ->
+  { comb = fun env k err -> k env err x }
 
 (** Combinator accepting the given lexeme (or terminal). *)
 let lexeme : 'a Lex.lexeme -> 'a t = fun lex ->
-  let comb : type b. b env -> ('a, b) cont -> b err -> b = fun env k err ->
+  let comb : type b. ('a, b) comb = fun env k err ->
     (try
        let (v, buf_before_blanks, col_before_blanks) =
          lex env.current_buf env.current_col
@@ -228,7 +236,7 @@ let cache : type a.a t -> a t = fun g ->
   let open Assoc in
   let open Input.Tbl in
   let cache = create () in
-  let comb : type b. b env -> (b env -> (unit -> b) -> a -> b) -> (unit -> b) -> b  =
+  let comb : type b. (a, b) comb =
     fun e0 k f ->
       let add_value e f x =
         let l = try find cache e0.current_buf e0.current_col with Not_found -> [] in
