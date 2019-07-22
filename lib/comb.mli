@@ -106,7 +106,7 @@ val deref : 'a t ref -> 'a t
     parameters. *)
 val change_layout
     : ?old_before:bool -> ?new_before:bool -> ?new_after:bool -> ?old_after:bool
-      -> 'a t -> Lex.blank -> 'a t
+      -> Lex.blank -> 'a t -> 'a t
 
 (** Combinator that caches a grammar to avoid exponential behavior.
     parsing with the grammar from each position is memoized to avoid

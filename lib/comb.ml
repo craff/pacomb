@@ -217,9 +217,9 @@ let deref : 'a t ref -> 'a t = fun gref ->
 (** changes the blank function *)
 let change_layout
     : ?old_before:bool -> ?new_before:bool -> ?new_after:bool -> ?old_after:bool
-      -> 'a t -> Lex.blank -> 'a t =
+      -> Lex.blank -> 'a t -> 'a t =
   fun ?(old_before=true) ?(new_before=false) ?(new_after=false) ?(old_after=true)
-      g b ->
+      b g ->
   { comb = fun e k f ->
         let (s,n) = if old_before then (e.current_buf,e.current_col) else
             (e.buf_before_blanks,e.col_before_blanks) in

@@ -246,11 +246,19 @@ let str_to_parser items =
 
 
 let test_mapper _argv =
+  let map_all_expr =
+    { default_mapper with
+      expr = (fun mapper exp -> exp_to_grammar
+                                  (default_mapper.expr mapper exp))
+    ; structure_item =  (fun mapper s -> str_to_parser
+                                  [default_mapper.structure_item mapper s])
+    }
+  in
   { default_mapper with
     structure_item = (fun mapper item ->
       match item with
       | { pstr_desc = Pstr_extension (({ txt = "parser"; _ }, PStr str), _); _} ->
-         str_to_parser str
+         default_mapper.structure_item map_all_expr (str_to_parser str)
       | other -> default_mapper.structure_item mapper other)
   ; expr = (fun mapper exp ->
       match exp with

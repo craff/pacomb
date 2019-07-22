@@ -167,13 +167,13 @@ val seq2_rpos : 'a grammar -> (Pos.t -> 'b) grammar -> 'b grammar
     of the first parsing. Using [cache] allows to recover a polynomial complexity *)
 val cache : 'a grammar -> 'a grammar
 
-(** [layout g b] changes the blank function to parse the input with the
+(** [layout b g] changes the blank function to parse the input with the
     grammar [g]. The optional parameters allow to control which blanks are used
     at the bounndary. Both can be used in which case the new blanks are used
     second before parsing with [g] and first after. *)
 val layout : ?old_before:bool -> ?new_before:bool ->
              ?new_after:bool -> ?old_after:bool ->
-             'a grammar -> Lex.blank -> 'a grammar
+             Lex.blank -> 'a grammar -> 'a grammar
 
 (** {2 Definition of recursive grammars } *)
 

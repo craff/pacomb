@@ -83,7 +83,7 @@ let test9 = dseq test8
 let test8 = compile test8
 let test9 = compile test9
 
-let test10 = seq char_a (layout (seq char_a char_b (+)) Lex.noblank) (+)
+let test10 = seq char_a (layout Lex.noblank (seq char_a char_b (+))) (+)
 let test10 = compile test10
 
 let test11 =
