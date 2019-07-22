@@ -199,43 +199,51 @@ let int : ?name:string -> unit -> int t = fun ?name () ->
         let f = ref (fun x -> x) in
         let (c,s,n) =
           let (c,s,n as r) = Input.read s n in
-          if c = '+' || c = '-' then
+          if c = '+' then Input.read s n
+          else if c = '-' then
             (f := (fun x -> -x); Input.read s n)
           else r
         in
         if not (c >= '0' && c <= '9') then raise NoParse;
         r := !r * 10 + (Char.code c - Char.code '0');
-        let rec fn s n =
-          if (c >= '0' && c <= '9') then (
-            r := !r * 10 + (Char.code c - Char.code '0');
-            fn s n)
-          else (c,s,n)
-        in
-        let (_,s,n) = fn s n in
-        (!f !r,s,n) }
-
-(** Parses a float in base 10. [".1"] is not accepted ["0.1"] is. *)
-let float : ?name:string -> unit -> float t = fun ?name () ->
-  { n = Option.get "FLOAT" name
-  ; c = Charset.from_string "-+0-9"
-  ; f = fun s n ->
-        let b = Buffer.create 16 in
-        let (c,s,n) =
-          let (c,s,n as r) = Input.read s n in
-          if c = '+' || c = '-' then
-            (Buffer.add_char b c; Input.read s n)
-          else r
-        in
-        if not (c >= '0' && c <= '9') then raise NoParse;
-        Buffer.add_char b c;
         let rec fn s0 n0 =
           let (c,s,n) = Input.read s0 n0 in
           if (c >= '0' && c <= '9') then (
+            r := !r * 10 + (Char.code c - Char.code '0');
+            fn s n)
+          else (s0,n0)
+        in
+        let (s,n) = fn s n in
+        (!f !r,s,n) }
+
+(** Parses a float in base 10. [".1"] is as ["0.1"]. *)
+let float : ?name:string -> unit -> float t = fun ?name () ->
+  { n = Option.get "FLOAT" name
+  ; c = Charset.from_string "-+0-9."
+  ; f = fun s0 n0 ->
+        let b = Buffer.create 16 in
+        let found_digit = ref false in
+        let rec fn s0 n0 =
+          let (c,s,n) = Input.read s0 n0 in
+          if (c >= '0' && c <= '9') then (
+            found_digit := true;
             Buffer.add_char b c;
             fn s n)
           else (c,s,n,s0,n0)
         in
-        let (c,s,n,s0,n0) = fn s n in
+        let gn c s n s0 n0 =
+          if (c >= '0' && c <= '9') then (
+            found_digit := true;
+            Buffer.add_char b c;
+            fn s n)
+          else (c,s,n,s0,n0)
+        in
+        let (c,s,n,s0,n0) =
+          let (c,s,n) = Input.read s0 n0 in
+          if c = '+' || c = '-' then
+            (Buffer.add_char b c; fn s n)
+          else gn c s n s0 n0
+        in
         let (c,s,n,s0,n0) =
           if c <> '.' then (c,s,n,s0,n0) else
             begin
@@ -243,6 +251,7 @@ let float : ?name:string -> unit -> float t = fun ?name () ->
               fn s n
             end
         in
+        if not !found_digit then raise NoParse;
         let (_,_s,_n,s0,n0) =
           if c <> 'E' && c <> 'e' then (c,s,n,s0,n0) else
             begin
