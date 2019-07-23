@@ -101,12 +101,25 @@ val lr : 'a t -> Charset.t -> ('a -> 'a) t -> 'a t
     for recursive grammars (not for left recursion *)
 val deref : 'a t ref -> 'a t
 
+type layout_config =
+  { old_blanks_before : bool
+  (** Ignoring blanks with the old blank function before parsing? *)
+  ; new_blanks_before : bool
+  (** Then ignore blanks with the new blank function (before parsing)? *)
+  ; new_blanks_after  : bool
+  (** Use the new blank function one last time before resuming old layout? *)
+  ; old_blanks_after  : bool
+  (** Use then the old blank function one last time as well? *) }
+
+(** Default configuration, parsing with the old blanks before (i.e., the field
+    [old_blanks_before] is [true]),  and the new blanks after (i.e., the field
+    [old_blanks_after] is also [true]). The other two fields are [false]. *)
+val default_layout_config : layout_config
+
 (** Change the blank function used to parse with the given combinator.
     we can choose which blank to use at the boundary with the optional
     parameters. *)
-val change_layout
-    : ?old_before:bool -> ?new_before:bool -> ?new_after:bool -> ?old_after:bool
-      -> 'a t -> Lex.blank -> 'a t
+val change_layout : ?config:layout_config -> 'a t -> Lex.blank -> 'a t
 
 (** Combinator that caches a grammar to avoid exponential behavior.
     parsing with the grammar from each position is memoized to avoid

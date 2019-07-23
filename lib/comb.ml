@@ -214,24 +214,52 @@ let lr : 'a t -> Charset.t -> ('a -> 'a) t -> 'a t = fun g cs gf ->
 let deref : 'a t ref -> 'a t = fun gref ->
   { comb = fun env k err -> !gref.comb env k err }
 
-(** changes the blank function *)
-let change_layout
-    : ?old_before:bool -> ?new_before:bool -> ?new_after:bool -> ?old_after:bool
-      -> 'a t -> Lex.blank -> 'a t =
-  fun ?(old_before=true) ?(new_before=false) ?(new_after=false) ?(old_after=true)
-      g b ->
-  { comb = fun e k f ->
-        let (s,n) = if old_before then (e.current_buf,e.current_col) else
-            (e.buf_before_blanks,e.col_before_blanks) in
-        let (s,n) = if new_before then b s n else (s,n) in
-        let b0 = e.blank_fun in
-        let e = { e with blank_fun = b; current_buf = s; current_col = n } in
-        g.comb e (fun e f x ->
-              let (s,n) = if new_after then (e.current_buf,e.current_col)
-                          else (e.buf_before_blanks,e.col_before_blanks) in
-              let (s,n) = if old_after then b0 s n else (s,n) in
-              let e = { e with blank_fun=b0; current_buf = s; current_col = n } in
-              k e f x) f }
+type layout_config =
+  { old_blanks_before : bool
+  (** Ignoring blanks with the old blank function before parsing? *)
+  ; new_blanks_before : bool
+  (** Then ignore blanks with the new blank function (before parsing)? *)
+  ; new_blanks_after  : bool
+  (** Use the new blank function one last time before resuming old layout? *)
+  ; old_blanks_after  : bool
+  (** Use then the old blank function one last time as well? *) }
+
+let default_layout_config : layout_config =
+  { old_blanks_before = true
+  ; new_blanks_before = false
+  ; new_blanks_after  = false
+  ; old_blanks_after  = true }
+
+(** Combinator changing the "blank function". *)
+let change_layout : ?config:layout_config -> 'a t -> Lex.blank -> 'a t =
+    fun ?(config=default_layout_config) g blank_fun ->
+  let comb : type r. ('a, r) comb = fun env k err ->
+    let (s, n) as buf =
+      if config.old_blanks_before then (env.current_buf, env.current_col)
+      else (env.buf_before_blanks, env.col_before_blanks)
+    in
+    let (s, n) =
+      if config.new_blanks_before then blank_fun s n
+      else buf
+    in
+    let old_blank_fun = env.blank_fun in
+    let env = { env with blank_fun ; current_buf = s ; current_col = n } in
+    g.comb env (fun env err v ->
+      let (s, n) as buf =
+        if config.new_blanks_after then (env.current_buf, env.current_col)
+        else (env.buf_before_blanks, env.col_before_blanks)
+      in
+      let (s, n) =
+        if config.old_blanks_after then old_blank_fun s n
+        else buf
+      in
+      let env =
+        { env with blank_fun = old_blank_fun
+        ; current_buf = s ; current_col = n }
+      in
+      k env err v) err
+  in
+  { comb }
 
 type 'a result =
   | Error : 'a result
