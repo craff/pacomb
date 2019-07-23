@@ -17,8 +17,8 @@ clean:
 install:
 	dune install
 
-DOCMODS=lib/grammar.mli lib/combinator.mli lib/lex.mli lib/regexp.mli lib/input.mli \
-  lib/position.mli lib/earley.mli
+DOCMODS=lib/grammar.mli lib/comb.mli lib/lex.mli lib/regexp.mli lib/input.mli \
+  lib/pos.mli lib/earley.mli
 
 .PHONY: doc
 doc:	all
