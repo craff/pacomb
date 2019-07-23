@@ -338,27 +338,22 @@ let parse_string : type a. a t -> Lex.blank -> string -> a =
 let parse_channel : type a. a t -> Lex.blank -> in_channel -> a =
   fun g b ic -> parse_buffer g b (Input.from_channel ic) 0
 
-let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> a list =
-    fun g b s0->
-  let n0 = 0 in
-  let max_pos = ref (s0,n0) in
-  let f () =
-    let (s,c) = !max_pos in
-    raise (Parse_error (s,c))
+let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
+    fun g blank_fun buf0 col0 ->
+  let max_pos = ref (buf0, col0) in
+  let err () =
+    let (buf, col) = !max_pos in
+    raise (Parse_error(buf, col))
   in
   let res = ref [] in
-  let k _e f x =
-    res := x :: !res;
-    f ()
-  in
-  let (s,n) = b s0 n0 in
+  let k _ err v = res := v :: !res; err () in
+  let (buf, col) = blank_fun buf0 col0 in
   let env =
-    { blank_fun = b; buf_before_blanks = s0; col_before_blanks = n0
-    ; current_buf = s; current_col = n; max_pos; left_pos_stack=[]
-    ; key = Assoc.new_key ()}
+    { buf_before_blanks = buf0 ; col_before_blanks = col0
+    ; current_buf = buf ; current_col = col
+    ; max_pos; blank_fun ; left_pos_stack = [] ; key = Assoc.new_key () }
   in
   try
-    ignore ((add_eof g).comb env k f);
+    ignore ((add_eof g).comb env k err);
     assert false
-  with Parse_error _ as e ->
-    if !res = [] then raise e else !res
+  with Parse_error _ as e -> if !res = [] then raise e; !res

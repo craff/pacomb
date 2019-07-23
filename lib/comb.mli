@@ -39,7 +39,7 @@ val partial_parse_buffer : 'a t -> Lex.blank -> ?blank_after:bool
 
 (** Returns all possible parse tree. Usefull for natural language but also
     to debug ambiguity in a supposed non ambiguous grammar. *)
-val parse_all_buffer : 'a t -> Lex.blank -> Input.buffer -> 'a list
+val parse_all_buffer : 'a t -> Lex.blank -> Input.buffer -> int -> 'a list
 
 (** {2 combinator constructors, normally not needed by the casual user } *)
 
