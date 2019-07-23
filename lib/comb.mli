@@ -24,7 +24,7 @@ val handle_exception : ?error:(unit -> 'b) -> ('a -> 'b) -> 'a -> 'b
 
 (** Parse a whole input buffer. the eof combinator is added at
     the end of the given combinator *)
-val parse_buffer : 'a t -> Lex.blank -> Input.buffer -> 'a
+val parse_buffer : 'a t -> Lex.blank -> Input.buffer -> int -> 'a
 
 (** Parse a whole string *)
 val parse_string : 'a t -> Lex.blank -> string -> 'a

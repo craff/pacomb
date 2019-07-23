@@ -292,6 +292,10 @@ let cache : type a. a t -> a t = fun g ->
   in
   { comb }
 
+let eof : unit t = lexeme (Lex.eof ()).f
+
+let add_eof : type a. a t -> a t = fun g -> seq g eof (fun v _ -> v)
+
 exception Parse_error of Input.buffer * int
 
 (** A helper to hangle exceptions *)
@@ -304,47 +308,57 @@ let handle_exception ?(error=fail_no_parse) f a =
       (Input.filename buf) (Input.line_num buf) (Input.utf8_col_num buf pos);
     error ()
 
-let partial_parse_buffer : type a. a t -> Lex.blank -> ?blank_after:bool -> Lex.buf -> int -> a * Lex.buf * int =
-  fun g b ?(blank_after=false) s0 n0 ->
-    let max_pos = ref (s0,n0) in
-    let f () =
-      let (s,c) = !max_pos in
-      raise (Parse_error (s,c))
-    in
-    let (s,n) = b s0 n0 in
-    g.comb { blank_fun = b; buf_before_blanks = s0; col_before_blanks = n0; current_buf = s; current_col = n; max_pos; left_pos_stack=[]; key = Assoc.new_key ()} (fun e _f x ->
-        if blank_after then (x,e.current_buf,e.current_col)
-        else (x,e.buf_before_blanks,e.col_before_blanks)) f
+let partial_parse_buffer : type a. a t -> Lex.blank -> ?blank_after:bool
+                           -> Lex.buf -> int -> a * Lex.buf * int =
+    fun g blank_fun ?(blank_after=false) buf0 col0 ->
+  let max_pos = ref (buf0, col0) in
+  let err () =
+    let (buf, col) = !max_pos in
+    raise (Parse_error(buf, col))
+  in
+  let (buf, col) = blank_fun buf0 col0 in
+  let env =
+    { buf_before_blanks = buf0 ; col_before_blanks = col0
+    ; current_buf = buf ; current_col = col
+    ; max_pos ; left_pos_stack = [] ; blank_fun ; key = Assoc.new_key () }
+  in
+  let k env _ v =
+    if blank_after then (v, env.current_buf, env.current_col)
+    else (v, env.buf_before_blanks, env.col_before_blanks)
+  in
+  g.comb env k err
 
-let parse_buffer : type a. a t -> Lex.blank -> Lex.buf -> a = fun g b s0 ->
-  let g = seq g (lexeme (Lex.eof ()).f) (fun x _ -> x) in
-  let (x,_,_) = partial_parse_buffer g b s0 0 in
-  x
+let parse_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a =
+    fun g blank_fun buf col ->
+  let (v,_,_) = partial_parse_buffer (add_eof g) blank_fun buf col in v
 
 let parse_string : type a. a t -> Lex.blank -> string -> a =
-  fun g b s -> parse_buffer g b (Input.from_string s)
+  fun g b s -> parse_buffer g b (Input.from_string s) 0
 
 let parse_channel : type a. a t -> Lex.blank -> in_channel -> a =
-  fun g b ic -> parse_buffer g b (Input.from_channel ic)
+  fun g b ic -> parse_buffer g b (Input.from_channel ic) 0
 
 let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> a list =
-  fun g b s0->
-    let g = seq g (lexeme (Lex.eof ()).f) (fun x _ -> x) in
-    let n0 = 0 in
-    let max_pos = ref (s0,n0) in
-    let f () =
-      let (s,c) = !max_pos in
-      raise (Parse_error (s,c))
-    in
-    let res = ref [] in
-    let k _e f x =
-      res := x :: !res;
-      f ()
-    in
-    let (s,n) = b s0 n0 in
-    try
-      ignore (g.comb { blank_fun = b; buf_before_blanks = s0; col_before_blanks = n0; current_buf = s; current_col = n; max_pos; left_pos_stack=[];
-                    key = Assoc.new_key ()} k f);
-      assert false
-    with Parse_error _ as e ->
-      if !res = [] then raise e else !res
+    fun g b s0->
+  let n0 = 0 in
+  let max_pos = ref (s0,n0) in
+  let f () =
+    let (s,c) = !max_pos in
+    raise (Parse_error (s,c))
+  in
+  let res = ref [] in
+  let k _e f x =
+    res := x :: !res;
+    f ()
+  in
+  let (s,n) = b s0 n0 in
+  let env =
+    { blank_fun = b; buf_before_blanks = s0; col_before_blanks = n0
+    ; current_buf = s; current_col = n; max_pos; left_pos_stack=[]
+    ; key = Assoc.new_key ()}
+  in
+  try
+    ignore ((add_eof g).comb env k f);
+    assert false
+  with Parse_error _ as e ->
+    if !res = [] then raise e else !res

@@ -31,7 +31,7 @@ let alternatives gs =
   fn (fail ()) gs
 
 let parse_buffer g bl b =
-  let g = compile g in Comb.parse_buffer g bl b
+  let g = compile g in Comb.parse_buffer g bl b 0
 
 let parse_string ?(filename="") grammar blank str =
   let str = Input.from_string ~filename str in
