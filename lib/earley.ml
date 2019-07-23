@@ -1,4 +1,3 @@
-open Utils
 open Lex
 open Grammar
 
@@ -50,13 +49,13 @@ let partial_parse_buffer g bl ?(blank_after=false) buf n =
   Comb.partial_parse_buffer g bl ~blank_after buf n
 
 let grammar_prio ?(param_to_string=(fun _ -> "<...>")) name =
-  let tbl = EqHashtbl.create 8 in
+  let tbl = Hashtbl_eq.create 8 in
   let is_set = ref None in
   (fun p ->
-    try EqHashtbl.find tbl p
+    try Hashtbl_eq.find tbl p
     with Not_found ->
       let g = declare_grammar (name^"_"^param_to_string p) in
-      EqHashtbl.add tbl p g;
+      Hashtbl_eq.add tbl p g;
       (match !is_set with None -> ()
       | Some f ->
          set_grammar g (f p);
@@ -67,19 +66,19 @@ let grammar_prio ?(param_to_string=(fun _ -> "<...>")) name =
       alternatives (List.map snd (List.filter (fun (f,_) -> f p) gs) @ (gp p))
     in
     is_set := Some f;
-    EqHashtbl.iter (fun p r ->
+    Hashtbl_eq.iter (fun p r ->
       set_grammar r (f p);
     ) tbl)
 
 let grammar_prio_family ?(param_to_string=(fun _ -> "<...>")) name =
-  let tbl = EqHashtbl.create 8 in
-  let tbl2 = EqHashtbl.create 8 in
+  let tbl = Hashtbl_eq.create 8 in
+  let tbl2 = Hashtbl_eq.create 8 in
   let is_set = ref None in
   (fun args p ->
-    try EqHashtbl.find tbl (args,p)
+    try Hashtbl_eq.find tbl (args,p)
     with Not_found ->
       let g = declare_grammar (name^"_"^param_to_string (args,p)) in
-      EqHashtbl.add tbl (args, p) g;
+      Hashtbl_eq.add tbl (args, p) g;
       (match !is_set with None -> ()
       | Some f ->
          set_grammar g (f args p);
@@ -90,16 +89,16 @@ let grammar_prio_family ?(param_to_string=(fun _ -> "<...>")) name =
       (* NOTE: to make sure the tbl2 is filled soon enough *)
       let (gs, gp) = f args in
       try
-        EqHashtbl.find tbl2 args
+        Hashtbl_eq.find tbl2 args
       with Not_found ->
         let g = fun p ->
             alternatives (List.map snd (List.filter (fun (f,_) -> f p) gs) @ gp p)
         in
-        EqHashtbl.add tbl2 args g;
+        Hashtbl_eq.add tbl2 args g;
         g
     in
     is_set := Some f;
-    EqHashtbl.iter (fun (args,p) r ->
+    Hashtbl_eq.iter (fun (args,p) r ->
       set_grammar r (f args p);
     ) tbl)
 

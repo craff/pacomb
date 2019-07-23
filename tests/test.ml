@@ -287,7 +287,7 @@ let _ = assert_fail (fun () -> parse_string test17 "\"")
 
 let parse_all_string g s =
   let s = Input.from_string s in
-  Comb.parse_all_buffer g Lex.noblank s
+  Comb.parse_all_buffer g Lex.noblank s 0
 
 let catalan =
   let memo = Hashtbl.create 128 in
