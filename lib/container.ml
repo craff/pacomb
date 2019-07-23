@@ -6,7 +6,7 @@ type ('a,'b) eq =
 (** GADT to represent types in the syntax (extended when needed). *)
 type _ tag = ..
 
-module Make(V:sig type ('a,'b) elt end) = struct
+module Make(V : sig type ('a,'b) elt end) = struct
   include V
 
   (** Non-uniform list (containing elements of possibly different types). *)

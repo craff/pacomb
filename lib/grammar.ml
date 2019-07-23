@@ -1,6 +1,5 @@
 open Utils
 open Lex
-open Assoc
 
 type layout_config = Comb.layout_config
 
@@ -94,12 +93,12 @@ let give_name n g = { g with n }
 (** helper to construct the initial ['a grammar] record *)
 let mkg : ?name:string -> ?recursive:bool -> 'a grdf -> 'a grammar =
   fun ?(name="...") ?(recursive=false) d ->
-    let k = new_key () in
+    let k = Assoc.new_key () in
     { e = None; d; n = name; k; recursive; compiled = ref Comb.fail
     ; charset = None; phase = Defined; ne = ETmp; push = false; cache = false }
 
 (** A type to store list of grammar keys *)
-type ety = E : 'a ty -> ety [@@unboxed]
+type ety = E : 'a Assoc.ty -> ety [@@unboxed]
 
 (** printing functions *)
 let print_grammar ?(def=true) ch s =

@@ -34,14 +34,12 @@ let range cmin cmax =
 
 let delq cs c =
   let i = Char.code c in
-  cs.(i lsr shift) <-
-    cs.(i lsr shift) land (lnot (1 lsl (i land mask)))
+  cs.(i lsr shift) <- cs.(i lsr shift) land (lnot (1 lsl (i land mask)))
 
 let del cs c =
   let i = Char.code c in
   let cs = Array.copy cs in
-  cs.(i lsr shift) <-
-    cs.(i lsr shift) land (lnot (1 lsl (i land mask)));
+  cs.(i lsr shift) <- cs.(i lsr shift) land (lnot (1 lsl (i land mask)));
   cs
 
 let union cs1 cs2 =
