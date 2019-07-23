@@ -267,48 +267,30 @@ type 'a result =
   | Error : 'a result
   | Value : 'c env * (unit -> 'c) * 'a -> 'a result
 
-(** combinator that caches a grammar to avoid exponential behavior *)
-let cache : type a.a t -> a t = fun g ->
-  let open Assoc in
-  let open Input.Tbl in
-  let cache = create () in
-  let comb : type b. (a, b) comb =
-    fun e0 k f ->
-      let add_value e f x =
-        let l = try find cache e0.current_buf e0.current_col with Not_found -> [] in
-        let l = (Value(e,f,x)) :: l in
-        add cache e0.current_buf e0.current_col l
-      in
-      let add_error () =
-        let l = try find cache e0.current_buf e0.current_col with Not_found -> [] in
-        let l = Error :: l in
-        add cache e0.current_buf e0.current_col l
-      in
-      let k0 e f x =
-        add_value e f x;
-        k e f x
-      in
-      let f0 () =
-        add_error ();
-        f ()
-      in
-      let l = List.rev (try find cache e0.current_buf e0.current_col with Not_found -> []) in
-      let rec fn = function
-        | [] -> g.comb e0 k0 f0
-        | [Value(e,f,x)] ->
-           (match e0.key.eq e.key.k with
-            | Eq -> k e f x
-            | NEq -> assert false)
-        | [Error]        -> f ()
-        | Value(e,_f,x) :: l ->
-           let f () = fn l in
-           (match e0.key.eq e.key.k with
-            | Eq -> k e f x
-            | NEq -> assert false)
-        | Error :: _     -> assert false
-      in
-      fn l
-  in { comb }
+(** Combinator for caching a grammar, to avoid exponential behavior. *)
+let cache : type a. a t -> a t = fun g ->
+  let cache = Input.Tbl.create () in
+  let comb : type b. (a, b) comb = fun env0 k err ->
+    let {current_buf = buf0; current_col = col0; _} = env0 in
+    let add_elt elt =
+      let l = try Input.Tbl.find cache buf0 col0 with Not_found -> [] in
+      Input.Tbl.add cache buf0 col0 (elt :: l)
+    in
+    let k0 env err v = add_elt (Value(env, err, v)); k env err v in
+    let err0 () = add_elt Error; err () in
+    let rec fn l =
+      match l with
+      | []                    -> g.comb env0 k0 err0
+      | Error            :: l -> assert (l = []); err ()
+      | Value(env,err,v) :: l ->
+          match env0.key.eq env.key.k with
+          | NEq -> assert false
+          | Eq  -> k env (if l = [] then err else (fun () -> fn l)) v
+    in
+    let l = try Input.Tbl.find cache buf0 col0 with Not_found -> [] in
+    fn (List.rev l)
+  in
+  { comb }
 
 exception Parse_error of Input.buffer * int
 
