@@ -5,6 +5,7 @@ open Ast_helper
 open Longident
 open Location
 
+(*helper to build expressions *)
 let grmod s = Exp.ident (mknoloc (Ldot(Lident "Grammar",s)))
 let lxmod s = Exp.ident (mknoloc (Ldot(Lident "Lex",s)))
 let rgmod s = Exp.ident (mknoloc (Ldot(Lident "Regexp",s)))
@@ -14,8 +15,21 @@ let unit_ = Exp.construct (Location.mknoloc (Lident "()")) None
 let app loc f x = Exp.apply ~loc f [(Nolabel, x)]
 let app2 loc f x y = Exp.apply ~loc f [(Nolabel, x);(Nolabel, y)]
 
+(* make a location from two *)
 let merge_loc loc1 loc2 = { loc1 with loc_end = loc2.loc_end }
 
+(* an exception to issue a warning when an expression is probably a grammar
+   but tranformation fails, may be for a syntax error*)
+exception Warn of attribute
+
+let warn loc msg = raise (Warn (attribute_of_warning loc msg))
+
+let add_attribute exp att =
+  { exp with pexp_attributes = att :: exp.pexp_attributes }
+
+(* a mapper to test if an identifier occurs. return true also
+   if it occuer bounded, this is correct because we only need
+   that if it returns false then it does not occur *)
 let has_ident id e =
   let found = ref false in
   let mapper =
@@ -30,158 +44,198 @@ let has_ident id e =
   let _ = mapper.expr mapper e in
   !found
 
-let rec exp_to_grammar ?name_param ?(fn=(fun exp -> exp)) exp =
-  let lexify exp =
-    let loc = exp.pexp_loc in
-    match exp.pexp_desc with
-    | Pexp_constant (Pconst_char _) ->
-       app loc (grmod "term") (app2 loc (lxmod "char") exp unit_)
-    | Pexp_constant (Pconst_string _) ->
-       app loc (grmod "term") (app2 loc (lxmod "string") exp unit_)
-    | Pexp_construct({txt = Lident "INT"; _}, None) ->
-       app loc (grmod "term") (app loc (lxmod "int") unit_)
-    | Pexp_construct({txt = Lident "FLOAT"; _}, None) ->
-       app loc (grmod "term") (app loc (lxmod "float") unit_)
-    | Pexp_construct({txt = Lident "RE"; _}, Some s) ->
-       app loc (grmod "term") (app loc (lxmod "regexp")
-                                  (app loc (rgmod "from_string") s))
-    | Pexp_apply({ pexp_desc = Pexp_ident { txt = Lident("="|"<"|">"|"<="|">="); _ }; _}, _) ->
-       app loc (grmod "test") exp
-    | _ -> exp
-  in
-  let item (e, loc_e) =  match e.pexp_desc with
-    | Pexp_construct
-      ( { txt = Lident "::"; _}
-      , Some({pexp_desc =
-                Pexp_tuple
-                  [ {pexp_desc = Pexp_ident {txt = Lident name; loc}; _}
-                  ; exp ]; _})) ->
-       (Some (mkloc name loc),lexify exp, loc_e)
-    | _ ->
-       (None, lexify e, loc_e)
-  in
-  let items e =
-    let loc_e = e.pexp_loc in
-    match e.pexp_desc with
-    | Pexp_apply(e1, args) ->
-       let kn (_,e') = (e',merge_loc e'.pexp_loc loc_e) in
-       let l = (e1, e.pexp_loc) :: List.map kn args in
-       List.map item l
-    | Pexp_construct({txt = Lident "()"; loc}, None) ->
-       [None, app loc (grmod "empty") unit_, loc_e]
-    | _ -> [item (e, e.pexp_loc)]
-  in
-  let rec rules e =
-    match e.pexp_desc with
-    | Pexp_apply
-      ( { pexp_desc = Pexp_ident {txt = Lident "=>"; _}; _ }
-      , [(Nolabel,rule);(Nolabel,action)]) ->
-       let rule = items rule in
-       let loc_a = action.pexp_loc in
-       let gn (fn, rule) (name, item, loc_e) = match name with
-         | None    -> (fn, (false, false, false, item, loc_e) :: rule)
-         | Some id ->
-            let id_rpos = mkloc (id.txt ^ "_rpos") id.loc in
-            let (fn,rpos) =
-              if has_ident id_rpos.txt action then
-                ((fun exp -> Exp.fun_ ~loc:loc_a Nolabel None
-                               (Pat.var id_rpos) (fn exp)), true)
-              else (fn, false)
-            in
-            let (fn,has_id) =
-              if has_ident id.txt action then
-                ((fun exp -> Exp.fun_ ~loc:loc_a Nolabel None
-                               (Pat.var id) (fn exp)), true)
-              else
-                (fn, false)
-            in
-            let id_lpos = mkloc (id.txt ^ "_lpos") id.loc in
-            let (fn,lpos) =
-              if has_ident id_lpos.txt action then
-                ((fun exp -> Exp.fun_ ~loc:loc_a Nolabel None
-                               (Pat.var id_lpos) (fn exp)), true)
-              else
-                (fn, false)
-            in
-            (fn, (lpos,has_id,rpos,item,loc_e) :: rule)
+(* transform an expression in a pattern
+   - "_" does not work. use "__" instead
+   - (pat = lid) is the synta for as pattern *)
+let rec exp_to_pattern e =
+  let loc = e.pexp_loc in
+  match e.pexp_desc with
+  | Pexp_ident({txt = Lident name; loc = loc_s}) ->
+     let name = mkloc name loc_s in
+     (Some name, Pat.var ~loc name)
+  | Pexp_apply({pexp_desc = Pexp_ident {txt = Lident "="; _}; _},
+               [ (Nolabel, e)
+               ; (Nolabel,
+                  {pexp_desc = Pexp_ident({txt = Lident name
+                                          ;loc = loc_s}); _})])
+     ->
+     let name = mkloc name loc_s in
+     let (_, pat) = exp_to_pattern e in
+     (Some name, Pat.alias pat name)
+  | Pexp_constraint(e,t) ->
+     let (name, pat) = exp_to_pattern e in
+     (name, Pat.constraint_ ~loc pat t)
+  | Pexp_tuple(l) ->
+     let (_,pats) = List.split (List.map exp_to_pattern l) in
+     (None, Pat.tuple ~loc pats)
+  | Pexp_open(_,m,e) ->
+     let (name, pat) = exp_to_pattern e in
+     (name, Pat.open_ ~loc m  pat)
+  | _ -> warn loc "expression eft of \"::\" does not represent a pattern"
+
+(* transform an expression into a terminal *)
+let exp_to_term exp =
+  let loc = exp.pexp_loc in
+  match exp.pexp_desc with
+  | Pexp_constant (Pconst_char _) ->
+     app loc (grmod "term") (app2 loc (lxmod "char") exp unit_)
+  | Pexp_constant (Pconst_string _) ->
+     app loc (grmod "term") (app2 loc (lxmod "string") exp unit_)
+  | Pexp_construct({txt = Lident "INT"; _}, None) ->
+     app loc (grmod "term") (app loc (lxmod "int") unit_)
+  | Pexp_construct({txt = Lident "FLOAT"; _}, None) ->
+     app loc (grmod "term") (app loc (lxmod "float") unit_)
+  | Pexp_construct({txt = Lident "RE"; _}, Some s) ->
+     app loc (grmod "term") (app loc (lxmod "regexp")
+                               (app loc (rgmod "from_string") s))
+  | Pexp_apply({ pexp_desc = Pexp_ident
+                  { txt = Lident("="|"<"|">"|"<="|">="); _ }; _}, _) ->
+     app loc (grmod "test") exp
+  | _ -> exp
+
+(* treat each iterm in a rule. Accept (pat::term) or term when
+   - pat is an expression accepted by exp_to_pattern
+   - term is an expression accepted by exp_to_term *)
+let exp_to_rule_item (e, loc_e) =  match e.pexp_desc with
+  | Pexp_construct
+    ( { txt = Lident "::"; _}
+    , Some({pexp_desc =
+              Pexp_tuple
+                [ epat ; exp ]; _})) ->
+     let (name, pat) = exp_to_pattern epat in
+     (Some (name, pat), exp_to_term exp, loc_e)
+  | _ ->
+     (None, exp_to_term e, loc_e)
+
+(* transform exp into rule, that is list of rule item. Accept
+   - a sequence of items (that is applications of items)
+   - or () to denote the empty rule *)
+let exp_to_rule e =
+  let loc_e = e.pexp_loc in
+  match e.pexp_desc with
+  | Pexp_apply(e1, args) ->
+     let kn (_,e') = (e',merge_loc e'.pexp_loc loc_e) in
+     let l = (e1, e.pexp_loc) :: List.map kn args in
+     List.map exp_to_rule_item l
+  | Pexp_construct({txt = Lident "()"; loc}, None) ->
+     [None, app loc (grmod "empty") unit_, loc_e]
+  | _ -> [exp_to_rule_item (e, e.pexp_loc)]
+
+(* transform an expression into a list of rules with action
+   - name_param is an optional arguments for an eventual parameter name
+   - fn is a function to modify the action. It adds [Exp.fun _] conctructs *)
+let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
+  match e.pexp_desc with
+  (* base case [items => action] *)
+  | Pexp_apply
+    ( { pexp_desc = Pexp_ident {txt = Lident "=>"; _}; _ }
+    , [(Nolabel,rule);(Nolabel,action)]) ->
+     let rule = exp_to_rule rule in
+     let loc_a = action.pexp_loc in
+     let gn (acts_fn, rule) (name, item, loc_e) = match name with
+       | None    -> (acts_fn, (false, false, false, item, loc_e) :: rule)
+       | Some (None, pat) ->
+          let acts_fn exp = Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp) in
+          (acts_fn, (false,true,false,item,loc_e) :: rule)
+       | Some (Some id, pat) ->
+          let id_rpos = mkloc (id.txt ^ "_rpos") id.loc in
+          let (acts_fn,rpos) =
+            if has_ident id_rpos.txt action then
+              ((fun exp -> Exp.fun_ ~loc:loc_a Nolabel None
+                             (Pat.var id_rpos) (acts_fn exp)), true)
+            else (acts_fn, false)
+          in
+          let acts_fn exp = Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp) in
+          let id_lpos = mkloc (id.txt ^ "_lpos") id.loc in
+          let (acts_fn,lpos) =
+            if has_ident id_lpos.txt action then
+              ((fun exp -> Exp.fun_ ~loc:loc_a Nolabel None
+                             (Pat.var id_lpos) (acts_fn exp)), true)
+            else
+              (acts_fn, false)
+          in
+          (acts_fn, (lpos,true,rpos,item,loc_e) :: rule)
+     in
+     let (acts_fn, rule) = List.fold_left gn (acts_fn, []) rule in
+     let rule = List.rev rule in
+     let action =
+       try exp_to_grammar ~acts_fn action
+       with
+       | Exit ->
+          let loc = action.pexp_loc in
+          app loc (grmod "empty") (acts_fn action)
+       | Warn att ->
+          let loc = action.pexp_loc in
+          let exp = app loc (grmod "empty") (acts_fn action) in
+          add_attribute exp att
+
+     in
+     let fn (lpos,has_id,rpos,item,loc_e) exp =
+       let f = match (lpos,has_id,rpos) with
+         | false, false, false -> "seq2"
+         | false, true , false -> "seqf"
+         | true , false, false -> "seq2_lpos"
+         | true , true , false -> "seqf_lpos"
+         | false, false, true  -> "seq2_rpos"
+         | false, true , true  -> "seqf_rpos"
+         | true , false, true  -> "seq2_pos"
+         | true , true , true  -> "seqf_pos"
        in
-       let (fn, rule) = List.fold_left gn (fn, []) rule in
-       let rule = List.rev rule in
-       let action =
-         try exp_to_grammar ~fn action
-         with Exit ->
-           let loc = action.pexp_loc in
-           app loc (grmod "empty") (fn action)
-       in
-       let fn (lpos,has_id,rpos,item,loc_e) exp =
-         let f = match (lpos,has_id,rpos) with
-           | false, false, false -> "seq2"
-           | false, true , false -> "seqf"
-           | true , false, false -> "seq2_lpos"
-           | true , true , false -> "seqf_lpos"
-           | false, false, true  -> "seq2_rpos"
-           | false, true , true  -> "seqf_rpos"
-           | true , false, true  -> "seq2_pos"
-           | true , true , true  -> "seqf_pos"
-         in
-         app2 (merge_loc loc_e exp.pexp_loc) (grmod f) item exp
-       in
-       let rule = List.fold_right fn rule action in
-       [rule]
-    | Pexp_apply
-      ( { pexp_desc = Pexp_ident {txt = Lident "<"; _}; _ }
-      , [_;_]) when name_param <> None ->
-       let rec fn exp = match exp.pexp_desc with
-         | Pexp_apply
-           ( { pexp_desc = Pexp_ident {txt = Lident "<"; _}; _ }
-           , [(Nolabel, x);(Nolabel, y)]) ->
-            y :: fn x
-         | _ -> [exp]
-       in
-       let prios = fn e in
-       let (name,param) =
-         match name_param with None -> assert false
-                       | Some x -> x
-       in
-       let loc = e.pexp_loc in
-       let rec gn acc l =
-         match l with
-         | x::(y::_ as l) ->
-            let e =
-              app2 loc (grmod "seq2")
-                (app loc (grmod "test") (app2 loc (Exp.ident (mknoloc (Lident "=")))
-                                     (Exp.ident param) x))
-                (app loc (Exp.ident name) y)
-            in gn (e::acc) l
-         | [] | [_] -> acc
-       in
-       gn [] prios
-    | Pexp_sequence(e1,e2) ->
-       rules e1 @ rules e2
-    | _ -> raise Exit
-  in
+       app2 (merge_loc loc_e exp.pexp_loc) (grmod f) item exp
+     in
+     let rule = List.fold_right fn rule action in
+     [rule]
+  (* inheritance case [prio1 < prio2 < ... < prion] *)
+  | Pexp_apply({ pexp_desc = Pexp_ident {txt = Lident "<"; _}; _ }
+               , [_;_]) when name_param <> None ->
+     let rec fn exp = match exp.pexp_desc with
+       | Pexp_apply
+         ( { pexp_desc = Pexp_ident {txt = Lident "<"; _}; _ }
+         , [(Nolabel, x);(Nolabel, y)]) ->
+          y :: fn x
+       | _ -> [exp]
+     in
+     let prios = fn e in
+     let (name,param) =
+       match name_param with None -> assert false
+                           | Some x -> x
+     in
+     let loc = e.pexp_loc in
+     let rec gn acc l =
+       match l with
+       | x::(y::_ as l) ->
+          let e =
+            app2 loc (grmod "seq2")
+              (app loc (grmod "test") (app2 loc (Exp.ident (mknoloc (Lident "=")))
+                                         (Exp.ident param) x))
+              (app loc (Exp.ident name) y)
+          in gn (e::acc) l
+       | [] | [_] -> acc
+     in
+     gn [] prios
+  (* alternatives represented as sequence *)
+  | Pexp_sequence(e1,e2) ->
+     exp_to_rules ?name_param ~acts_fn e1
+     @ exp_to_rules ?name_param ~acts_fn e2
+  (* not a grammar at all (no warning)! *)
+  | _ -> raise Exit
+
+(* transform an expression into grammar, by adding [alt] combinators
+   to the result of exp_to_rules *)
+and exp_to_grammar ?name_param ?(acts_fn=(fun exp -> exp)) exp =
   let fail = app exp.pexp_loc (grmod "fail") unit_ in
   let fn exp rule =
     let loc = merge_loc exp.pexp_loc rule.pexp_loc in
     app2 loc (grmod "alt") exp rule in
-  List.fold_left fn fail (rules exp)
+  List.fold_left fn fail (exp_to_rules ?name_param ~acts_fn exp)
 
+(* remove acts_fn argument and handle exceptions *)
 let exp_to_grammar ?name_param exp =
   try (true, exp_to_grammar ?name_param exp)
-  with Exit -> (false, exp)
+  with Exit     -> (false, exp)
+     | Warn att -> (false, add_attribute exp att)
 
-let str_to_grammar str =
-  match str with
-  | [{pstr_desc = Pstr_eval(e,_); _}] ->
-     snd (exp_to_grammar e)
-  | _  -> Exp.extension
-            (extension_of_error
-               (Location.error ~loc:(List.hd str).pstr_loc "shoud be an expression"))
-
-exception Warning of attribute
-
-let warn loc msg = raise (Warning (attribute_of_warning loc msg))
-
+(* transform a list of structure item to parser definition *)
 let str_to_parser items =
   let fn item =
     let is_grammar = ref false in
@@ -189,10 +243,14 @@ let str_to_parser items =
     | Pstr_value(rec_,ls) ->
        let gn vb =
          let loc = vb.pvb_loc in
-         let (name,do_warn) = match vb.pvb_pat.ppat_desc with
-           | Ppat_var s -> (s         , false)
-           | _          -> (mknoloc "", true )
+         let rec treat_pat p = match p.ppat_desc with
+           | Ppat_var s           -> (s         , false)
+           | Ppat_alias(_,s)      -> (s         , false)
+           | Ppat_open(_,p)       -> treat_pat p
+           | Ppat_constraint(p,_) -> treat_pat p
+           | _                    -> (mknoloc "", true )
          in
+         let (name,do_warn) = treat_pat vb.pvb_pat in
          let (param,exp) = match vb.pvb_expr.pexp_desc with
            | Pexp_fun (Nolabel, None, { ppat_desc = Ppat_var param; _ }, exp) ->
              (Some param, exp)
@@ -206,71 +264,64 @@ let str_to_parser items =
          let (changed,rules) = exp_to_grammar ?name_param exp in
          if changed && do_warn then
            warn vb.pvb_pat.ppat_loc
-             "Pattern not allowed here for grammars";
+             "Pattern not allowed here for grammar parameter";
          if changed then is_grammar := true;
          let rules =
            if List.exists (fun (s,_) -> s.txt = "cached") vb.pvb_attributes then
              app loc (grmod "cache") rules
            else rules
          in
-         (loc,name,param,rules)
+         (loc,rec_,name,vb.pvb_pat,param,rules)
        in
        let ls = List.map gn ls in
        if not !is_grammar then [item] else
-       begin match rec_ with
-       | Nonrecursive ->
-         let definitions =
-           let gn (loc,name, param, rules) =
-             match param with
-               None -> Str.value Nonrecursive [Vb.mk ~loc (Pat.var name) rules]
-             | Some name ->
-                Str.value Nonrecursive
-                  [Vb.mk ~loc (Pat.var name)
-                     (Exp.fun_ Nolabel None (Pat.var name) rules)]
+         begin
+           let set name = "set__grammar__" ^ name.txt in
+           let declarations =
+             let gn (loc,rec_,(name:string loc),pat,param,rules) =
+               match rec_ with
+               | Nonrecursive ->
+                  Str.value Nonrecursive [Vb.mk ~loc pat rules]
+               | Recursive ->
+                  let vd =
+                    match param with
+                    | None ->
+                       Vb.mk ~loc pat
+                         (app loc (grmod "declare_grammar")
+                            (Exp.constant ~loc:name.loc (Const.string name.txt)))
+                    | Some _ ->
+                       Vb.mk ~loc (Pat.tuple [pat; Pat.var (mkloc (set name) name.loc)])
+                         (app loc (grmod "grammar_family")
+                            (Exp.constant ~loc:name.loc (Const.string name.txt)))
+                  in
+                  Str.value Nonrecursive [vd]
+                in
+                List.map gn ls
            in
-           List.map gn ls
-         in
-         definitions
-       | Recursive ->
-          let set name = "set__grammar__" ^ name.txt in
-          let declarations =
-            let gn (loc,name, param, _) =
-              let vd =
-                match param with
-                | None ->
-                   Vb.mk ~loc (Pat.var name)
-                     (app loc (grmod "declare_grammar")
-                        (Exp.constant ~loc:name.loc (Const.string name.txt)))
-                | Some _ ->
-                   Vb.mk ~loc (Pat.tuple [Pat.var name; Pat.var (mkloc (set name) name.loc)])
-                     (app loc (grmod "grammar_family")
-                        (Exp.constant ~loc:name.loc (Const.string name.txt)))
-              in
-              Str.value Nonrecursive [vd]
-            in
-            List.map gn ls
-         in
-         let definitions =
-           let fn (loc,name, param, rules) =
-             let exp =
-               match param with
-               | None ->
-                  app2 loc (grmod "set_grammar")
-                    (Exp.ident (Location.mkloc (Lident name.txt) name.loc))
-                    rules
-               | Some n ->
-                  app loc
-                    (Exp.ident (Location.mkloc (Lident (set name)) name.loc))
-                    (Exp.fun_ ~loc Nolabel None (Pat.var n) rules)
+           let definitions =
+             let fn (loc,rec_,name,_,param, rules) =
+               match rec_ with
+               | Nonrecursive -> Str.eval unit_
+               | Recursive ->
+                  let exp =
+                    match param with
+                    | None ->
+                       app2 loc (grmod "set_grammar")
+                         (Exp.ident (Location.mkloc (Lident name.txt) name.loc))
+                         rules
+                    | Some n ->
+                       app loc
+                         (Exp.ident (Location.mkloc (Lident (set name)) name.loc))
+                         (Exp.fun_ ~loc Nolabel None (Pat.var n) rules)
+                  in
+                  Str.value Nonrecursive [Vb.mk ~loc (Pat.any ()) exp]
              in
-             Str.value Nonrecursive [Vb.mk ~loc (Pat.any ()) exp]
+             List.map fn ls
            in
-           List.map fn ls
-         in
-         declarations @ definitions
-       end
+           declarations @ definitions
+         end
     | _              -> [item]
-    with Warning w ->
+    with Warn w ->
       (* NOTE: there is no place for attribute in structure_item:
          add an include for that! *)
       [Str.include_ { pincl_mod = Mod.structure items
@@ -286,8 +337,11 @@ let str_to_parser items =
                   ; pincl_attributes = [] }
 
 
-let test_mapper _argv =
-  let map_all_expr =
+(* the main mapper *)
+let pacomb_mapper _argv =
+  (* the recursive mapper that tries to transform all
+     expression to grammar and all let bindings to grammar definitions *)
+  let map_all =
     { default_mapper with
       expr = (fun mapper exp -> default_mapper.expr mapper
                                   (snd (exp_to_grammar exp)))
@@ -295,19 +349,14 @@ let test_mapper _argv =
                                   [default_mapper.structure_item mapper s])
     }
   in
+  (* the mapper that use the previous one inside [[%% parse]] *)
   { default_mapper with
     structure_item = (fun mapper item ->
       match item with
       | { pstr_desc = Pstr_extension (({ txt = "parser"; _ }, PStr str), _); _} ->
-         default_mapper.structure_item map_all_expr (str_to_parser str)
+         default_mapper.structure_item map_all (str_to_parser str)
       | other -> default_mapper.structure_item mapper other)
-  ; expr = (fun mapper exp ->
-      match exp with
-      | { pexp_desc = Pexp_extension ({ txt = "grammar"; _ }, PStr str); _} ->
-         str_to_grammar str
-      | other -> default_mapper.expr mapper other)
-
   }
 
 let () =
-  register "ppx_test" test_mapper
+  register "ppx_test" pacomb_mapper
