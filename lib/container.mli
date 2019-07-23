@@ -108,7 +108,7 @@ end
 
 val eq : t -> t -> bool
 
-module Make(T:sig type ('a,'b) elt end) : Param
+module Make(T : sig type ('a,'b) elt end) : Param
        with type ('a, 'b) elt = ('a,'b) T.elt
 
 type ('a, 'b) elt = 'a

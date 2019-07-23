@@ -1,4 +1,3 @@
-open Utils
 open Lex
 
 type layout_config = Comb.layout_config
@@ -268,13 +267,13 @@ let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
 
 (** a function to defined indexed grammars *)
 let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
-  let tbl = Utils.EqHashtbl.create 8 in
+  let tbl = Hashtbl_eq.create 8 in
   let is_set = ref None in
   (fun p ->
-    try EqHashtbl.find tbl p
+    try Hashtbl_eq.find tbl p
     with Not_found ->
       let g = declare_grammar (name^"_"^param_to_string p) in
-      EqHashtbl.add tbl p g;
+      Hashtbl_eq.add tbl p g;
       (match !is_set with None -> ()
       | Some f ->
          set_grammar g (f p);
@@ -282,7 +281,7 @@ let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
       g),
   (fun f ->
     is_set := Some f;
-    EqHashtbl.iter (fun p r ->
+    Hashtbl_eq.iter (fun p r ->
       set_grammar r (f p);
     ) tbl)
 

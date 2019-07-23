@@ -2,4 +2,4 @@
   (name pacomb)
   (public_name pacomb)
   (modules :standard earley)
-  (private_modules container utils assoc))
+  (private_modules container hashtbl_eq assoc))

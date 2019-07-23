@@ -1,4 +1,7 @@
-open Utils
+let default : 'a -> 'a option -> 'a = fun d o ->
+  match o with
+  | None   -> d
+  | Some e -> e
 
 type buf = Input.buffer
 
@@ -38,7 +41,7 @@ let sp = Printf.sprintf
 (** Terminal accepting a given char, remark: [char '\255'] is equivalent to
     [eof]. *)
 let char : ?name:string -> char -> 'a -> 'a t = fun ?name c x ->
-  { n = Option.get (sp "%C" c) name
+  { n = default (sp "%C" c) name
   ; c = Charset.singleton c
   ; f = fun s n ->
         let (c',s,n) = Input.read s n in
@@ -56,7 +59,7 @@ let charset_from_test f =
 (** Accept a character for which the test returns [true] *)
 let test : ?name:string -> (char -> bool) -> char t = fun ?name f ->
   let cs = charset_from_test f in
-  { n = Option.get (Charset.show cs) name
+  { n = default (Charset.show cs) name
   ; c = charset_from_test f
   ; f = fun s n ->
         let (c,s,n) = Input.read s n in
@@ -73,7 +76,7 @@ let charset : ?name:string -> Charset.t -> char t = fun ?name cs ->
 let not_test : ?name:string -> (char -> bool) -> 'a -> 'a t =
   fun ?name f a ->
   let cs = charset_from_test f in
-  { n = Option.get (sp "^%s" (Charset.show cs)) name
+  { n = default (sp "^%s" (Charset.show cs)) name
   ; c = Charset.complement cs
   ; f = fun s n ->
         let (c,_,_) = Input.read s n in
@@ -88,7 +91,7 @@ let not_charset : ?name:string -> Charset.t -> 'a -> 'a t =
 (** Compose two terminals in sequence *)
 let seq : ?name:string -> 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t =
   fun ?name t1 t2 f ->
-  { n = Option.get (sp "%s%s" t1.n t2.n) name
+  { n = default (sp "%s%s" t1.n t2.n) name
   ; c = if accept_empty t1 then Charset.union t1.c t2.c else t1.c
   ; f = fun s n ->
         let (s1,s,n) = t1.f s n in
@@ -101,7 +104,7 @@ let seq2 ?name t1 t2 = seq ?name t1 t2 (fun _ x -> x)
 (** [alt t1 t2] parses the input with [t1] or [t2]. *)
 let alt : ?name:string -> 'a t -> 'a t -> 'a t =
   fun ?name t1 t2 ->
-  { n = Option.get (sp "(%s)|(%s)" t1.n t2.n) name
+  { n = default (sp "(%s)|(%s)" t1.n t2.n) name
   ; c = Charset.union t1.c t2.c
   ; f = fun s n ->
         try
@@ -117,7 +120,7 @@ let alt : ?name:string -> 'a t -> 'a t -> 'a t =
 
 let save : ?name:string -> 'a t -> (string -> 'a -> 'b) -> 'b t =
   fun ?name t1 f ->
-  { n = Option.get t1.n name
+  { n = default t1.n name
   ; c = t1.c
   ; f = fun s n ->
         let (l,s1,n1) = t1.f s n in
@@ -130,7 +133,7 @@ let save : ?name:string -> 'a t -> (string -> 'a -> 'b) -> 'b t =
 (** Parses the given terminal 0 or 1 time. *)
 let option : ?name:string -> 'a -> 'a t -> 'a t =
   fun ?name d t ->
-  { n = Option.get (sp "(%s)?" t.n) name
+  { n = default (sp "(%s)?" t.n) name
   ; c = Charset.full
   ; f = fun s n ->
         try let (x,s,n) = t.f s n in (x,s,n)
@@ -139,14 +142,14 @@ let option : ?name:string -> 'a -> 'a t -> 'a t =
 (** Applies a function to the result of the given terminal. *)
 let appl : ?name: string -> ('a -> 'b) -> 'a t -> 'b t =
   fun ?name f t ->
-  { n = Option.get t.n name
+  { n = default t.n name
   ; c = t.c
   ; f = fun s n -> let (x,s,n) = t.f s n in (f x,s,n) }
 
 (** [star t a f] Repetition of a given terminal 0,1 or more times. *)
 let star : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
   fun ?name t a f ->
-  { n = Option.get (sp "(%s)*" t.n) name
+  { n = default (sp "(%s)*" t.n) name
   ; c = t.c
   ; f = fun s n ->
         let rec fn a s n =
@@ -161,7 +164,7 @@ let star : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
 (** Same as above but parses at least once .*)
 let plus : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
   fun ?name t a f ->
-  { n = Option.get (sp "(%s)*" t.n) name
+  { n = default (sp "(%s)*" t.n) name
   ; c = t.c
   ; f = fun s n ->
         let rec fn a s n =
@@ -177,7 +180,7 @@ let plus : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
 (** [string s] Accepts only the given string.*)
 let string : ?name:string -> string -> 'a -> 'a t = fun ?name k x ->
   if k = "" then invalid_arg "Lex.string: empty string";
-  { n = Option.get (sp "%S" k) name
+  { n = default (sp "%S" k) name
   ; c = Charset.singleton k.[0]
   ; f = fun s n ->
         let l = String.length k in
@@ -192,7 +195,7 @@ let string : ?name:string -> string -> 'a -> 'a t = fun ?name k x ->
 
 (** Parses an integer in base 10. ["+42"] is accepted. *)
 let int : ?name:string -> unit -> int t = fun ?name () ->
-  { n = Option.get "INT" name
+  { n = default "INT" name
   ; c = Charset.from_string "-+0-9"
   ; f = fun s n ->
         let r = ref 0 in
@@ -218,7 +221,7 @@ let int : ?name:string -> unit -> int t = fun ?name () ->
 
 (** Parses a float in base 10. [".1"] is as ["0.1"]. *)
 let float : ?name:string -> unit -> float t = fun ?name () ->
-  { n = Option.get "FLOAT" name
+  { n = default "FLOAT" name
   ; c = Charset.from_string "-+0-9."
   ; f = fun s0 n0 ->
         let b = Buffer.create 16 in
@@ -325,7 +328,7 @@ let escaped = fun c s n ->
   else raise Exit
 
 let char_lit : ?name:string -> unit -> char t = fun ?name () ->
-  { n = Option.get "CHARLIT" name
+  { n = default "CHARLIT" name
   ; c = Charset.singleton '\''
   ; f = fun s n ->
         let (c,s,n) = Input.read s n in
@@ -350,7 +353,7 @@ let rec skip_newline c s0 n0 =
   else (c,s0,n0)
 
 let string_lit : ?name:string -> unit -> string t = fun ?name () ->
-  { n = Option.get "STRINTLIT" name
+  { n = default "STRINTLIT" name
   ; c = Charset.singleton '"'
   ; f = fun s n ->
         let (c,s,n) = Input.read s n in
@@ -421,11 +424,11 @@ let keyword : ?name:string -> string -> (char -> bool) -> 'a -> 'a t =
     to be parsed is first in the result *)
 let regexp_grps : ?name:string -> Regexp.t -> string list t = fun ?name r ->
   let r = from_regexp_grps r in
-  { r with n = Option.get r.n name }
+  { r with n = default r.n name }
 
 let regexp : ?name:string -> Regexp.t -> string t = fun ?name r ->
   let r = from_regexp r in
-  { r with n = Option.get r.n name }
+  { r with n = default r.n name }
 
 (** Functions managing blanks *)
 
