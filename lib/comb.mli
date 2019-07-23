@@ -119,7 +119,7 @@ val default_layout_config : layout_config
 (** Change the blank function used to parse with the given combinator.
     we can choose which blank to use at the boundary with the optional
     parameters. *)
-val change_layout : ?config:layout_config -> 'a t -> Lex.blank -> 'a t
+val change_layout : ?config:layout_config -> Lex.blank -> 'a t -> 'a t
 
 (** Combinator that caches a grammar to avoid exponential behavior.
     parsing with the grammar from each position is memoized to avoid

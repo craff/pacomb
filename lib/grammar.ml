@@ -59,7 +59,7 @@ type 'a grammar =
    | Read : int * (Pos.t -> 'a) t -> 'a grdf (** read the position from the stack
                                                not accessible by user, but needed
                                                in [elim_let_rec] *)
-   | Layout : 'a t * blank * layout_config -> 'a grdf
+   | Layout : blank * 'a t * layout_config -> 'a grdf
                                            (** changes the blank function *)
    | Cache : 'a t -> 'a grdf               (** caches the grammar *)
    | Tmp  : 'a grdf                        (** used as initial value for recursive
@@ -84,7 +84,7 @@ and 'a grne =
                                                EPush(ERead(g)) *)
   | ERead : int * (Pos.t -> 'a) grne -> 'a grne
   | ERPos : (Pos.t -> 'a) grne -> 'a grne
-  | ELayout : 'a grne * blank * layout_config -> 'a grne
+  | ELayout : blank * 'a grne * layout_config -> 'a grne
   | ECache : 'a grne -> 'a grne
   | ETmp  : 'a grne
 
@@ -122,7 +122,7 @@ let print_grammar ?(def=true) ch s =
     | ERead(_,g)    -> pr "%a" pg g
     | ERPos(g)      -> pr "%a" pg g
     | ECache(g)     -> pr "%a" pg g
-    | ELayout(g,_,_)-> pr "%a" pg g
+    | ELayout(_,g,_) -> pr "%a" pg g
     | ETmp          -> pr "TMP"
 
   and print_grdf : type a. out_channel -> a grdf -> unit =
@@ -142,7 +142,7 @@ let print_grammar ?(def=true) ch s =
     | RPos(g)      -> pr "%a" pg g
     | LPos(g)      -> pr "%a" pg g
     | Cache(g)     -> pr "%a" pg g
-    | Layout(g,_,_)-> pr "%a" pg g
+    | Layout(_,g,_)-> pr "%a" pg g
     | Tmp          -> pr "TMP"
 
   and print_negr : type a. out_channel -> a grammar -> unit =
@@ -247,8 +247,8 @@ let read n g = mkg (if g.d = Fail then Fail else Read(n,g))
 
 let cache g = mkg (if g.d = Fail then Fail else Cache(g))
 
-let layout ?(config=Comb.default_layout_config) g b =
-  mkg (if g.d = Fail then Fail else Layout(g,b,config))
+let layout ?(config=Comb.default_layout_config) b g =
+  mkg (if g.d = Fail then Fail else Layout(b,g,config))
 
 (** function to define mutually recursive grammar:
     - first one declares the grammars
@@ -333,10 +333,10 @@ let ne_cache g1 = match g1 with
   | EFail -> EFail
   | _     -> ECache(g1)
 
-let ne_layout g b cfg =
+let ne_layout b g cfg =
   match g with
   | EFail -> EFail
-  | _     -> ELayout(g,b,cfg)
+  | _     -> ELayout(b,g,cfg)
 
 (** first phase of transformation:
     - get the result of an empty parse if it exists
@@ -383,7 +383,7 @@ let factor_empty g =
     | Read(_,g1)    -> fn g1; (match g1.e with
                                | None -> None
                                | Some x -> Some (x Pos.phantom)) (* Loose position *)
-    | Layout(g,_,_) -> fn g; g.e
+    | Layout(_,g,_) -> fn g; g.e
     | Cache(g)      -> fn g; g.e
     | Tmp           -> failwith "grammar compiled before full definition"
   in
@@ -417,7 +417,7 @@ let factor_empty g =
     | RPos(g1) -> hn g1; ne_rpos (get g1)
     | Read(n,g1) -> hn g1; ne_read n (get g1)
     | Cache(g1) -> hn g1; ne_cache(get g1)
-    | Layout(g,b,cfg) -> hn g; ne_layout (get g) b cfg
+    | Layout(b,g,cfg) -> hn g; ne_layout b (get g) cfg
     | Tmp           -> failwith "grammar compiled before full definition"
 
   in fn g; hn g
@@ -441,7 +441,7 @@ let remove_push : type a. a grammar -> unit =
         | ERPos(g1) -> ne_rpos(fn r g1)
         | ELr(_,_) -> assert false
         | ECache(g1) -> cache := true; fn r g1
-        | ELayout(g1,b,cfg) -> ne_layout (fn r g1) b cfg
+        | ELayout(b,g1,cfg) -> ne_layout b (fn r g1) cfg
         | ERef g0 as g -> gn g0; g
         | ETmp -> assert false
         | EFail | ETerm _ as g -> g
@@ -504,7 +504,7 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
       | ERPos(g1) ->
          let (g1, s1) = fn g1 in
          (ne_rpos g1,rpos(appl s1 (fun f pos a -> f a pos)))
-      | ELayout(g1,_,_) ->
+      | ELayout(_,g1,_) ->
          let (_, s1) = fn g1 in
          if s1.d <> Fail then
            invalid_arg "fixpoint: left recursion under layout change";
@@ -558,7 +558,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
     | ERead(_,g) -> fn g
     | ERPos g -> fn g
     | ECache g -> fn g
-    | ELayout(g,_,cfg) -> if cfg.old_blanks_before && not cfg.old_blanks_after then fn g else Charset.full
+    | ELayout(_,g,cfg) -> if cfg.old_blanks_before && not cfg.old_blanks_after then fn g else Charset.full
     | ETmp -> assert false
 
   and gn : type a. a grammar -> Charset.t = fun g ->
@@ -588,7 +588,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   | ERead(n,g) -> Comb.read n (compile_ne g)
   | ERPos(g) -> Comb.right_pos (compile_ne g)
   | ECache(g) -> Comb.cache (compile_ne g)
-  | ELayout(g,b,cfg) -> Comb.change_layout ~config:cfg (compile_ne g) b
+  | ELayout(b,g,cfg) -> Comb.change_layout ~config:cfg b (compile_ne g)
   | ETmp -> assert false
 
  and compile : type a. a grammar -> a Comb.t = fun g ->

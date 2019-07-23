@@ -83,7 +83,7 @@ let test9 = dseq test8
 let test8 = compile test8
 let test9 = compile test9
 
-let test10 = seq char_a (layout (seq char_a char_b (+)) Lex.noblank) (+)
+let test10 = seq char_a (layout Lex.noblank (seq char_a char_b (+))) (+)
 let test10 = compile test10
 
 let test11 =
@@ -134,6 +134,11 @@ let test12 = test12c
 
 let test13 = fixpoint (fun r -> alt (empty 0) (seq r (seq char_a r (+)) (+)))
 let test13 = compile test13
+
+let test14 = compile (term (Lex.int ()))
+let test15 = compile (term (Lex.float ()))
+let test16 = compile (term (Lex.char_lit ()))
+let test17 = compile (term (Lex.string_lit ()))
 
 let _ = assert (parse_string test0 "a" = 1)
 let _ = assert_fail (fun () -> parse_string test0 "")
@@ -205,6 +210,80 @@ let _ = assert (parse_string test12 "bcabbc" = ())
 let _ = assert (parse_string test12 "acabbc" = ())
 let _ = assert (parse_string test12 "abacbc" = ())
 let _ = assert (parse_string test12 "bcacbc" = ())
+
+let _ = assert (parse_string test14 "0" = 0)
+let _ = assert (parse_string test14 "42" = 42)
+let _ = assert (parse_string test14 "-42" = -42)
+let _ = assert (parse_string test14 "+42" = 42)
+let _ = assert (parse_string test14 "1553" = 1553)
+let _ = assert_fail (fun () -> parse_string test14 "")
+
+let _ = assert (parse_string test15 "0" = 0.0)
+let _ = assert (parse_string test15 "42" = 42.0)
+let _ = assert (parse_string test15 "-42" = -42.0)
+let _ = assert (parse_string test15 "+42" = 42.0)
+let _ = assert (parse_string test15 ".42" = 0.42)
+let _ = assert (parse_string test15 "-.42" = -0.42)
+let _ = assert (parse_string test15 "+.42" = 0.42)
+let _ = assert (parse_string test15 "12.42" = 12.42)
+let _ = assert (parse_string test15 "-12.42" = -12.42)
+let _ = assert (parse_string test15 "+12.42" = 12.42)
+let _ = assert (parse_string test15 "+12.42" = 12.42)
+let _ = assert (parse_string test15 "0e3" = 0.0)
+let _ = assert (parse_string test15 "42e3" = 42.0e3)
+let _ = assert (parse_string test15 "-42e+3" = -42.0e3)
+let _ = assert (parse_string test15 "+42e-3" = 42.0e-3)
+let _ = assert (parse_string test15 ".42e3" = 0.42e3)
+let _ = assert (parse_string test15 "-.42e-3" = -0.42e-3)
+let _ = assert (parse_string test15 "+.42e+3" = 0.42e+3)
+let _ = assert (parse_string test15 "12.42e33" = 12.42e33)
+let _ = assert (parse_string test15 "-12.42e-33" = -12.42e-33)
+let _ = assert (parse_string test15 "+12.42e+33" = 12.42e+33)
+let _ = assert (parse_string test15 "+12.42e42" = 12.42e42)
+
+let _ = assert_fail (fun () -> parse_string test15 "")
+let _ = assert_fail (fun () -> parse_string test15 ".")
+let _ = assert_fail (fun () -> parse_string test15 "e")
+let _ = assert_fail (fun () -> parse_string test15 "E")
+let _ = assert_fail (fun () -> parse_string test15 ".e")
+let _ = assert_fail (fun () -> parse_string test15 "-E")
+let _ = assert_fail (fun () -> parse_string test15 "e5")
+let _ = assert_fail (fun () -> parse_string test15 "E5")
+let _ = assert_fail (fun () -> parse_string test15 ".e5")
+let _ = assert_fail (fun () -> parse_string test15 "-E5")
+
+let _ = assert (parse_string test16 "'a'" = 'a')
+let _ = assert (parse_string test16 "'\"'" = '"')
+let _ = assert (parse_string test16 "'\\\\'" = '\\')
+let _ = assert (parse_string test16 "'\\''" = '\'')
+let _ = assert (parse_string test16 "'\\\"'" = '"')
+let _ = assert (parse_string test16 "'\\n'" = '\n')
+let _ = assert (parse_string test16 "'\\t'" = '\t')
+let _ = assert (parse_string test16 "'\\r'" = '\r')
+let _ = assert (parse_string test16 "'\\b'" = '\b')
+let _ = assert (parse_string test16 "'\\048'" = '\048')
+let _ = assert (parse_string test16 "'\\255'" = '\255')
+let _ = assert (parse_string test16 "'\\x48'" = '\x48')
+let _ = assert (parse_string test16 "'\\xFF'" = '\xFF')
+let _ = assert (parse_string test16 "'\\o033'" = '\o033')
+let _ = assert (parse_string test16 "'\\o377'" = '\o377')
+let _ = assert_fail (fun () -> parse_string test16 "")
+let _ = assert_fail (fun () -> parse_string test16 "'")
+let _ = assert_fail (fun () -> parse_string test16 "''")
+let _ = assert_fail (fun () -> parse_string test16 "'''")
+let _ = assert_fail (fun () -> parse_string test16 "'\\256'")
+let _ = assert_fail (fun () -> parse_string test16 "'\\o400'")
+
+let _ = assert (parse_string test17 "\"\"" = "")
+let _ = assert (parse_string test17 "\"toto\"" = "toto")
+let _ = assert (parse_string test17 "\"\\ttoto\\n\"" = "\ttoto\n")
+let _ = assert (parse_string test17 "\"\\ttoto\\t\\
+                                     coucou\"" = "\ttoto\tcoucou")
+let _ = assert (parse_string test17 "\"\\ttoto\\t\\
+                                     \\
+                                     coucou\"" = "\ttoto\tcoucou")
+let _ = assert_fail (fun () -> parse_string test17 "\"")
+
 
 let parse_all_string g s =
   let s = Input.from_string s in

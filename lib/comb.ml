@@ -193,7 +193,9 @@ let right_pos : (Pos.t -> 'a) t -> 'a t = fun g ->
   in
   { comb }
 
-(** [lr g gf] is an optimized version of [let rec r = seq g (seq r gf)]. *)
+(** [lr g gf] is the combinator used to eliminate left recursion.  its
+    meaning is [g gf*] using an EBNF syntax or using a recursive combinator
+    which is illegal : [seq g (let rec r = seq r gf in r)]. *)
 let lr : 'a t -> Charset.t -> ('a -> 'a) t -> 'a t = fun g cs gf ->
   let comb : type r. ('a, r) comb = fun env k err ->
     let rec lr env err v =
@@ -231,8 +233,8 @@ let default_layout_config : layout_config =
   ; old_blanks_after  = true }
 
 (** Combinator changing the "blank function". *)
-let change_layout : ?config:layout_config -> 'a t -> Lex.blank -> 'a t =
-    fun ?(config=default_layout_config) g blank_fun ->
+let change_layout : ?config:layout_config -> Lex.blank -> 'a t -> 'a t =
+    fun ?(config=default_layout_config) blank_fun g ->
   let comb : type r. ('a, r) comb = fun env k err ->
     let (s, n) as buf =
       if config.old_blanks_before then (env.current_buf, env.current_col)
