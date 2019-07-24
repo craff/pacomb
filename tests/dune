@@ -40,15 +40,6 @@
     (system "./big_expr.exe 4 4 4 | ./calc.exe")))
 
 (test
-  (name sexp)
-  (modules sexp)
-  (flags -ppx "./ppx/ppx_pacomb.exe")
-  (libraries unix pacomb)
-  (deps ../ppx/ppx_pacomb.exe big_expr.exe sexp.exe)
-  (action
-    (system "./big_sexp.exe 1000 | ./sexp.exe")))
-
-(test
   (name calc_prio)
   (modules calc_prio)
   (flags -ppx "./ppx/ppx_pacomb.exe")
@@ -65,3 +56,21 @@
   (deps ../ppx/ppx_pacomb.exe big_expr.exe calc_factor.exe)
   (action
     (system "./big_expr.exe 4 4 4 | ./calc_factor.exe")))
+
+(test
+  (name sexp)
+  (modules sexp)
+  (flags -ppx "./ppx/ppx_pacomb.exe")
+  (libraries unix pacomb)
+  (deps ../ppx/ppx_pacomb.exe big_expr.exe sexp.exe)
+  (action
+    (system "./big_sexp.exe 1000 | ./sexp.exe")))
+
+(test
+  (name sexp_rr)
+  (modules sexp_rr)
+  (flags -ppx "./ppx/ppx_pacomb.exe")
+  (libraries unix pacomb)
+  (deps ../ppx/ppx_pacomb.exe big_expr.exe sexp_rr.exe)
+  (action
+    (system "./big_sexp.exe 1000 | ./sexp_rr.exe")))
