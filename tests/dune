@@ -62,7 +62,7 @@
   (modules sexp)
   (flags -ppx "./ppx/ppx_pacomb.exe")
   (libraries unix pacomb)
-  (deps ../ppx/ppx_pacomb.exe big_expr.exe sexp.exe)
+  (deps ../ppx/ppx_pacomb.exe big_sexp.exe sexp.exe)
   (action
     (system "./big_sexp.exe 1000 | ./sexp.exe")))
 
@@ -71,6 +71,6 @@
   (modules sexp_rr)
   (flags -ppx "./ppx/ppx_pacomb.exe")
   (libraries unix pacomb)
-  (deps ../ppx/ppx_pacomb.exe big_expr.exe sexp_rr.exe)
+  (deps ../ppx/ppx_pacomb.exe big_sexp.exe sexp_rr.exe)
   (action
     (system "./big_sexp.exe 1000 | ./sexp_rr.exe")))
