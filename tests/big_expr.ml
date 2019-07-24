@@ -11,7 +11,7 @@ let int () =
 
 let rec expr n p s =
   if n <= 0 then int ()
-  else seq (if Random.bool () then "+" else "-")
+  else seq (if Random.bool () then " + " else " - ")
          s (fun () -> seq
                         (if Random.bool () then "*" else "/")
                         p (fun () ->
