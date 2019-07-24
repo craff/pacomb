@@ -3,3 +3,6 @@
   (public_name pacomb)
   (modules :standard)
   (private_modules container hashtbl_eq assoc))
+
+(documentation
+  (package pacomb))
