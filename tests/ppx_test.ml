@@ -2,20 +2,28 @@ open Pacomb
 open Grammar
 open Comb
 
-let test ?(blank=Lex.noblank) g s r =
+let bspace = Lex.blank_charset (Charset.singleton ' ')
+
+let test ?(blank=bspace) g s r =
   let g = compile g in
   assert (parse_string g blank s = r)
 
-let test_fail ?(blank=Lex.noblank) g s =
+let tests ?(blank=bspace) g l =
+  List.iter (fun (s,r) -> test ~blank g s r) l
+
+let test_fail ?(blank=bspace) g s =
   let g = compile g in
   try
     let _ = parse_string g blank s in assert false
   with Comb.Parse_error _ -> ()
 
-let bspace = Lex.blank_charset (Charset.singleton ' ')
+let tests_fail ?(blank=bspace) g l =
+  List.iter (test_fail ~blank g) l
 
 [%%parser
   (*  test syntax for terminal *)
+  let g : unit grammar = () => ()
+  let _ = test g "" ()
   let g : unit grammar = 'a' => ()
   let _ = test g "a" ()
   let g : unit grammar = "a" => ()
@@ -41,6 +49,33 @@ let bspace = Lex.blank_charset (Charset.singleton ' ')
   let _ = test ~blank:bspace g " 123 " (4,1,4)
   let g : (int * int * int) grammar = ((((x:int),(y:int))=z)::g0) => Pos.(y,x,z_rpos.col)
   let _ = test ~blank:bspace g " 123 " (4,1,4)
+
+  (* test rules and sequences *)
+  type op = Add | Sub | Mul | Div
+  let bin = (x::INT) (op::('+'=>Add ; '-'=>Sub; '*'=>Mul; '/'=>Div)) (y::INT) => (x,op,y)
+  let _ = test ~blank:bspace bin "42 + 73" (42,Add,73)
+  let g = (x::INT) 'a' 'b' => x
+        ; 'a' (x::INT) 'b' => x
+        ; 'a' 'b' (x::INT) => x
+  let _ = tests ~blank:bspace g [("42 a b",42); ("a 42 b",42); ("a b 42",42)]
+
+  (* test positions *)
+  let g = (x::INT) 'a' 'b' => Pos.(x_lpos.col,x,x_rpos.col)
+        ; 'a' (x::INT) (b::'b') => Pos.(x_lpos.col,x,b_rpos.col)
+        ; (a::'a') 'b' (x::INT) => Pos.(a_lpos.col,x,x_rpos.col)
+  let _ = tests ~blank:bspace g [("42 a b ",(0,42,2))
+                               ; ("a 42 b ",(2,42,6))
+                               ; ("a b 42 ",(0,42,6))]
+  let g = (x::bin) 'a' 'b' => Pos.(x_lpos.col,x,x_rpos.col)
+        ; 'a' (x::bin) (b::'b') => Pos.(x_lpos.col,x,b_rpos.col)
+        ; (a::'a') 'b' (x::bin) => Pos.(a_lpos.col,x,x_rpos.col)
+  let _ = tests ~blank:bspace g [("42+13 a b ",(0,(42,Add,13),5))
+                               ; ("a 42 * 4 b ",(2,(42,Mul,4),10))
+                               ; ("a b 42 / 2 ",(0,(42,Div,2),10))]
+
+  (* test recursion *)
+
+  (* test parameters *)
 
   (* test grammar under sub expressions or sub modules *)
   let noblank = layout Lex.noblank
