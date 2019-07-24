@@ -38,11 +38,16 @@ given below.
 ]
 ```
 
-The extension `[%%parser ...]` modifies the behaviour of let-bindings, which
-are used for defining grammars. This applies both for `let` and `let rec`, the
-latter being used for recursive grammars. An extension `[%grammar]` is also
-provided at the level of expressions. We give below the BNF grammar for the
-extension, together with a sketch of its semantics.
+The extension `[%%parser ...]` extend expression with grammars of type `'a
+Grammar.t` and modifies the behaviour of let-bindings especially recursive
+ones to use `declare_grammar`, `set_grammar` and `grammar_family`. recursive
+grammars. Recall that due to the limitation of ppx, we use a sub syntax of
+OCaml expression for grammars. It is therefore not a good idea to use "=>" as
+an infix inside `[%parse ...]`.
+
+
+We give below the BNF grammar for the extension, together with a sketch of
+its semantics.
 ```
 grammar ::= rule                                                   itself
        | grammar ; rule                                       Grammar.alt
@@ -52,24 +57,56 @@ qitems ::= ()                                               Grammar.empty
        | non_empty_qitems                                          itself
 non_empty_qitems ::= qitem                                         itself
        | non_empty_qitems qitems                              Grammar.seq
-qitem ::= item | (lid :: item)          give a name if used in the action
+qitem ::= item | (pat :: item)          give a name if used in the action
 item ::= '...'                                  Grammar.term(Lex.char ())
        | "..."                                Grammar.term(Lex.string ())
        | INT                                     Grammar.term(Lex.int ())
        | FLOAT                                 Grammar.term(Lex.float ())
        | RE(expr)      Grammar.term(Lex.regexp (Regexp.from_string expr))
        | expr                                                      itself
+pat ::= lid
+       | (pat : coretype)
+       | pat = lid                               encoding of [pat as lid]
+       | (pat, ..., pat)
+       | M.pat
 ```
+pat correspond to an encoding of patterns in expressions. Beware that "_" is
+invalid, use "__" instead.
+
+In action code (expression right of "=>"), a lid_lpos or lid_rpos will denote
+respectively the left and right position of the time named lid.  If the item
+is matched by a tuple, you must use `pat = lid` syntax to give a name to the
+whole item.
+
+The grammar above allows for some nesting as in:
+
+```
+[%%parser
+ type p = Atom | Prod | Sum
+ let rec
+     expr p = Atom < Prod < Sum
+            ; (p=Atom) (x::FLOAT)                        => x
+            ; (p=Atom) '(' (e::expr Sum) ')'             => e
+            ; (p=Prod) (x::expr Prod) => ( '*' (y::expr Atom) => x*.y
+                                         ; '/' (y::expr Atom) => x/.y)
+            ; (p=Sum ) (x::expr Sum ) => ('+' (y::expr Prod) => x+.y
+                                         ; '-' (y::expr Prod) => x-.y)
+```]
+
+But when using this, beware that `x` is not available before the final action
+code, it can not be used for selecting  grammar rule. `(p::prio) => (x::g p) => x`
+will report `p` as unbounded.
 
 - non recursive let bindings correspond to just a name for the grammar.
 - recursive let bindings correspond either to
-  - [Grammar.declare_grammar + Grammar.set_grammar] (if no paramater)
-  - [Grammar.grammar_familly + setting the grammar] if a parameter is given.
-  In the latter case, a rule `p_1 < p_2 < ... < p_n` will automatically add
-  rules to include the grammar parametrized by `p_i` in the grammar
-  parametrized by `p_(i+1)`.
+  - `Grammar.declare_grammar + Grammar.set_grammar` (if no paramater)
+  - `Grammar.grammar_familly + setting the grammar` if a parameter is given.
 
-Anything which does not corespond to this grammar will we keeped unchanged
+In both cases, a rule `p_1 < p_2 < ... < p_n` will automatically add rules to
+include the grammar parametrized by `p_i` in the grammar parametrized by
+`p_(i+1)`.
+
+Anything which does not correspond to this grammar will we keeped unchanged
 in the structure as ocaml code (like the type definition in the example
 above).  A mutually recursive definition can also mix the definition of
 grammars (parametric of not) with the definition of normal ocaml values.
@@ -93,5 +130,5 @@ traverses:
 
 - The ppx extension is not too bad but still suffer from the fact that is
   uses a sublanguage of OCaml to describe grammar. For instance
-  `[%grammar (_::INT) => 0]` is not legal because `_` cannot be used in an Ocaml
-  expression.
+  `[%parser let g = (_::INT) => 0]` is not legal because `_` cannot be used in
+  an Ocaml expression.
