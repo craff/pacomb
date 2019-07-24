@@ -5,7 +5,7 @@ all:
 	dune build
 
 .PHONY: tests
-tests:
+tests: all
 	dune runtest
 
 .PHONY: clean
@@ -17,12 +17,6 @@ clean:
 install:
 	dune install
 
-DOCMODS=lib/grammar.mli lib/comb.mli lib/lex.mli lib/regexp.mli lib/input.mli \
-  lib/pos.mli lib/earley.mli
-
 .PHONY: doc
-doc:	all
-	mkdir -p doc/html doc/latex
-	ocamldoc -I _build/default/lib/.pacomb.objs/byte -latex -o doc/latex/pacomb.tex $(DOCMODS)
-	cd doc/latex && pdflatex pacomb.tex
-	ocamldoc -I _build/default/lib/.pacomb.objs/byte -html -d doc/html $(DOCMODS)
+doc:
+	dune build @doc
