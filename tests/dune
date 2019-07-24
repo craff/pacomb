@@ -13,12 +13,12 @@
   (action (run ./hard.exe 1000)))
 
 (test
-  (name nested)
-  (modules nested)
+  (name ppx_test)
+  (modules ppx_test)
   (flags -ppx "./ppx/ppx_pacomb.exe")
   (libraries unix pacomb)
   (deps ../ppx/ppx_pacomb.exe hard.exe)
-  (action (run ./nested.exe)))
+  (action (run ./ppx_test.exe)))
 
 (executable
   (name big_expr)
