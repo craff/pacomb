@@ -41,7 +41,7 @@ type 'a grammar =
    | Fail : 'a grdf                        (** grammar that always fais *)
    | Empty : 'a -> 'a grdf                 (** accept only the empty input *)
    | Term : 'a Lex.t -> 'a grdf            (** terminals *)
-   | Alt  : 'a t * 'a t -> 'a grdf         (** alternatived *)
+   | Alt  : 'a t list -> 'a grdf           (** alternatived *)
    | Appl : 'a t * ('a -> 'b) -> 'b grdf   (** application *)
    | Seq  : 'a t * 'b t * ('a -> 'b -> 'c) -> 'c grdf
                                            (** sequence *)
@@ -70,7 +70,7 @@ type 'a grammar =
 and 'a grne =
   | EFail : 'a grne
   | ETerm : 'a terminal -> 'a grne
-  | EAlt  : 'a grne * 'a grne -> 'a grne
+  | EAlt  : 'a grne list -> 'a grne
   | EAppl : 'a grne * ('a -> 'b) -> 'b grne
   | ESeq  : 'a grne * 'b grammar * ('a -> 'b -> 'c) -> 'c grne
   | EDSeq : 'a grne * ('a -> 'b grammar) * ('b -> 'c) -> 'c grne
@@ -100,6 +100,16 @@ let mkg : ?name:string -> ?recursive:bool -> 'a grdf -> 'a grammar =
 type ety = E : 'a Assoc.ty -> ety [@@unboxed]
 
 (** printing functions *)
+
+
+let prl pr sep ch l =
+  let rec fn ch = function
+    | [] -> ()
+    | [x] -> pr ch x
+    | x::l -> Printf.fprintf ch "%a%s%a" pr x sep fn l
+  in
+  fn ch l
+
 let print_grammar ?(def=true) ch s =
   let adone = ref [] in
   let rec print_grne : type a. out_channel -> a grne -> unit =
@@ -110,7 +120,7 @@ let print_grammar ?(def=true) ch s =
     match g with
     | EFail         -> pr "0"
     | ETerm t       -> pr "%s" t.n
-    | EAlt(g1,g2)   -> pr "(%a|%a)" pg g1 pg g2
+    | EAlt(gs)      -> pr "(%a)" (prl pg "|") gs
     | EAppl(g,_)    -> pr "App(%a)" pg g
     | ESeq(g1,g2,_) -> pr "%a%a" pg g1 pv g2
     | EDSeq(g1,_,_) -> pr "%a???" pg g1
@@ -131,7 +141,7 @@ let print_grammar ?(def=true) ch s =
     | Fail         -> pr "0"
     | Empty _      -> pr "1"
     | Term t       -> pr "%s" t.n
-    | Alt(g1,g2)   -> pr "(%a|%a)" pg g1 pg g2
+    | Alt(gs)      -> pr "(%a)" (prl pg "|") gs
     | Appl(g,_)    -> pr "App(%a)" pg g
     | Seq(g1,g2,_) -> pr "%a%a" pg g1 pg g2
     | DSeq(g1,_,_) -> pr "%a???" pg g1
@@ -194,8 +204,12 @@ let term ?name (x) =
   let name = match name with None -> x.Lex.n | Some n -> n in
   mkg ~name (Term x)
 
-let alt g f  =
-  mkg (if g.d = Fail && f.d = Fail then Fail else Alt(g,f))
+let alt ?name l =
+  let l = List.filter (fun g -> g.d <> Fail) l in
+  match l with
+  | [] -> fail ()
+  | [g] -> g
+  | l   -> mkg ?name (Alt l)
 
 let appl ?name g f = mkg ?name (if g.d = Fail then Fail else Appl(g,f))
 
@@ -286,10 +300,12 @@ let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
     ) tbl)
 
 (** helpers for the constructors of 'a grne *)
-let ne_alt g1 g2 = match (g1,g2) with
-  | EFail, g2 -> g2
-  | g1, EFail -> g1
-  | (g1,g2)   -> EAlt(g1,g2)
+let ne_alt l =
+  let l = List.filter (fun g -> g <> EFail) l in
+  match l with
+  | [] -> EFail
+  | [g] -> g
+  | l   -> EAlt l
 
 let ne_appl g f =
   match g with
@@ -354,7 +370,9 @@ let factor_empty g =
     | Fail -> None
     | Empty x -> Some x
     | Term _     -> None
-    | Alt(g1,g2) -> fn g1; fn g2; (match g1.e with Some _ -> g1.e | None -> g2.e)
+    | Alt(gs) -> List.iter fn gs;
+                 let gn acc g = match acc with Some _ -> acc | None -> g.e in
+                 List.fold_left gn None gs
     | Appl(g,f) -> fn g; (match g.e with
                     | None -> None
                     | Some x -> try Some (f x) with NoParse -> None)
@@ -396,20 +414,20 @@ let factor_empty g =
     | Fail -> EFail
     | Empty _ -> EFail
     | Term(x) -> ETerm(x)
-    | Alt(g1,g2) -> hn g1; hn g2; ne_alt (get g1) (get g2)
+    | Alt(gs) -> List.iter hn gs; ne_alt (List.map get gs)
     | Appl(g,f) -> hn g; ne_appl (get g) f
     | Seq(g1,g2,f) -> hn g1; hn g2; let ga = ne_seq (get g1) g2 f in
                       let gb = match g1.e with
                         | None   -> EFail
                         | Some x -> ne_appl (get g2) (fun y -> f x y)
                       in
-                      ne_alt ga gb
+                      ne_alt [ga; gb]
     | DSeq(g1,g2,f) -> hn g1; let ga = ne_dseq (get g1) g2 f in
                        let gb = match g1.e with
                          | None   -> EFail
                          | Some x -> let g2 = g2 x in fn g2; hn g2; ne_appl (get g2) f (* FIXME *)
                        in
-                       ne_alt ga gb
+                       ne_alt [ga; gb]
     | Lr(g1,g2) -> hn g1; hn g2; ne_lr (get g1) g2
     | LPos(g1) -> hn g1; ne_lpos (get g1)
     | RPos(g1) -> hn g1; ne_rpos (get g1)
@@ -430,7 +448,7 @@ let remove_push : type a. a grammar -> unit =
     let cache = ref false in
     let rec fn : type a. bool -> a grne -> a grne =
       fun r -> function
-        | EAlt(g1,g2) -> ne_alt (fn r g1) (fn r g2)
+        | EAlt(gs) -> ne_alt (List.map (fn r) gs)
         | EAppl(g1,f) -> ne_appl (fn r g1) f
         | ESeq(g1,g2,f) -> ne_seq (fn r g1) g2 f
         | EDSeq(g1,g2,f) -> ne_dseq (fn r g1) g2 f
@@ -479,10 +497,9 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
          if s1.d <> Fail then
            invalid_arg "fixpoint: left recursion under dependant sequence";
          (g, fail())
-      | EAlt(g1,g2) ->
-         let (g1, s1) = fn g1 in
-         let (g2, s2) = fn g2 in
-         (ne_alt g1 g2, alt s1 s2)
+      | EAlt(gs) ->
+         let (gs,ss) = List.split (List.map fn gs) in
+         (ne_alt gs, alt ss)
       | ELr(g1,s)   ->
          let (g1,s1) = fn g1 in
          (ne_lr g1 s, lr s1 (appl s (fun f g a -> f (g a))))
@@ -546,7 +563,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
     match g with
     | EFail -> Charset.empty
     | ETerm(c) -> c.c
-    | EAlt(g1,g2) -> Charset.union (fn g1) (fn g2)
+    | EAlt(gs) -> List.fold_left (fun s g -> Charset.union s (fn g)) Charset.empty gs
     | ESeq(g,_,_) -> fn g
     | EDSeq(g,_,_) -> fn g
     | EAppl(g,_) -> fn g
@@ -570,13 +587,26 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
        r
   in fn g
 
+let split_list l =
+  let rec fn acc1 acc2 =
+    function [] -> acc1, acc2
+           | x::l -> fn (x::acc2) acc1 l
+  in
+  fn [] [] l
+
 (** compilation of a grammar to combinators *)
 let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   match g with
   | EFail -> Comb.fail
   | ETerm(c) -> Comb.lexeme c.f
-  | EAlt(g1,g2) -> Comb.alt (first_charset g1) (compile_ne g1)
-                            (first_charset g2) (compile_ne g2)
+  | EAlt(gs) -> let rec fn = function
+                  | [] -> (Charset.empty, Comb.fail)
+                  | [g] -> (first_charset g, compile_ne g)
+                  | l -> let (l1,l2) = split_list l in
+                         let (cs1,c1) = fn l1 in
+                         let (cs2,c2) = fn l2 in
+                         (Charset.union cs1 cs2, Comb.alt cs1 c1 cs2 c2)
+                in snd (fn gs)
   | ESeq(g1,g2,f) -> Comb.seq (compile_ne g1) (compile g2) f
   | EDSeq(g1,g2,f) -> Comb.dep_seq (compile_ne g1) (fun x -> compile (g2 x)) f
   | EAppl(g1,f) -> Comb.app (compile_ne g1) f

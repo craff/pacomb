@@ -1,5 +1,5 @@
 (library
   (name pacomb)
   (public_name pacomb)
-  (modules :standard earley)
+  (modules :standard)
   (private_modules container hashtbl_eq assoc))

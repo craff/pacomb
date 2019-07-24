@@ -122,13 +122,18 @@ let dep_seq : 'a t -> ('a -> 'b t) -> ('b -> 'c) -> 'c t = fun g1 g2 fn ->
 
 (** Alternatives combinator. *)
 let alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t =
-    fun cs1 g1 cs2 g2 ->
+  fun cs1 g1 cs2 g2 ->
+  let f1 = ref 0 and f2 = ref 0 in
   let comb : type r. ('a, r) comb = fun env k err ->
     match (test cs1 env, test cs2 env) with
     | (false, false) -> next env err
     | (true , false) -> g1.comb env k err
     | (false, true ) -> g2.comb env k err
-    | (true , true ) -> g1.comb env k (fun () -> g2.comb env k err)
+    | (true , true ) ->
+       (* one wants to avoid incrementing f2 in err or f1 in err. This way, if
+          f1 parses 50% and f2 the other 50%, we have f1 ~ f2 *)
+       if !f1 < !f2 then (g1.comb env k (fun () -> incr f1; g2.comb env k err))
+       else (g2.comb env k (fun () -> incr f2; g1.comb env k err))
   in
   { comb }
 

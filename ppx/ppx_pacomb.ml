@@ -16,7 +16,10 @@ let app loc f x = Exp.apply ~loc f [(Nolabel, x)]
 let app2 loc f x y = Exp.apply ~loc f [(Nolabel, x);(Nolabel, y)]
 
 (* make a location from two *)
-let merge_loc loc1 loc2 = { loc1 with loc_end = loc2.loc_end }
+let merge_loc loc1 loc2 =
+  if loc2.loc_ghost then loc1
+  else if loc1.loc_ghost then loc2
+  else { loc1 with loc_end = loc2.loc_end }
 
 (* an exception to issue a warning when an expression is probably a grammar
    but tranformation fails, may be for a syntax error*)
@@ -223,11 +226,21 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
 (* transform an expression into grammar, by adding [alt] combinators
    to the result of exp_to_rules *)
 and exp_to_grammar ?name_param ?(acts_fn=(fun exp -> exp)) exp =
-  let fail = app exp.pexp_loc (grmod "fail") unit_ in
-  let fn exp rule =
-    let loc = merge_loc exp.pexp_loc rule.pexp_loc in
-    app2 loc (grmod "alt") exp rule in
-  List.fold_left fn fail (exp_to_rules ?name_param ~acts_fn exp)
+  let rules = exp_to_rules ?name_param ~acts_fn exp in
+  match rules with (* three cases for better location ? *)
+  | [] -> app none (grmod "fail") unit_
+  | [x] -> x
+  | _ ->
+     let rec fn = function
+       | [] -> Exp.construct (mknoloc (Lident "[]")) None
+       | x::l ->
+          let exp = fn l in
+          let loc = merge_loc x.pexp_loc exp.pexp_loc in
+          Exp.construct ~loc (mknoloc (Lident "::"))
+            (Some(Exp.tuple [x;exp]))
+     in
+     let exp = fn rules in
+     app exp.pexp_loc (grmod "alt") exp
 
 (* remove acts_fn argument and handle exceptions *)
 let exp_to_grammar ?name_param exp =

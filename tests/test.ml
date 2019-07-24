@@ -25,43 +25,41 @@ let char_c = term(Lex.char 'c' 1)
 
 let na n = String.make n 'a'
 
-let test0 = alt char_a char_b
+let test0 = alt [char_a; char_b]
 let test0 = compile test0
 
 let test0b = seq char_a char_b (+)
 let test0b = compile test0b
 
-let test1 = fixpoint (fun r -> alt (empty 0) (seq char_a r (+)))
+let test1 = fixpoint (fun r -> alt [empty 0; seq char_a r (+)])
 let test1 = compile test1
 
-let test2 = fixpoint (fun r -> alt (empty 0)
-                                   (alt (seq char_a r (+))
-                                        (seq char_b r (+))))
+let test2 = fixpoint (fun r -> alt [empty 0
+                                  ; seq char_a r (+)
+                                  ; seq char_b r (+)])
 let test2 = compile test2
 
-let test3 = fixpoint (fun r -> alt (empty 0) (seq r char_a (+)))
+let test3 = fixpoint (fun r -> alt [empty 0; seq r char_a (+)])
 let test3 = compile test3
 
-let test4 = fixpoint (fun r -> alt (alt (empty 0) char_b) (seq r char_a (+)))
+let test4 = fixpoint (fun r -> alt [empty 0; char_b; seq r char_a (+)])
 let test4 = compile test4
 
-let test5 = fixpoint (fun r -> alt (empty 0)
-                                  (alt (seq r char_a (+))
-                                       (seq r char_b (+))))
+let test5 = fixpoint (fun r -> alt [empty 0; seq r char_a (+); seq r char_b (+)])
 let test5 = compile test5
 
-let star g = fixpoint (fun r -> alt (seq r g (+)) (empty 0))
+let star g = fixpoint (fun r -> alt [seq r g (+); empty 0])
 
 let plus g sep =
   let g' = appl g (fun x -> [x]) in
-  fixpoint (fun r -> alt (seq (seq1 g sep) r (fun x y -> x::y)) g')
+  fixpoint (fun r -> alt [seq (seq1 g sep) r (fun x y -> x::y); g'])
 
 let test6 = plus (star (char_a)) (term(Lex.char ',' ()))
 let test6 = compile test6
 
 let star_pos g =
   let gseq = seq in
-  let galt = alt in
+  let galt x y = alt [x;y] in
   let open Pos in
   fixpoint
     (fun r -> rpos(lpos(galt (gseq r g
@@ -72,8 +70,8 @@ let test7 = seq (plus (star_pos (char_a)) (term(Lex.char ',' ()))) char_b (fun x
 let test7 = compile test7
 
 let test8 = fixpoint
-              (fun r -> alt (empty 0)
-                            (seq char_a (seq r char_b (fun x _ -> x + 1)) (fun _ x -> x)))
+              (fun r -> alt [empty 0
+                            ;seq char_a (seq r char_b (fun x _ -> x + 1)) (fun _ x -> x)])
 let test9 = dseq test8
                  (let rec fn x =
                     if x <= 0 then empty 0
@@ -91,22 +89,22 @@ let test11 =
       let gbc =
         fixpoint ~name:"BC" (fun bc ->
             let gac =
-              alt (empty ())
-                (alt (seq ab (seq char_a char_b (fun _ _ -> ())) (fun _ _ -> ()))
-                   (seq bc (seq char_b char_c (fun _ _ -> ())) (fun _ _ -> ())))
+              alt [empty ()
+                  ;seq ab (seq char_a char_b (fun _ _ -> ())) (fun _ _ -> ())
+                  ;seq bc (seq char_b char_c (fun _ _ -> ())) (fun _ _ -> ())]
             in
-            alt (empty ())
-              (alt (seq ab (seq char_a char_b (fun _ _ -> ())) (fun _ _ -> ()))
-                 (seq gac (seq char_a char_c (fun _ _ -> ())) (fun _ _ -> ()))))
+            alt [empty ()
+                ;seq ab (seq char_a char_b (fun _ _ -> ())) (fun _ _ -> ())
+                ;seq gac (seq char_a char_c (fun _ _ -> ())) (fun _ _ -> ())])
     in
     let gac =
-      alt (empty ())
-        (alt (seq ab (seq char_a char_b (fun _ _ -> ())) (fun _ _ -> ()))
-           (seq gbc (seq char_b char_c (fun _ _ -> ())) (fun _ _ -> ())))
+      alt [empty ()
+          ;seq ab (seq char_a char_b (fun _ _ -> ())) (fun _ _ -> ())
+          ;seq gbc (seq char_b char_c (fun _ _ -> ())) (fun _ _ -> ())]
     in
-    alt (empty ())
-      (alt (seq gbc (seq char_b char_c (fun _ _ -> ())) (fun _ _ -> ()))
-         (seq gac (seq char_a char_c (fun _ _ -> ())) (fun _ _ -> ()))))
+    alt [empty ()
+        ;seq gbc (seq char_b char_c (fun _ _ -> ())) (fun _ _ -> ())
+        ;seq gac (seq char_a char_c (fun _ _ -> ())) (fun _ _ -> ())])
 let test11c = compile test11
 let _ = Printf.printf "test11: %a\n%!" (print_grammar ~def:false) test11
 let test11 = test11c
@@ -116,23 +114,23 @@ let test12 =
   let ac = declare_grammar "AC" in
   let bc = declare_grammar "BC" in
   set_grammar ab
-    (alt (empty ())
-       (alt (seq bc (seq char_b char_c (fun _ _ -> ())) (fun _ _ -> ()))
-          (seq ac (seq char_a char_c (fun _ _ -> ())) (fun _ _ -> ()))));
+    (alt [empty ()
+         ;seq bc (seq char_b char_c (fun _ _ -> ())) (fun _ _ -> ())
+         ;seq ac (seq char_a char_c (fun _ _ -> ())) (fun _ _ -> ())]);
   set_grammar ac
-    (alt (empty ())
-       (alt (seq ab (seq char_a char_b (fun _ _ -> ())) (fun _ _ -> ()))
-          (seq bc (seq char_b char_c (fun _ _ -> ())) (fun _ _ -> ()))));
+    (alt [empty ()
+         ;seq ab (seq char_a char_b (fun _ _ -> ())) (fun _ _ -> ())
+         ;seq bc (seq char_b char_c (fun _ _ -> ())) (fun _ _ -> ())]);
   set_grammar bc
-    (alt (empty ())
-       (alt (seq ab (seq char_a char_b (fun _ _ -> ())) (fun _ _ -> ()))
-          (seq ac (seq char_a char_c (fun _ _ -> ())) (fun _ _ -> ()))));
+    (alt [empty ()
+         ;seq ab (seq char_a char_b (fun _ _ -> ())) (fun _ _ -> ())
+         ;seq ac (seq char_a char_c (fun _ _ -> ())) (fun _ _ -> ())]);
   ab
 let test12c = compile test12
 let _ = Printf.printf "test12: %a\n%!" (print_grammar ~def:false) test12
 let test12 = test12c
 
-let test13 = fixpoint (fun r -> alt (empty 0) (seq r (seq char_a r (+)) (+)))
+let test13 = fixpoint (fun r -> alt [empty 0; seq r (seq char_a r (+)) (+)])
 let test13 = compile test13
 
 let test14 = compile (term (Lex.int ()))
