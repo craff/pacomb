@@ -92,7 +92,7 @@ let exp_to_term exp =
      app loc (grmod "term") (app loc (lxmod "regexp")
                                (app loc (rgmod "from_string") s))
   | Pexp_apply({ pexp_desc = Pexp_ident
-                  { txt = Lident("="|"<"|">"|"<="|">="); _ }; _}, _) ->
+                  { txt = Lident("="|"<"|">"|"<="|">="|"<>"); _ }; _}, _) ->
      app loc (grmod "test") exp
   | _ -> exp
 

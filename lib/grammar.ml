@@ -357,7 +357,15 @@ let ne_layout b g cfg =
     - and returns a grammar with the empty parses are removed
     - store this in the corresponding fields of g *)
 let factor_empty g =
-  let get g = if g.recursive then ERef g else (assert (g.ne <> ETmp); g.ne )in
+  let get g =
+    if g.recursive then ERef g else
+      begin
+        assert (g.ne <> ETmp);
+        let ge = if g.push then EPush g.ne else g.ne in
+        let ge = if g.cache then ECache ge else ge in
+        ge
+      end
+  in
 
   let rec fn : type a. a grammar -> unit = fun g ->
     if g.phase = Defined then
@@ -630,12 +638,13 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
     else
       begin
         g.phase <- Compiled;
-        g.compiled := compile_ne g.ne;
+        let cg = compile_ne g.ne in
+        let cg = if g.push then Comb.push cg else cg in
+        let cg = if g.cache then Comb.cache cg else cg in
+        g.compiled := cg;
         get g
       end
   in
-  let cg = if g.push then Comb.push cg else cg in
-  let cg = if g.cache then Comb.cache cg else cg in
   match g.e with
   | Some x ->
      let e = Comb.empty x in
