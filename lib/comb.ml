@@ -49,17 +49,14 @@ type ('a, 'r) comb = 'r env -> ('a, 'r) cont -> 'r err -> 'r
     parameter. *)
 type 'a t = { comb : 'r. ('a, 'r) comb } [@@unboxed]
 
-let record_max_pos env =
+(** [next env err] updates the current maximum position [env.max_pos] and then
+    calls the [err] function. *)
+let next : 'b env -> 'a err -> 'a = fun env err ->
   let (buf_max, col_max) = !(env.max_pos) in
   let line_max = Input.line buf_max in
   let line = Input.line env.current_buf in
   if line > line_max || (line = line_max && env.current_col > col_max) then
-    env.max_pos := (env.current_buf, env.current_col)
-
-(** [next env err] updates the current maximum position [env.max_pos] and then
-    calls the [err] function. *)
-let next : 'b env -> 'a err -> 'a = fun env err ->
-  record_max_pos env;
+    env.max_pos := (env.current_buf, env.current_col);
   err ()
 
 (** [give_up ()] rejects parsing from a corresponding semantic action. *)
@@ -133,8 +130,8 @@ let alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t =
   let comb : type r. ('a, r) comb = fun env k err ->
     match (test cs1 env, test cs2 env) with
     | (false, false) -> next env err
-    | (true , false) -> record_max_pos env; g1.comb env k err
-    | (false, true ) -> record_max_pos env; g2.comb env k err
+    | (true , false) -> g1.comb env k err
+    | (false, true ) -> g2.comb env k err
     | (true , true ) ->
        (* one wants to avoid incrementing f2 in err or f1 in err. This way, if
           f1 parses 50% and f2 the other 50%, we have f1 ~ f2 *)
