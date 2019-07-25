@@ -72,7 +72,10 @@ let test cs e = Charset.mem cs (Input.get e.current_buf e.current_col)
 
 (** Combinator that always fails. *)
 let fail : 'a t =
-  { comb = fun _ _ err -> err () }
+  { comb = fun env _ err -> next env err }
+
+let assert_false : 'a t =
+  { comb = fun _ _ _ -> assert false }
 
 (** Combinator accepting the empty input only. *)
 let empty : 'a -> 'a t = fun x ->

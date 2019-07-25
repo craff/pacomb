@@ -42,39 +42,71 @@ let tests_fail ?(blank=bspace) g l =
 
   (* test patterns in terminals *)
   let g0 : (int * int) grammar = (x::INT) => Pos.(x_lpos.col, x_rpos.col)
-  let _ = test ~blank:bspace g0 " 123 " (1,4)
+  let _ = test g0 " 123 " (1,4)
   let g : (int * int) grammar = ((x,y)::g0) => (y,x)
-  let _ = test ~blank:bspace g " 123 " (4,1)
+  let _ = test g " 123 " (4,1)
   let g : (int * int * int) grammar = (((x,y)=z)::g0) => Pos.(y,x,z_rpos.col)
-  let _ = test ~blank:bspace g " 123 " (4,1,4)
+  let _ = test g " 123 " (4,1,4)
   let g : (int * int * int) grammar = ((((x:int),(y:int))=z)::g0) => Pos.(y,x,z_rpos.col)
-  let _ = test ~blank:bspace g " 123 " (4,1,4)
+  let _ = test g " 123 " (4,1,4)
 
   (* test rules and sequences *)
   type op = Add | Sub | Mul | Div
   let bin = (x::INT) (op::('+'=>Add ; '-'=>Sub; '*'=>Mul; '/'=>Div)) (y::INT) => (x,op,y)
-  let _ = test ~blank:bspace bin "42 + 73" (42,Add,73)
+  let _ = test bin "42 + 73" (42,Add,73)
   let g = (x::INT) 'a' 'b' => x
         ; 'a' (x::INT) 'b' => x
         ; 'a' 'b' (x::INT) => x
-  let _ = tests ~blank:bspace g [("42 a b",42); ("a 42 b",42); ("a b 42",42)]
+  let _ = tests g [("42 a b",42); ("a 42 b",42); ("a b 42",42)]
 
   (* test positions *)
   let g = (x::INT) 'a' 'b' => Pos.(x_lpos.col,x,x_rpos.col)
         ; 'a' (x::INT) (b::'b') => Pos.(x_lpos.col,x,b_rpos.col)
         ; (a::'a') 'b' (x::INT) => Pos.(a_lpos.col,x,x_rpos.col)
-  let _ = tests ~blank:bspace g [("42 a b ",(0,42,2))
+  let _ = tests g [("42 a b ",(0,42,2))
                                ; ("a 42 b ",(2,42,6))
                                ; ("a b 42 ",(0,42,6))]
   let g = (x::bin) 'a' 'b' => Pos.(x_lpos.col,x,x_rpos.col)
         ; 'a' (x::bin) (b::'b') => Pos.(x_lpos.col,x,b_rpos.col)
         ; (a::'a') 'b' (x::bin) => Pos.(a_lpos.col,x,x_rpos.col)
-  let _ = tests ~blank:bspace g [("42+13 a b ",(0,(42,Add,13),5))
+  let _ = tests g [("42+13 a b ",(0,(42,Add,13),5))
                                ; ("a 42 * 4 b ",(2,(42,Mul,4),10))
                                ; ("a b 42 / 2 ",(0,(42,Div,2),10))]
 
   (* test recursion *)
-
+  let rec g = (y::g) (x::INT) => x+y
+            ; (x::INT) => x
+  let _ = tests g [("42", 42); ("1 2 3",6)]
+  let rec g = (x::INT) (y::g) => x+y
+            ; (x::INT) => x
+  let _ = tests g [("42", 42); ("1 2 3",6)]
+  let rec g = (x::INT) '+' (y::g) => x+y
+            ; (x::g) '-' (y::INT) => x-y
+            ; (x::INT) => x
+  let _ = tests g [("42", 42); ("1 + 2 - 3",0); ("1 - 2 - 3",-4)]
+  let rec g1 = (x::g3) 'a' 'b' => x+1
+             ; 'c' (x::g1) 'd' => x-1
+             ; 'e' 'f' (x::g2) => x
+             ; ()              => 0
+      and g2 = (x::g1) 'b' 'a' => x+1
+             ; 'c' (x::g2) 'd' => x-1
+             ; 'f' 'e' (x::g3) => x
+             ; ()              => 0
+      and g3 = (x::g2) 'a' 'b' => x+1
+             ; 'd' (x::g3) 'c' => x-1
+             ; 'e' 'f' (x::g1) => x
+             ; ()              => 0
+  let _ = compile g3
+  let _ = print_grammar ~def:false stdout g1; print_newline ()
+  let _ = print_grammar ~def:false stdout g2; print_newline ()
+  let _ = print_grammar ~def:false stdout g3; print_newline ()
+  let (b,cs) = grammar_info g1
+  let _ = Printf.printf "%b %a\n%!" b Charset.print cs
+  let (b,cs) = grammar_info g2
+  let _ = Printf.printf "%b %a\n%!" b Charset.print cs
+  let (b,cs) = grammar_info g3
+  let _ = Printf.printf "%b %a\n%!" b Charset.print cs
+  let _ = test g1 "ef" 0
   (* test parameters *)
 
   (* test grammar under sub expressions or sub modules *)
@@ -85,10 +117,10 @@ let tests_fail ?(blank=bspace) g l =
     struct
       let f = 'b' (x::(noblank ('a' 'a' => 2))) => x
     end
-  let _ = test ~blank:bspace f "aa" 2
-  let _ = test_fail ~blank:bspace f "a a"
+  let _ = test f "aa" 2
+  let _ = test_fail f "a a"
 
-  let _ = test ~blank:bspace H.f "b aa " 2
+  let _ = test H.f "b aa " 2
   let _ = test_fail H.f "b a a "
 
 ]

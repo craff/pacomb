@@ -34,7 +34,8 @@ type 'a grammar =
  and 'a t = 'a grammar
 
  (** The various transformation phase before until compilation to combinators *)
- and phase = Defined | EmptyComputed | EmptyRemoved | PushFactored | LeftRecEliminated | Compiled
+ and phase = Defined | EmptyComputed | EmptyRemoved | PushFactored
+           | LeftRecEliminated | Compiling | Compiled
 
  (** Grammar constructors at definition *)
  and 'a grdf =
@@ -93,7 +94,7 @@ let give_name n g = { g with n }
 let mkg : ?name:string -> ?recursive:bool -> 'a grdf -> 'a grammar =
   fun ?(name="...") ?(recursive=false) d ->
     let k = Assoc.new_key () in
-    { e = None; d; n = name; k; recursive; compiled = ref Comb.fail
+    { e = None; d; n = name; k; recursive; compiled = ref Comb.assert_false
     ; charset = None; phase = Defined; ne = ETmp; push = false; cache = false }
 
 (** A type to store list of grammar keys *)
@@ -125,7 +126,7 @@ let print_grammar ?(def=true) ch s =
     | ESeq(g1,g2,_) -> pr "%a%a" pg g1 pv g2
     | EDSeq(g1,_,_) -> pr "%a???" pg g1
     | ELr(g,s)      -> pr "%a(%a)*" pg g pv s
-    | ERef(g)       -> pr "(%a\\0)" pv g
+    | ERef(g)       -> pr "%a" pv g
     | EPush(g)      -> pr "%a" pg g
     | ERead(_,g)    -> pr "%a" pg g
     | ERPos(g)      -> pr "%a" pg g
@@ -632,18 +633,23 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   remove_push g;
   elim_left_rec [] g;
   assert (g.phase >= LeftRecEliminated);
-  let get g = if g.recursive then Comb.deref g.compiled else !(g.compiled) in
+  (* NOTE: g.recursive is not enough here, with mutual recursion; after
+           left rec elimination, the loop may be detected at other position
+           in the tree *)
+  let get g = if g.recursive || g.phase = Compiling then Comb.deref g.compiled
+              else !(g.compiled)
+  in
   let cg =
-    if g.phase = Compiled then get g
-    else
-      begin
-        g.phase <- Compiled;
+    match g.phase with
+    | Compiled | Compiling -> get g
+    | _ ->
+        g.phase <- Compiling;
         let cg = compile_ne g.ne in
         let cg = if g.push then Comb.push cg else cg in
         let cg = if g.cache then Comb.cache cg else cg in
         g.compiled := cg;
+        g.phase <- Compiled;
         get g
-      end
   in
   match g.e with
   | Some x ->
