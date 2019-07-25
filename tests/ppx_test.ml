@@ -96,17 +96,11 @@ let tests_fail ?(blank=bspace) g l =
              ; 'd' (x::g3) 'c' => x-1
              ; 'e' 'f' (x::g1) => x
              ; ()              => 0
-  let _ = compile g3
-  let _ = print_grammar ~def:false stdout g1; print_newline ()
-  let _ = print_grammar ~def:false stdout g2; print_newline ()
-  let _ = print_grammar ~def:false stdout g3; print_newline ()
-  let (b,cs) = grammar_info g1
-  let _ = Printf.printf "%b %a\n%!" b Charset.print cs
-  let (b,cs) = grammar_info g2
-  let _ = Printf.printf "%b %a\n%!" b Charset.print cs
-  let (b,cs) = grammar_info g3
-  let _ = Printf.printf "%b %a\n%!" b Charset.print cs
-  let _ = test g1 "ef" 0
+  let _ = tests g1 [("", 0); ("ab",1); ("cd",-1); ("ef", 0)]
+  let _ = tests g2 [("", 0); ("ba",1); ("cd",-1); ("fe", 0)]
+  let _ = tests g3 [("", 0); ("ab",1); ("dc",-1); ("ef", 0)]
+  let _ = tests g1 [("cdefefcfedcabd",-2)]
+
   (* test parameters *)
 
   (* test grammar under sub expressions or sub modules *)
