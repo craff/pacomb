@@ -248,6 +248,16 @@ let exp_to_grammar ?name_param exp =
   with Exit     -> (false, exp)
      | Warn att -> (false, add_attribute exp att)
 
+(* transform a list of structure_items in one *)
+let flatten_str items =
+  match items with
+  | [x] -> x
+  | _ ->
+     Str.include_ { pincl_mod = Mod.structure items
+                  ; pincl_loc = Location.none
+                  ; pincl_attributes = [] }
+
+
 (* transform a list of structure item to parser definition *)
 let str_to_parser items =
   let fn item =
@@ -341,14 +351,7 @@ let str_to_parser items =
                    ; pincl_loc = Location.none
                    ; pincl_attributes = [w] }]
   in
-  let items = List.flatten (List.map fn items) in
-  match items with
-  | [x] -> x
-  | _ ->
-     Str.include_ { pincl_mod = Mod.structure items
-                  ; pincl_loc = Location.none
-                  ; pincl_attributes = [] }
-
+  flatten_str (List.flatten (List.map fn items))
 
 (* the main mapper *)
 let pacomb_mapper _argv =
