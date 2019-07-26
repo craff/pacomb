@@ -301,55 +301,50 @@ let vb_to_parser rec_ vb =
     (loc,changed,name,vb.pvb_pat,param,rules)
   in
   let ls = List.map gn vb in
-  let (gr,orig) = List.partition (fun (_,changed,_,_,_,_) -> changed) ls in
+  let (gr,orig) = List.partition
+                    (fun (_,changed,_,_,_,_) -> changed && rec_ = Recursive)
+                    ls
+  in
   let set name = "set__grammar__" ^ name.txt in
   let declarations =
-    let gn (loc,changed,(name:string loc),pat,param,rules) =
+    let gn (loc,changed,(name:string loc),pat,param,_) =
       assert changed;
-      match rec_ with
-      | Nonrecursive ->
-         [Vb.mk ~loc pat rules]
-      | Recursive ->
-         let vd =
-           match param with
-           | None ->
-              Vb.mk ~loc pat
-                (app loc (grmod "declare_grammar")
-                   (Exp.constant ~loc:name.loc (Const.string name.txt)))
+      let vd =
+        match param with
+        | None ->
+           Vb.mk ~loc pat
+             (app loc (grmod "declare_grammar")
+                (Exp.constant ~loc:name.loc (Const.string name.txt)))
            | Some _ ->
               Vb.mk ~loc (Pat.tuple [pat; Pat.var (mkloc (set name) name.loc)])
                 (app loc (grmod "grammar_family")
                    (Exp.constant ~loc:name.loc (Const.string name.txt)))
-         in
-         [vd]
+      in
+      [vd]
     in
     List.map gn gr
   in
   let orig =
-    let gn (loc,changed,_,pat,_,rules) =
-      assert (not changed);
-      Vb.mk ~loc pat rules
+    let gn (loc,_,_,pat,_,rules) =
+        Vb.mk ~loc pat rules
     in
     List.map gn orig
   in
   let definitions =
     let fn (loc,changed,name,_,param, rules) =
       assert changed;
-      match rec_ with
-      | Nonrecursive -> []
-      | Recursive ->
-         let exp =
-           match param with
-           | None ->
-              app2 loc (grmod "set_grammar")
-                (Exp.ident (Location.mkloc (Lident name.txt) name.loc))
-                rules
+      let exp =
+        match param with
+        | None ->
+           app2 loc (grmod "set_grammar")
+             (Exp.ident (Location.mkloc (Lident name.txt) name.loc))
+             rules
            | Some n ->
               app loc
                 (Exp.ident (Location.mkloc (Lident (set name)) name.loc))
                 (Exp.fun_ ~loc Nolabel None (Pat.var n) rules)
-             in
-             [Vb.mk ~loc (Pat.any ()) exp]
+      in
+      [Vb.mk ~loc (Pat.any ()) exp]
     in
     List.map fn gr
   in
