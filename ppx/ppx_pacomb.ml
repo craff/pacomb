@@ -117,7 +117,6 @@ let rec exp_to_rule e =
       Pexp_apply({ pexp_desc = Pexp_ident
          { txt = Lident("="|"<"|">"|"<="|">="|"<>"); _ }; _}, _); _} as cond,
       (Nolabel,a3)::rest) ->
-     Printf.eprintf "coucou\n%!";
      let (rule,_) = exp_to_rule (Exp.apply a3 rest) in
      (rule, Some cond)
   | Pexp_apply(e1, args) ->
