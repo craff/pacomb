@@ -1,12 +1,15 @@
 (test
   (name test)
   (modules test)
+  (modes byte)
+  (link_flags compiler-libs/ocamlcommon.cma compiler-libs/ocamlbytecomp.cma compiler-libs/ocamltoplevel.cma metalib.cma)
   (libraries unix pacomb)
   (action (run ./test.exe)))
 
 (test
   (name hard)
   (modules hard)
+  (modes byte)
   (flags -ppx "./ppx/ppx_pacomb.exe")
   (libraries unix pacomb)
   (deps ../ppx/ppx_pacomb.exe hard.exe)
@@ -15,6 +18,7 @@
 (test
   (name ppx_test)
   (modules ppx_test)
+  (modes byte)
   (flags -ppx "./ppx/ppx_pacomb.exe")
   (libraries unix pacomb)
   (deps ../ppx/ppx_pacomb.exe hard.exe)
@@ -33,6 +37,7 @@
 (test
   (name calc)
   (modules calc)
+  (modes byte)
   (flags -ppx "./ppx/ppx_pacomb.exe")
   (libraries unix pacomb)
   (deps ../ppx/ppx_pacomb.exe big_expr.exe calc.exe)
@@ -42,6 +47,7 @@
 (test
   (name calc_prio)
   (modules calc_prio)
+  (modes byte)
   (flags -ppx "./ppx/ppx_pacomb.exe")
   (libraries unix pacomb)
   (deps ../ppx/ppx_pacomb.exe big_expr.exe calc_prio.exe)
@@ -51,6 +57,7 @@
 (test
   (name calc_factor)
   (modules calc_factor)
+  (modes byte)
   (flags -ppx "./ppx/ppx_pacomb.exe")
   (libraries unix pacomb)
   (deps ../ppx/ppx_pacomb.exe big_expr.exe calc_factor.exe)
@@ -60,6 +67,7 @@
 (test
   (name sexp)
   (modules sexp)
+  (modes byte)
   (flags -ppx "./ppx/ppx_pacomb.exe")
   (libraries unix pacomb)
   (deps ../ppx/ppx_pacomb.exe big_sexp.exe sexp.exe)
@@ -69,6 +77,7 @@
 (test
   (name sexp_rr)
   (modules sexp_rr)
+  (modes byte)
   (flags -ppx "./ppx/ppx_pacomb.exe")
   (libraries unix pacomb)
   (deps ../ppx/ppx_pacomb.exe big_sexp.exe sexp_rr.exe)

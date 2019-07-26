@@ -1,4 +1,5 @@
 open Lex
+open Codelib
 
 type layout_config = Comb.layout_config
 
@@ -21,7 +22,7 @@ type 'a grammar =
                               valid from phase PushFactored  *)
   ; mutable cache : bool  (** Does this grammar needs a cache
                               valid from phase PushFactored  *)
-  ; mutable compiled : 'a Comb.t ref
+  ; mutable compiled : 'a Comb.t code
                           (** the combinator for the grammar. One needs a ref
                               for recursion.
                               valid from phase Compiled *)
@@ -94,7 +95,7 @@ let give_name n g = { g with n }
 let mkg : ?name:string -> ?recursive:bool -> 'a grdf -> 'a grammar =
   fun ?(name="...") ?(recursive=false) d ->
     let k = Assoc.new_key () in
-    { e = None; d; n = name; k; recursive; compiled = ref Comb.assert_false
+    { e = None; d; n = name; k; recursive; compiled = .<Comb.assert_false>.
     ; charset = None; phase = Defined; ne = ETmp; push = false; cache = false }
 
 (** A type to store list of grammar keys *)
@@ -604,31 +605,34 @@ let split_list l =
   fn [] [] l
 
 (** compilation of a grammar to combinators *)
-let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
+
+let rec compile_ne : type a. a grne -> a Comb.t code = fun g ->
   match g with
-  | EFail -> Comb.fail
-  | ETerm(c) -> Comb.lexeme c.f
+  | EFail -> .<Comb.fail>.
+  | ETerm(c) -> .<Comb.lexeme c.f>.
   | EAlt(gs) -> let rec fn = function
-                  | [] -> (Charset.empty, Comb.fail)
+                  | [] -> (Charset.empty, .<Comb.fail>.)
                   | [g] -> (first_charset g, compile_ne g)
                   | l -> let (l1,l2) = split_list l in
                          let (cs1,c1) = fn l1 in
                          let (cs2,c2) = fn l2 in
-                         (Charset.union cs1 cs2, Comb.alt cs1 c1 cs2 c2)
+                         (Charset.union cs1 cs2, .<Comb.alt cs1 .~c1 cs2 .~c2>.)
                 in snd (fn gs)
-  | ESeq(g1,g2,f) -> Comb.seq (compile_ne g1) (compile g2) f
-  | EDSeq(g1,g2,f) -> Comb.dep_seq (compile_ne g1) (fun x -> compile (g2 x)) f
-  | EAppl(g1,f) -> Comb.app (compile_ne g1) f
-  | ELr(g,s) -> Comb.lr (compile_ne g) (first_charset s.ne) (compile_ne s.ne)
+  | ESeq(g1,g2,f) -> .<Comb.seq .~(compile_ne g1) .~(compile g2) f>.
+  | EDSeq(g1,g2,f) -> .<Comb.dep_seq .~(compile_ne g1) (fun x -> Runcode.run (compile (g2 x))) f>.
+  | EAppl(g1,f) -> .<Comb.app .~(compile_ne g1) f>.
+  | ELr(g,s) ->
+     let cs = first_charset s.ne in
+     .<Comb.lr .~(compile_ne g) cs .~(compile_ne s.ne)>.
   | ERef g -> compile g
-  | EPush(g) -> Comb.push (compile_ne g)
-  | ERead(n,g) -> Comb.read n (compile_ne g)
-  | ERPos(g) -> Comb.right_pos (compile_ne g)
-  | ECache(g) -> Comb.cache (compile_ne g)
-  | ELayout(b,g,cfg) -> Comb.change_layout ~config:cfg b (compile_ne g)
+  | EPush(g) -> .<Comb.push .~(compile_ne g)>.
+  | ERead(n,g) -> .<Comb.read n .~(compile_ne g)>.
+  | ERPos(g) -> .<Comb.right_pos .~(compile_ne g)>.
+  | ECache(g) -> .<Comb.cache .~(compile_ne g)>.
+  | ELayout(b,g,cfg) -> .<Comb.change_layout ~config:cfg b .~(compile_ne g)>.
   | ETmp -> assert false
 
- and compile : type a. a grammar -> a Comb.t = fun g ->
+ and compile : type a. a grammar -> a Comb.t code = fun g ->
   factor_empty g;
   remove_push g;
   elim_left_rec [] g;
@@ -636,8 +640,8 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   (* NOTE: g.recursive is not enough here, with mutual recursion; after
            left rec elimination, the loop may be detected at other position
            in the tree *)
-  let get g = if g.recursive || g.phase = Compiling then Comb.deref g.compiled
-              else !(g.compiled)
+  let get g = if g.recursive || g.phase = Compiling then g.compiled
+              else g.compiled
   in
   let cg =
     match g.phase with
@@ -645,18 +649,22 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
     | _ ->
         g.phase <- Compiling;
         let cg = compile_ne g.ne in
-        let cg = if g.push then Comb.push cg else cg in
-        let cg = if g.cache then Comb.cache cg else cg in
-        g.compiled := cg;
+        let cg = if g.push then .<Comb.push .~cg>. else cg in
+        let cg = if g.cache then .<Comb.cache .~cg>. else cg in
+        g.compiled <- cg;
         g.phase <- Compiled;
         get g
   in
   match g.e with
   | Some x ->
-     let e = Comb.empty x in
-     if g.ne = EFail then e else Comb.alt Charset.full e (first_charset g.ne) cg
+     let e = .<Comb.empty x>. in
+     if g.ne = EFail then e else
+       let cs = first_charset g.ne in
+       .<Comb.alt Charset.full .~e cs .~cg>.
   | None ->
-     if g.ne = EFail then Comb.fail else cg
+     if g.ne = EFail then .<Comb.fail>. else cg
+
+let compile g = Runcode.run (compile g)
 
 (** get some infos *)
 let grammar_info g =
