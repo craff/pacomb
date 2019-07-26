@@ -72,12 +72,12 @@ let test7 = compile test7
 let test8 = fixpoint
               (fun r -> alt [empty 0
                             ;seq char_a (seq r char_b (fun x _ -> x + 1)) (fun _ x -> x)])
-let test9 = dseq test8
+let test9 = dseq (appl test8 (fun x -> (x, ())))
                  (let rec fn x =
                     if x <= 0 then empty 0
                     else seq (fn (x-1)) char_a (fun x _  -> x+1)
                        in fn)
-                 (fun x -> x)
+                 (fun _ x -> x)
 let test8 = compile test8
 let test9 = compile test9
 

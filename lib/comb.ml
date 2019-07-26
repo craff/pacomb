@@ -109,14 +109,14 @@ let seq : 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t = fun g1 g2 fn ->
   { comb }
 
 (** Dependant sequence combinator. *)
-let dep_seq : 'a t -> ('a -> 'b t) -> ('b -> 'c) -> 'c t = fun g1 g2 fn ->
-  let comb : type r. ('c, r) comb = fun env k err ->
-    g1.comb env (fun env err v1 ->
+let dep_seq : ('a * 'b) t -> ('a -> 'c t) -> ('b -> 'c -> 'd) -> 'd t = fun g1 g2 fn ->
+  let comb : type r. ('d, r) comb = fun env k err ->
+    g1.comb env (fun env err (v1,v2) ->
       (try
          let g = g2 v1 in
-         fun () -> g.comb env (fun env err v2 ->
+         fun () -> g.comb env (fun env err v3 ->
            (try
-              let v = fn v2 in
+              let v = fn v2 v3 in
               fun () -> k env err v
             with Lex.NoParse -> fun () -> next env err) ()) err
        with Lex.NoParse -> fun () -> next env err) ()) err

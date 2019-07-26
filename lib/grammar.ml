@@ -46,7 +46,7 @@ type 'a grammar =
    | Appl : 'a t * ('a -> 'b) -> 'b grdf   (** application *)
    | Seq  : 'a t * 'b t * ('a -> 'b -> 'c) -> 'c grdf
                                            (** sequence *)
-   | DSeq : 'a t * ('a -> 'b t) * ('b -> 'c) -> 'c grdf
+   | DSeq : ('a * 'b) t * ('a -> 'c t) * ('b -> 'c -> 'd) -> 'd grdf
                                            (** dependant sequence *)
    | Lr   : 'a t * ('a -> 'a) t -> 'a grdf
                                            (** Lr(g1,g2) represents g1 g2* and is
@@ -74,7 +74,7 @@ and 'a grne =
   | EAlt  : 'a grne list -> 'a grne
   | EAppl : 'a grne * ('a -> 'b) -> 'b grne
   | ESeq  : 'a grne * 'b grammar * ('a -> 'b -> 'c) -> 'c grne
-  | EDSeq : 'a grne * ('a -> 'b grammar) * ('b -> 'c) -> 'c grne
+  | EDSeq : ('a * 'b) grne * ('a -> 'c grammar) * ('b -> 'c -> 'd) -> 'd grne
   | ELr   : 'a grne * ('a -> 'a) grammar -> 'a grne
   | ERef  : 'a t -> 'a grne
   | EPush : 'a grne -> 'a grne             (** pushes the position before parsing
@@ -313,7 +313,7 @@ let ne_appl g f =
   | EFail          -> EFail
   | EAppl(g,h)     -> EAppl(g,fun x -> f (h x))
   | ESeq(g1,g2,h)  -> ESeq(g1,g2,fun x y -> f (h x y))
-  | EDSeq(g1,g2,h) -> EDSeq(g1,g2,fun y -> f (h y))
+  | EDSeq(g1,g2,h) -> EDSeq(g1,g2,fun x y -> f (h x y))
   | _              -> EAppl(g,f)
 
 let ne_seq g1 g2 f = match(g1,g2) with
@@ -392,11 +392,11 @@ let factor_empty g =
                                    | Some y -> try Some(f x y) with NoParse -> None)
     | DSeq(g1,g2,f) -> fn g1; (match g1.e with
                        | None -> None
-                       | Some x -> try
+                       | Some (x,x') -> try
                                    let g2 = g2 x in fn g2;
                                                     match g2.e with
                                                     | None -> None
-                                                    | Some y -> Some(f y)
+                                                    | Some y -> Some(f x' y)
                                  with NoParse -> None)
     | Lr(g1,g2) -> fn g1; fn g2; g1.e
     | LPos(g1)      -> fn g1; (match g1.e with
@@ -434,7 +434,9 @@ let factor_empty g =
     | DSeq(g1,g2,f) -> hn g1; let ga = ne_dseq (get g1) g2 f in
                        let gb = match g1.e with
                          | None   -> EFail
-                         | Some x -> let g2 = g2 x in fn g2; hn g2; ne_appl (get g2) f (* FIXME *)
+                         | Some (x,x') ->
+                            let g2 = g2 x in fn g2; hn g2;
+                            ne_appl (get g2) (f x') (* FIXME *)
                        in
                        ne_alt [ga; gb]
     | Lr(g1,g2) -> hn g1; hn g2; ne_lr (get g1) g2

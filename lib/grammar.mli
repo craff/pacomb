@@ -47,7 +47,7 @@ val seqf : 'a grammar -> ('a -> 'b) grammar -> 'b grammar
 (** [dseq g1 g2 f)] is a dependant sequence, the grammar [g2] used after [g1] may
     depend upon the semantics of [g1]. This is not very efficient as the grammar
     [g2] must be compiled at parsing time. It is a good idea to memoize [g2] *)
-val dseq : 'a grammar -> ('a -> 'b grammar) -> ('b -> 'c) -> 'c grammar
+val dseq : ('a * 'b) grammar -> ('a -> 'c grammar) -> ('b -> 'c -> 'd) -> 'd grammar
 
 (** [lpos g] is identical to [g] but passes the position just before parsing with
     [g] to the semantical action of [g] *)
