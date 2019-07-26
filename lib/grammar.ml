@@ -48,11 +48,12 @@ type 'a grammar =
                                            (** sequence *)
    | DSeq : ('a * 'b) t * ('a -> 'c t) * ('b -> 'c -> 'd) -> 'd grdf
                                            (** dependant sequence *)
-   | Lr   : 'a t * ('a -> 'a) t -> 'a grdf
+   | Lr   : 'a t * 'a Assoc.key * 'a t -> 'a grdf
                                            (** Lr(g1,g2) represents g1 g2* and is
                                                used to eliminate left recursion.
                                                It can not be exposed as left recursion
                                                under Lr is not supported *)
+   | Rkey : 'a Assoc.key -> 'a grdf
    | LPos : (Pos.t -> 'a) t -> 'a grdf     (** read the postion before parsing *)
    | RPos : (Pos.t -> 'a) t -> 'a grdf     (** read the postion after parsing *)
    | Read : int * (Pos.t -> 'a) t -> 'a grdf (** read the position from the stack
@@ -75,7 +76,8 @@ and 'a grne =
   | EAppl : 'a grne * ('a -> 'b) -> 'b grne
   | ESeq  : 'a grne * 'b grammar * ('a -> 'b -> 'c) -> 'c grne
   | EDSeq : ('a * 'b) grne * ('a -> 'c grammar) * ('b -> 'c -> 'd) -> 'd grne
-  | ELr   : 'a grne * ('a -> 'a) grammar -> 'a grne
+  | ELr   : 'a grne * 'a Assoc.key * 'a grammar -> 'a grne
+  | ERkey : 'a Assoc.key -> 'a grne
   | ERef  : 'a t -> 'a grne
   | EPush : 'a grne -> 'a grne             (** pushes the position before parsing
                                                to a dedicated stack.
@@ -125,7 +127,8 @@ let print_grammar ?(def=true) ch s =
     | EAppl(g,_)    -> pr "App(%a)" pg g
     | ESeq(g1,g2,_) -> pr "%a%a" pg g1 pv g2
     | EDSeq(g1,_,_) -> pr "%a???" pg g1
-    | ELr(g,s)      -> pr "%a(%a)*" pg g pv s
+    | ELr(g,_,s)    -> pr "%a(%a)*" pg g pv s
+    | ERkey _       -> ()
     | ERef(g)       -> pr "%a" pv g
     | EPush(g)      -> pr "%a" pg g
     | ERead(_,g)    -> pr "%a" pg g
@@ -146,7 +149,8 @@ let print_grammar ?(def=true) ch s =
     | Appl(g,_)    -> pr "App(%a)" pg g
     | Seq(g1,g2,_) -> pr "%a%a" pg g1 pg g2
     | DSeq(g1,_,_) -> pr "%a???" pg g1
-    | Lr(g,s)      -> pr "%a(%a)*" pg g pg s
+    | Lr(g,_,s)    -> pr "%a(%a)*" pg g pg s
+    | Rkey _       -> ()
     | Read(_,g)    -> pr "%a" pg g
     | RPos(g)      -> pr "%a" pg g
     | LPos(g)      -> pr "%a" pg g
@@ -230,9 +234,9 @@ let seq2 g1 g2 = seq g1 g2 (fun _ x -> x)
 
 let seqf g1 g2 = seq g1 g2 (fun x f -> f x)
 
-let lr g1 g2 =
+let lr g1 k g2 =
   if g2.d = Fail then g1
-  else mkg (if g1.d = Fail then Fail else Lr(g1,g2))
+  else mkg (if g1.d = Fail then Fail else Lr(g1,k,g2))
 
 let lpos g = mkg (if g.d = Fail then Fail else LPos(g))
 
@@ -326,11 +330,11 @@ let ne_dseq g1 g2 f = match g1 with
   | EFail  -> EFail
   | _     -> EDSeq(g1,g2,f)
 
-let ne_lr g s =
-  match (g,s) with
+let ne_lr g k s =
+  match (g, s) with
   | EFail, _ -> EFail
   | _, {ne=EFail;_} -> g
-  | _        -> ELr(g,s)
+  | _        -> ELr(g,k,s)
 
 let ne_lpos g1 = match g1 with
   | EFail -> EFail
@@ -398,7 +402,8 @@ let factor_empty g =
                                                     | None -> None
                                                     | Some y -> Some(f x' y)
                                  with NoParse -> None)
-    | Lr(g1,g2) -> fn g1; fn g2; g1.e
+    | Lr(g1,_,g2)   -> fn g1; fn g2; g1.e
+    | Rkey _        -> None
     | LPos(g1)      -> fn g1; (match g1.e with
                                | None -> None
                                | Some x -> Some (x Pos.phantom)) (* Loose position *)
@@ -436,10 +441,11 @@ let factor_empty g =
                          | None   -> EFail
                          | Some (x,x') ->
                             let g2 = g2 x in fn g2; hn g2;
-                            ne_appl (get g2) (f x') (* FIXME *)
+                            ne_appl (get g2) (f x') (* FIXME, fn called twice on g2 *)
                        in
                        ne_alt [ga; gb]
-    | Lr(g1,g2) -> hn g1; hn g2; ne_lr (get g1) g2
+    | Lr(g1,k,g2) -> hn g1; hn g2; ne_lr (get g1) k g2
+    | Rkey k    -> ERkey k
     | LPos(g1) -> hn g1; ne_lpos (get g1)
     | RPos(g1) -> hn g1; ne_rpos (get g1)
     | Read(n,g1) -> hn g1; ne_read n (get g1)
@@ -466,7 +472,8 @@ let remove_push : type a. a grammar -> unit =
         | EPush(g1) -> push := true; fn true g1
         | ERead(n,g1) -> ne_read (if r then n else n+1) (fn r g1)
         | ERPos(g1) -> ne_rpos(fn r g1)
-        | ELr(_,_) -> assert false
+        | ELr _  -> assert false
+        | ERkey _  -> assert false
         | ECache(g1) -> cache := true; fn r g1
         | ELayout(b,g1,cfg) -> ne_layout b (fn r g1) cfg
         | ERef g0 as g -> gn g0; g
@@ -494,29 +501,28 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
 
   let u = g.k.k in
 
-  let rec fn : type b. b grne -> b grne * (a -> b) grammar =
+  let rec fn : type b. b grne -> b grne * b grammar =
     fun g ->
       match g with
       | EFail -> (EFail, fail ())
       | ETerm _ -> (g, fail ())
       | ESeq(g1,g2,f) ->
          let (g1, s1) = fn g1 in
-         (ne_seq g1 g2 f,
-          seq s1 g2 (fun fx y a -> f (fx a) y))
-      | EDSeq(g1,_,_) ->
-         let (_, s1) = fn g1 in
-         if s1.d <> Fail then
-           invalid_arg "fixpoint: left recursion under dependant sequence";
-         (g, fail())
+         (ne_seq g1 g2 f, seq s1 g2 f)
+      | EDSeq(g1,g2,f) ->
+         let (g1, s1) = fn g1 in
+         (ne_dseq g1 g2 f, dseq s1 g2 f)
       | EAlt(gs) ->
          let (gs,ss) = List.split (List.map fn gs) in
          (ne_alt gs, alt ss)
-      | ELr(g1,s)   ->
+      | ELr(g1,k,s)   ->
          let (g1,s1) = fn g1 in
-         (ne_lr g1 s, lr s1 (appl s (fun f g a -> f (g a))))
+         (ne_lr g1 k s, lr s1 k s)
+      | ERkey _ ->
+         (g, fail ())
       | EAppl(g1,f) ->
          let (g1,s) = fn g1 in
-         (ne_appl g1 f, appl s (fun g a -> f (g a)))
+         (ne_appl g1 f, appl s f)
       | ERef(g) -> gn g
       | EPush(g1) as g ->
          assert ((snd (fn g1)).d = Fail);
@@ -526,10 +532,10 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
          (g, fail())
       | ERead(n,g1) ->
          let (g1, s1) = fn g1 in
-         (ne_read n g1,read n (appl s1 (fun f pos a -> f a pos)))
+         (ne_read n g1, read n s1)
       | ERPos(g1) ->
          let (g1, s1) = fn g1 in
-         (ne_rpos g1,rpos(appl s1 (fun f pos a -> f a pos)))
+         (ne_rpos g1, rpos s1)
       | ELayout(_,g1,_) ->
          let (_, s1) = fn g1 in
          if s1.d <> Fail then
@@ -537,11 +543,11 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
          (g, fail())
       | ETmp -> assert false
 
-   and gn : type b. b grammar -> b grne * (a -> b) grammar =
+   and gn : type b. b grammar -> b grne * b grammar =
      fun g ->
        match g.k.eq u with
        | Eq  ->
-          (EFail, empty(fun x -> x));
+          (EFail, mkg (Rkey g.k))
        | NEq ->
           if List.mem (E g.k.k) above then
             begin
@@ -552,7 +558,7 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
               elim_left_rec (E u :: above) g;
               let (g',s) = fn g.ne in
               factor_empty s;
-              s.e <- None;
+              assert(s.e = None);
               s.phase <- LeftRecEliminated;
               if s.ne = EFail then (ERef g, fail()) else (g', s)
             end
@@ -565,38 +571,45 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
        factor_empty s;
        s.e <- None;
        s.phase <- LeftRecEliminated;
-       if s.ne <> EFail then g.ne <- ne_lr g1 s;
+       if s.ne <> EFail then g.ne <- ne_lr g1 g.k s;
      end
 
 (** compute the characters set accepted at the beginning of the input *)
 let first_charset : type a. a grne -> Charset.t = fun g ->
-  let rec fn : type a. a grne -> Charset.t = fun g ->
+
+  let rec fn : type a. a grne -> bool * Charset.t = fun g ->
     match g with
-    | EFail -> Charset.empty
-    | ETerm(c) -> c.c
-    | EAlt(gs) -> List.fold_left (fun s g -> Charset.union s (fn g)) Charset.empty gs
-    | ESeq(g,_,_) -> fn g
+    | EFail -> (false, Charset.empty)
+    | ETerm(c) -> (false, c.c)
+    | EAlt(gs) ->
+       List.fold_left (fun (shift,s) g ->
+           let (shift',s') = fn g in
+           (shift || shift', Charset.union s s')) (false, Charset.empty) gs
+    | ESeq(g,g2,_) ->
+       let (shift, s as r) = fn g in
+       if shift then (false, Charset.union s (snd (fn g2.ne))) else r
     | EDSeq(g,_,_) -> fn g
     | EAppl(g,_) -> fn g
-    | ELr(g,_) -> fn g
+    | ELr(g,_,_) -> fn g
+    | ERkey _ -> (true, Charset.empty)
     | ERef g -> gn g
     | EPush g -> fn g
     | ERead(_,g) -> fn g
     | ERPos g -> fn g
     | ECache g -> fn g
-    | ELayout(_,g,cfg) -> if cfg.old_blanks_before && not cfg.old_blanks_after then fn g else Charset.full
+    | ELayout(_,g,cfg) -> if cfg.old_blanks_before && not cfg.old_blanks_after then fn g else (false, Charset.full)
     | ETmp -> assert false
 
-  and gn : type a. a grammar -> Charset.t = fun g ->
+  and gn : type a. a grammar -> bool * Charset.t = fun g ->
     assert g.recursive;
     match g.charset with
-    | Some c -> c
+    | Some c -> (false, c)
     | None ->
        g.charset <- Some Charset.empty;
-       let r = fn g.ne in
+       let (shift, r) = fn g.ne in
        g.charset <- Some r;
-       r
-  in fn g
+       (shift, r)
+  in snd (fn g)
 
 let split_list l =
   let rec fn acc1 acc2 =
@@ -621,7 +634,8 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   | ESeq(g1,g2,f) -> Comb.seq (compile_ne g1) (compile g2) f
   | EDSeq(g1,g2,f) -> Comb.dep_seq (compile_ne g1) (fun x -> compile (g2 x)) f
   | EAppl(g1,f) -> Comb.app (compile_ne g1) f
-  | ELr(g,s) -> Comb.lr (compile_ne g) (first_charset s.ne) (compile_ne s.ne)
+  | ELr(g,k,s) -> Comb.lr (compile_ne g) (first_charset s.ne) k (compile_ne s.ne)
+  | ERkey k -> Comb.read_tbl k
   | ERef g -> compile g
   | EPush(g) -> Comb.push (compile_ne g)
   | ERead(n,g) -> Comb.read n (compile_ne g)

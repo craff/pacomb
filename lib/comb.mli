@@ -97,7 +97,10 @@ val right_pos : (Pos.t -> 'a) t -> 'a t
 (** [lr c1 c2] is an optimized version of [let rec r = seq c1 (seq r c2)]
     which is illegal as it is left recursive and loops. The optional charset indicates
     the characteres accepted by [c2] at the beginning of input. *)
-val lr : 'a t -> Charset.t -> ('a -> 'a) t -> 'a t
+val lr : 'a t -> Charset.t -> 'a Assoc.key -> 'a t -> 'a t
+
+(** combinator to access the value stored by lr*)
+val read_tbl : 'a Assoc.key -> 'a t
 
 (** Access to a reference to a combinator, use by Grammar.compile
     for recursive grammars (not for left recursion *)

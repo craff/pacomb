@@ -130,9 +130,6 @@ traverses:
 - A [Grammar.layout] contructor to change blanks (probably possible to solve this,
   but probably not woth it).
 
-- A [Grammar.desq] constructor that provides dependent sequence. Solving this
-  is an open problem.
-
 Grammars are not left factorised automatically: (A B) | (A C) may parse A twice and
 this may result in very poor performance. Two solutions:
   - left factorise your grammar yourself,

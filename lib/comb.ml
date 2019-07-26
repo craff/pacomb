@@ -32,7 +32,8 @@ type 'a env =
   ; col_before_blanks : int
   (** Column number in [buf_before_blanks] before reading the blanks. *)
   ; key               : 'a Assoc.key
-  (** Type repr. for keeping the type of the global result after parsing. *) }
+  (** Type repr. for keeping the type of the global result after parsing. *)
+  ; lr                : Assoc.t }
 
 (** Type of a function called in case of error. *)
 type 'b err = unit -> 'b
@@ -91,7 +92,7 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex ->
        fun () ->
          let env =
            { env with buf_before_blanks ; col_before_blanks
-                    ; current_buf ; current_col }
+                    ; current_buf ; current_col; lr = Assoc.empty }
          in
          k env err v
      with Lex.NoParse -> fun () -> next env err) ()
@@ -204,21 +205,30 @@ let right_pos : (Pos.t -> 'a) t -> 'a t = fun g ->
 (** [lr g gf] is the combinator used to eliminate left recursion. Intuitively,
     it parses using the "grammar" [g gf*].  An equivalent combinator CANNOT be
     defined as [seq Charset.full g cs (let rec r = seq cs r cs gf in r)]. *)
-let lr : 'a t -> Charset.t -> ('a -> 'a) t -> 'a t = fun g cs gf ->
+let lr : 'a t -> Charset.t -> 'a Assoc.key -> 'a t -> 'a t = fun g cs key gf ->
   let comb : type r. ('a, r) comb = fun env k err ->
-    let rec lr env err v =
+    let rec klr env err v =
       if test cs env then
+        let lr = Assoc.add key v env.lr in
+        let env0 = { env with lr } in
         let err () =
-          gf.comb env (fun env err fn ->
-            (try let y = fn v in fun () -> lr env err y
-             with Lex.NoParse -> fun () -> next env err) ()) err
+          gf.comb env0 klr err
         in
         k env err v
       else k env err v
     in
-    g.comb env lr err
+    g.comb env klr err
   in
   { comb }
+
+(** combinator to access the value stored by lr*)
+let read_tbl : 'a Assoc.key -> 'a t = fun key ->
+  let comb : type r. ('a, r) comb = fun env k err ->
+    let v = try Assoc.find key env.lr with Not_found -> assert false in
+    k env err v
+  in
+  { comb }
+
 
 (** Combinator under a refrerence used to implement recursive grammars. *)
 let deref : 'a t ref -> 'a t = fun gref ->
@@ -327,7 +337,7 @@ let partial_parse_buffer : type a. a t -> Lex.blank -> ?blank_after:bool
   let (buf, col) = blank_fun buf0 col0 in
   let env =
     { buf_before_blanks = buf0 ; col_before_blanks = col0
-    ; current_buf = buf ; current_col = col
+    ; current_buf = buf ; current_col = col; lr = Assoc.empty
     ; max_pos ; left_pos_stack = [] ; blank_fun ; key = Assoc.new_key () }
   in
   let k env _ v =
@@ -358,7 +368,7 @@ let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
   let (buf, col) = blank_fun buf0 col0 in
   let env =
     { buf_before_blanks = buf0 ; col_before_blanks = col0
-    ; current_buf = buf ; current_col = col
+    ; current_buf = buf ; current_col = col; lr = Assoc.empty
     ; max_pos; blank_fun ; left_pos_stack = [] ; key = Assoc.new_key () }
   in
   try

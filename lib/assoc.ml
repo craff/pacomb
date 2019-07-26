@@ -21,6 +21,7 @@ module type S = sig
   val add : 'a key -> 'a elt -> t -> t
   val add_key : 'a elt -> t -> ('a key * t)
   val find : 'a key -> t -> 'a elt
+  val remove : 'a key -> t -> t
   val mem : 'a key -> t -> bool
 end
 
@@ -53,6 +54,16 @@ module Make(Ty:Ty) = struct
          | Eq -> true
          | NEq -> fn l
     in fn l
+
+  let remove : type a.a key -> t -> t = fun k l ->
+    let rec fn : t -> t = function
+      | Nil -> raise Not_found
+      | Cons(k',v,l) ->
+         match k'.eq k.k with
+         | Eq -> l
+         | NEq -> Cons(k',v,fn l)
+    in fn l
+
 end
 
 module Idt = struct type 'a t = 'a end
