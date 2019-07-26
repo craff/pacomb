@@ -3,8 +3,8 @@ open Grammar
 open Comb
 
 
- type p = Atom | Prod | Sum
- let%parser rec
+type p = Atom | Prod | Sum
+let%parser rec
      expr p = Atom < Prod < Sum
             ; (p=Atom) (x::FLOAT)                        => x
             ; (p=Atom) '(' (e::expr Sum) ')'             => e

@@ -269,7 +269,6 @@ let flatten_str items =
 
 
 let vb_to_parser rec_ vb =
-  let is_grammar = ref false in
   let gn vb =
     let loc = vb.pvb_loc in
     let rec treat_pat p = match p.ppat_desc with
@@ -294,73 +293,82 @@ let vb_to_parser rec_ vb =
     if changed && do_warn then
       warn vb.pvb_pat.ppat_loc
         "Pattern not allowed here for grammar parameter";
-    if changed then is_grammar := true;
     let rules =
       if List.exists (fun (s,_) -> s.txt = "cached") vb.pvb_attributes then
         app loc (grmod "cache") rules
       else rules
     in
-    (loc,rec_,name,vb.pvb_pat,param,rules)
+    (loc,changed,name,vb.pvb_pat,param,rules)
   in
   let ls = List.map gn vb in
-  if not !is_grammar then raise Exit else
-    begin
-      let set name = "set__grammar__" ^ name.txt in
-      let declarations =
-        let gn (loc,rec_,(name:string loc),pat,param,rules) =
-          match rec_ with
-          | Nonrecursive ->
-             [Vb.mk ~loc pat rules]
-          | Recursive ->
-             let vd =
-               match param with
-               | None ->
-                  Vb.mk ~loc pat
-                    (app loc (grmod "declare_grammar")
-                       (Exp.constant ~loc:name.loc (Const.string name.txt)))
-               | Some _ ->
-                       Vb.mk ~loc (Pat.tuple [pat; Pat.var (mkloc (set name) name.loc)])
-                         (app loc (grmod "grammar_family")
-                            (Exp.constant ~loc:name.loc (Const.string name.txt)))
-             in
-             [vd]
-        in
-        List.map gn ls
-      in
-      let definitions =
-        let fn (loc,rec_,name,_,param, rules) =
-          match rec_ with
-          | Nonrecursive -> []
-          | Recursive ->
-             let exp =
-               match param with
-               | None ->
-                  app2 loc (grmod "set_grammar")
-                    (Exp.ident (Location.mkloc (Lident name.txt) name.loc))
-                    rules
-               | Some n ->
-                  app loc
-                    (Exp.ident (Location.mkloc (Lident (set name)) name.loc))
-                    (Exp.fun_ ~loc Nolabel None (Pat.var n) rules)
+  let (gr,orig) = List.partition (fun (_,changed,_,_,_,_) -> changed) ls in
+  let set name = "set__grammar__" ^ name.txt in
+  let declarations =
+    let gn (loc,changed,(name:string loc),pat,param,rules) =
+      assert changed;
+      match rec_ with
+      | Nonrecursive ->
+         [Vb.mk ~loc pat rules]
+      | Recursive ->
+         let vd =
+           match param with
+           | None ->
+              Vb.mk ~loc pat
+                (app loc (grmod "declare_grammar")
+                   (Exp.constant ~loc:name.loc (Const.string name.txt)))
+           | Some _ ->
+              Vb.mk ~loc (Pat.tuple [pat; Pat.var (mkloc (set name) name.loc)])
+                (app loc (grmod "grammar_family")
+                   (Exp.constant ~loc:name.loc (Const.string name.txt)))
+         in
+         [vd]
+    in
+    List.map gn gr
+  in
+  let orig =
+    let gn (loc,changed,_,pat,_,rules) =
+      assert (not changed);
+      Vb.mk ~loc pat rules
+    in
+    List.map gn orig
+  in
+  let definitions =
+    let fn (loc,changed,name,_,param, rules) =
+      assert changed;
+      match rec_ with
+      | Nonrecursive -> []
+      | Recursive ->
+         let exp =
+           match param with
+           | None ->
+              app2 loc (grmod "set_grammar")
+                (Exp.ident (Location.mkloc (Lident name.txt) name.loc))
+                rules
+           | Some n ->
+              app loc
+                (Exp.ident (Location.mkloc (Lident (set name)) name.loc))
+                (Exp.fun_ ~loc Nolabel None (Pat.var n) rules)
              in
              [Vb.mk ~loc (Pat.any ()) exp]
-        in
-        List.map fn ls
-      in
-      declarations @ definitions
-    end
+    in
+    List.map fn gr
+  in
+  (declarations, orig, definitions)
 
 (* transform a list of structure item to parser definition *)
 let str_to_parser items =
   let fn item =
     try match item.pstr_desc with
-    | Pstr_value(rec_,ls) ->
-       begin
-         try
-           let vbs = vb_to_parser rec_ ls in
-           List.fold_right (fun x a -> if x = [] then a else Str.value Nonrecursive x :: a) vbs []
-         with Exit -> [item]
-       end
+      | Pstr_value(rec_,ls) ->
+         let declarations, orig, definitions = vb_to_parser rec_ ls in
+         let fn ls =
+           List.fold_right
+             (fun x a -> if x = [] then a else Str.value Nonrecursive x :: a)
+             ls []
+         in
+           fn declarations
+         @ (if orig = [] then [] else [Str.value rec_ orig])
+         @ fn definitions
     | _              -> [item]
     with Warn w ->
       (* NOTE: there is no place for attribute in structure_item:
@@ -372,17 +380,20 @@ let str_to_parser items =
   flatten_str (List.flatten (List.map fn items))
 
 let exp_to_parser e =
-  match e.pexp_desc with
+  try match e.pexp_desc with
   | Pexp_let(rec_,vb,e0) ->
-     begin
-       try
-         let vb = vb_to_parser rec_ vb in
-         List.fold_right (fun vb e ->
-             if vb = [] then e else Exp.let_ Nonrecursive vb e) vb e0
-       with
-         Exit -> snd (exp_to_grammar e)
-     end
+     let declarations, orig, definitions = vb_to_parser rec_ vb in
+     let fn ls e0 =
+       List.fold_right
+         (fun vb e -> if vb = [] then e else Exp.let_ Nonrecursive vb e)
+         ls e0
+     in
+     let defs = (fn definitions e0) in
+     fn declarations (if orig = [] then defs else Exp.let_ rec_ orig defs)
   | _ -> snd (exp_to_grammar e)
+  with Exit     -> e
+     | Warn att -> add_attribute e att
+
 
 (* the main mapper *)
 let pacomb_mapper _argv =
