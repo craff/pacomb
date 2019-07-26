@@ -1,6 +1,6 @@
 open Pacomb
-open Grammar
 open Comb
+open Grammar
 
 let bspace = Lex.blank_charset (Charset.singleton ' ')
 
@@ -102,6 +102,20 @@ let tests_fail ?(blank=bspace) g l =
   let _ = tests g1 [("cdefefcfedcabd",-2)]
 
   (* test parameters *)
+  let rec g (g0, n) = (n=0) (empty ())            => 0
+                    ; (n>0) (x::g (g0, (n-1))) g0 => x+1
+  let _ =
+    for i = 0 to 10 do
+      test (g (('a' => ()), i)) (String.make i 'a') i;
+      test_fail (g (('a' => ()), i)) (String.make (i+1) 'a')
+    done
+  let rec g (g0, n) = (n=0) (empty ())            => 0
+                    ; (n>0) g0 (x::g (g0, (n-1))) => x+1
+  let _ =
+    for i = 0 to 10 do
+      test (g (('a' => ()), i)) (String.make i 'a') i;
+      test_fail (g (('a' => ()), i)) (String.make (i+1) 'a')
+    done
 
   (* test grammar under sub expressions or sub modules *)
   let noblank = layout Lex.noblank

@@ -91,9 +91,6 @@ let exp_to_term exp =
   | Pexp_construct({txt = Lident "RE"; _}, Some s) ->
      app loc (grmod "term") (app loc (lxmod "regexp")
                                (app loc (rgmod "from_string") s))
-  | Pexp_apply({ pexp_desc = Pexp_ident
-                  { txt = Lident("="|"<"|">"|"<="|">="|"<>"); _ }; _}, _) ->
-     app loc (grmod "test") exp
   | _ -> exp
 
 (* treat each iterm in a rule. Accept (pat::term) or term when
@@ -113,16 +110,24 @@ let exp_to_rule_item (e, loc_e) =  match e.pexp_desc with
 (* transform exp into rule, that is list of rule item. Accept
    - a sequence of items (that is applications of items)
    - or () to denote the empty rule *)
-let exp_to_rule e =
+let rec exp_to_rule e =
   let loc_e = e.pexp_loc in
   match e.pexp_desc with
+  | Pexp_apply({ pexp_desc =
+      Pexp_apply({ pexp_desc = Pexp_ident
+         { txt = Lident("="|"<"|">"|"<="|">="|"<>"); _ }; _}, _); _} as cond,
+      (Nolabel,a3)::rest) ->
+     Printf.eprintf "coucou\n%!";
+     let (rule,_) = exp_to_rule (Exp.apply a3 rest) in
+     (rule, Some cond)
   | Pexp_apply(e1, args) ->
      let kn (_,e') = (e',merge_loc e'.pexp_loc loc_e) in
      let l = (e1, e.pexp_loc) :: List.map kn args in
-     List.map exp_to_rule_item l
+     (List.map exp_to_rule_item l, None)
   | Pexp_construct({txt = Lident "()"; loc}, None) ->
-     [None, app loc (grmod "empty") unit_, loc_e]
-  | _ -> [exp_to_rule_item (e, e.pexp_loc)]
+     ([None, app loc (grmod "empty") unit_, loc_e], None)
+  | _ ->
+     ([exp_to_rule_item (e, e.pexp_loc)], None)
 
 (* transform an expression into a list of rules with action
    - name_param is an optional arguments for an eventual parameter name
@@ -133,7 +138,7 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
   | Pexp_apply
     ( { pexp_desc = Pexp_ident {txt = Lident "=>"; _}; _ }
     , [(Nolabel,rule);(Nolabel,action)]) ->
-     let rule = exp_to_rule rule in
+     let (rule,cond) = exp_to_rule rule in
      let loc_a = action.pexp_loc in
      let gn (acts_fn, rule) (name, item, loc_e) = match name with
        | None    -> (acts_fn, (false, false, false, item, loc_e) :: rule)
@@ -187,6 +192,12 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
        app2 (merge_loc loc_e exp.pexp_loc) (grmod f) item exp
      in
      let rule = List.fold_right fn rule action in
+     let rule =
+       match cond with
+       | None -> rule
+       | Some cond -> Exp.ifthenelse cond rule
+                        (Some (app none (grmod "fail") unit_))
+     in
      [rule]
   (* inheritance case [prio1 < prio2 < ... < prion] *)
   | Pexp_apply({ pexp_desc = Pexp_ident {txt = Lident "<"; _}; _ }
