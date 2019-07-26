@@ -8,21 +8,19 @@ let float =
   term(Lex.appl float_of_string
          (Lex.regexp(Regexp.from_string
                        "\\([-+]?[0-9]+\\([.][0-9]*\\)?\\([eE][-+]?[0-9]+\\)?\\)")))
-[%%parser
- let rec
-     atom = (x::FLOAT)        => x
-          ; (show_sub=false) '(' (e::expr) ')' => e
-          ; (show_sub=true) (l::'(') (e::expr) (r::')') =>
-              let open Pos in
-              Printf.printf "%d-%d: %f\n" l_lpos.col r_rpos.col e;
-              e
- and prod = (a::atom)               => a
+let%parser rec
+        atom = (x::FLOAT)        => x
+             ; (show_sub=false) '(' (e::expr) ')' => e
+             ; (show_sub=true) (l::'(') (e::expr) (r::')') =>
+                 let open Pos in
+                 Printf.printf "%d-%d: %f\n" l_lpos.col r_rpos.col e;
+                 e
+and prod = (a::atom)               => a
           ; (x::prod) '*' (y::atom) => x*.y
           ; (x::prod) '/' (y::atom) => x/.y
- and expr = (a::prod)               => a
-          ; (x::expr) '+' (y::prod) => x+.y
-          ; (x::expr) '-' (y::prod) => x-.y
-]
+and expr = (a::prod)               => a
+         ; (x::expr) '+' (y::prod) => x+.y
+         ; (x::expr) '-' (y::prod) => x-.y
 
 let g = compile expr
 
