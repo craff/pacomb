@@ -274,15 +274,7 @@ module Tbl = struct
 
   let iter : type a. a t -> (a -> unit) -> unit = fun tbl f ->
     let open Container in
-    let fn : a option array -> unit = fun a ->
-      Array.iter (function None -> () | Some x -> f x) a
-    in
-    (* FIXME: https://caml.inria.fr/mantis/view.php?id=7636 *)
-    iter { Container.f = Obj.magic fn } tbl
+    iter (fun a ->
+      Array.iter (function None -> () | Some x -> f x) a) tbl
 
-  (* Tests for the above FIXME: the type is not abstract ! *)
-  (*
-  let test1 : type a b. (a, b) Container.elt -> a = fun x -> x
-  let test2 : type a b. a -> (a, b) Container.elt = fun x -> x
-  *)
 end

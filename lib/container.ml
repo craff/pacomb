@@ -36,9 +36,8 @@ module Make(V : sig type ('a,'b) elt end) = struct
 
   (** unboxed mandatory for weak hashtbl to work, 4.04.0 only
       we use Obj until 4.04.0 is more spreaded *)
-  (* type any = C : 'b container -> any [@@unboxed] *)
-  type any = Obj.t container
-  let cast : 'b container -> any = Obj.magic
+  type any = C : 'b container -> any [@@unboxed]
+  let cast : 'b container -> any = fun x -> C x
 
   (** Container table. *)
   type 'a table =
@@ -85,7 +84,7 @@ module Make(V : sig type ('a,'b) elt end) = struct
        | N -> Cons(t, v, remove_table tab r)
 
   let clear : type a. a table -> unit = fun tab ->
-    List.iter (fun c -> c.data <- remove_table tab c.data) tab.elts;
+    List.iter (fun (C c) -> c.data <- remove_table tab c.data) tab.elts;
     tab.elts <- []
 
   let create_table : type a. unit -> a table = fun () ->
@@ -98,7 +97,7 @@ module Make(V : sig type ('a,'b) elt end) = struct
   type 'a iter = { f : 'b.('a, 'b) elt -> unit }
 
   let iter : type a. a iter -> a table -> unit = fun f tab ->
-    let rec fn : Obj.t nu_list -> unit = function
+    let rec fn : type b. b nu_list -> unit = function
       | Nil -> ()
       | Cons(t,v,r) ->
          begin
@@ -108,12 +107,12 @@ module Make(V : sig type ('a,'b) elt end) = struct
          end;
          fn r
     in
-    List.iter (fun c -> fn c.data) tab.elts
+    List.iter (fun (C c) -> fn c.data) tab.elts
 
   type ('a,'c) fold = { f : 'b.('a, 'b) elt -> 'c -> 'c }
 
   let fold : type a c. (a, c) fold -> a table -> c -> c = fun f tab acc ->
-    let rec fn :  Obj.t nu_list -> c -> c = fun l acc ->
+    let rec fn : type b. b nu_list -> c -> c = fun l acc ->
       match l with
       | Nil -> acc
       | Cons(t,v,r) ->
@@ -124,7 +123,7 @@ module Make(V : sig type ('a,'b) elt end) = struct
          in
          fn r acc
     in
-    List.fold_left (fun acc c -> fn c.data acc) acc tab.elts
+    List.fold_left (fun acc (C c) -> fn c.data acc) acc tab.elts
 
 end
 
@@ -146,8 +145,37 @@ module type Param = sig
 end
 
 type ('a, 'b) el = 'a
-
 include Make(struct type ('a, 'b) elt = ('a, 'b) el end)
+
+(* redefine iter and fold, to avoid the useless record but also to avoid
+   https://caml.inria.fr/mantis/view.php?id=7636
+ *)
+let iter : type a. (a -> unit) -> a table -> unit = fun f tab ->
+  let rec fn : type b. b nu_list -> unit = function
+    | Nil -> ()
+    | Cons(t,v,r) ->
+       begin
+         match tab.eq t with
+         | Y -> f v;
+         | N -> ()
+       end;
+       fn r
+  in
+  List.iter (fun (C c) -> fn c.data) tab.elts
+
+let fold : type a c. (a -> c -> c) -> a table -> c -> c = fun f tab acc ->
+  let rec fn :  type b. b nu_list -> c -> c = fun l acc ->
+    match l with
+    | Nil -> acc
+    | Cons(t,v,r) ->
+       let acc =
+         match tab.eq t with
+         | Y -> f v acc;
+         | N -> acc
+       in
+       fn r acc
+  in
+  List.fold_left (fun acc (C c) -> fn c.data acc) acc tab.elts
 
 type ('a, 'b) le = 'b
 module Ref = Make(struct type ('a, 'b) elt = ('a, 'b) le end)
