@@ -34,9 +34,8 @@ reason, PaComb provides a BNF-like PPX syntax extension (enabled using the
 [-ppx pacombPpx] compilation flag). An example with arithmetic expressions is
 given below.
 {[
-[%%parser
    type p = Atom | Prod | Sum
-   let rec expr p =
+   let%parser rec expr p =
      Atom < Prod < Sum
      ; (p=Atom) (x::FLOAT)                        => x
      ; (p=Atom) '(' (e::expr Sum) ')'             => e
@@ -46,12 +45,14 @@ given below.
      ; (p=Sum ) (x::expr Sum ) '-' (y::expr Prod) => x -. y
 ]]}
 
-The extension [[%%parser ...]] extends ocaml expressions with grammars of
-type ['a Grammar.t] and modifies the behaviour of let-bindings especially
-recursive ones to use [declare_grammar], [set_grammar] and
-[grammar_family]. Recall that due to the limitation of
-ppx, we use a sub syntax of OCaml expressions for grammars. It is therefore
-not a good idea to use "=>" as an infix inside [[%parser ...]].
+This works using the extensions [[%%parser ...]] for structures and [[%parser
+...]] for expression. They are also accessible by suffxing keywords with
+[%parser] as in the above example. These ppx extensions extends ocaml
+expressions with a syntax for grammars of type ['a Grammar.t] and modifies the
+behaviour of let-bindings especially recursive ones to use [declare_grammar],
+[set_grammar] and [grammar_family]. Recall that due to the limitation of ppx, we
+use a sub-syntax of OCaml expressions for grammars. It is therefore not a good
+idea to use "=>" as an infix inside [[%parser ...]].
 
 
 We give below the BNF grammar for the extension, together with a sketch of
@@ -65,20 +66,22 @@ qitems ::= ()                                               Grammar.empty
        | non_empty_qitems                                          itself
 non_empty_qitems ::= qitem                                         itself
        | non_empty_qitems qitems                              Grammar.seq
-qitem ::= item | (pat :: item)          give a name if used in the action
+qitem ::= item | (epat :: item)         give a name if used in the action
 item ::= '...'                                  Grammar.term(Lex.char ())
+       | CHAR(c)                                 Grammar.term(Lex.char c)
        | "..."                                Grammar.term(Lex.string ())
+       | STRING(s)                             Grammar.term(Lex.string s)
        | INT                                     Grammar.term(Lex.int ())
        | FLOAT                                 Grammar.term(Lex.float ())
        | RE(expr)      Grammar.term(Lex.regexp (Regexp.from_string expr))
        | expr                                                      itself
-pat ::= lid
-       | (pat : coretype)
-       | pat = lid                               encoding of [pat as lid]
-       | (pat, ..., pat)
-       | M.pat
+epat ::= lid
+       | (epat : coretype)
+       | epat = lid                              encoding of [pat as lid]
+       | (epat, ..., pat)
+       | M.epat
 ]}
-[pat] correspond to an encoding of patterns in expressions. Beware that [_] is
+[epat] correspond to an encoding of patterns in expressions. Beware that [_] is
 invalid, use [__] instead.
 
 In action code (expression right of [=>]), a [lid_lpos] or [lid_rpos] will
@@ -86,11 +89,11 @@ denote respectively the left and right position of the item named [lid].  If
 the item is matched by a tuple and you want to use its positon you must use
 [pat = lid] syntax to give a name to the whole item.
 
-The grammar above allows for some nesting as in:
+Beware that inside the scope of the extension, you can use the syntax for
+grammars every where. This allows for some nesting as in:
 {[
-[%%parser
- type p = Atom | Prod | Sum
- let rec
+type p = Atom | Prod | Sum
+let%parser rec
      expr p = Atom < Prod < Sum
             ; (p=Atom) (x::FLOAT)                        => x
             ; (p=Atom) '(' (e::expr Sum) ')'             => e
@@ -110,10 +113,10 @@ Here are the meaning of let bindings for grammars through the ppx extension:
   - [Grammar.declare_grammar + Grammar.set_grammar] (if no paramater)
   - [Grammar.grammar_familly + setting the grammar] if a parameter is given.
 
-A rule [p_1 < p_2 < ... < p_n] will automatically add rules to
-include the grammar parametrized by [p_i] in the grammar parametrized by
-[p_(i+1)]. Recall that due to the type of [Grammar.grammar_family] can
-only have one parameter.
+A rule [p_1 < p_2 < ... < p_n] will automatically add rules to include the
+grammar parametrized by [p_i] in the grammar parametrized by [p_(i+1)]. Recall
+that due to the type of [Grammar.grammar_family] recursive grammars can only
+have one parameter.
 
 Anything which does not correspond to this grammar will be unchanged
 in the ocaml code (like the type definition in the example
@@ -125,10 +128,8 @@ This means you could put the whole file between inside [%%parse ...].
 
 Pacomb must eliminate left recursion in grammars in order to use combinators
 that would loop otherwise. However, left recursion is not supported if it
-traverses:
-
-- A [Grammar.layout] contructor to change blanks (probably possible to solve this,
-  but probably not woth it).
+traverses A [Grammar.layout] contructor to change blanks (probably possible to
+solve this, but probably not woth it).
 
 Grammars are not left factorised automatically: (A B) | (A C) may parse A twice and
 this may result in very poor performance. Two solutions:
@@ -136,6 +137,6 @@ this may result in very poor performance. Two solutions:
   - Use Grammar.cache trading memory for speed.
 
 The ppx extension is not too bad but still suffers from the fact that it uses
-a sublanguage of OCaml to describe grammar. For instance [[%parser let g =
-((_,x)::g) => x]] is not legal because [_] cannot be used in an Ocaml
-expression. Though the following works: [[%parser let g = ((__,x)::g) => x]]
+a sublanguage of OCaml to describe grammar. For instance [let%parser g =
+((_,x)::g) => x] is not legal because [_] cannot be used in an Ocaml
+expression. Though the following works: [let%parser g = ((__,x)::g) => x]
