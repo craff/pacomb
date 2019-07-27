@@ -22,6 +22,8 @@ val mem : 'a key -> t -> bool
 
 val remove : 'a key -> t -> t
 
+val length : t -> int
+
 module type Ty = sig type 'a t end
 
 module type S = sig
@@ -33,6 +35,7 @@ module type S = sig
   val find : 'a key -> t -> 'a elt
   val remove : 'a key -> t -> t
   val mem : 'a key -> t -> bool
+  val length : t -> int
 end
 
 module Make(Ty:Ty) : S with type 'a elt = 'a Ty.t

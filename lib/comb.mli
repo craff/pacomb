@@ -34,8 +34,8 @@ val parse_channel : 'a t -> Lex.blank -> in_channel -> 'a
 
 (** Partial parsing. Beware, the returned position is not the maximum position
     that can be reached by the grammar *)
-val partial_parse_buffer : 'a t -> Lex.blank -> ?blank_after:bool
-                           -> Input.buffer -> int -> 'a * Input.buffer * int
+val partial_parse_buffer : 'a t -> Lex.blank -> ?blank_after:bool ->
+        ?cs:Charset.t -> Input.buffer -> int -> 'a * Input.buffer * int
 
 (** Returns all possible parse tree. Usefull for natural language but also
     to debug ambiguity in a supposed non ambiguous grammar. *)
@@ -60,12 +60,12 @@ val lexeme : 'a Lex.lexeme -> 'a t
     starts by parsing using [g1],  and then parses the rest of the input using
     [g2]. The function [fn] is used to combine the semantic values returned by
     parsing with [g1] and [g2]. *)
-val seq : 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t
+val seq : 'a t -> ?cs:Charset.t -> 'b t -> ('a -> 'b -> 'c) -> 'c t
 
 (** [sdep_seq c1 c2 f] is a dependant sequence, contrary to [seq c1 c2 f],
     the combinator used to parse after [c1] depends upon the value
     returned by [c1]. It s a good idea to memoize the function c2. *)
-val dep_seq: ('a * 'b) t -> ('a -> 'c t) -> ('a -> 'b -> 'c -> 'd) -> 'd t
+val dep_seq: ('a * 'b) t -> ?cs:Charset.t -> ('a -> 'c t) -> ('a -> 'b -> 'c -> 'd) -> 'd t
 
 (** Combinator parsing with the first combinator and in case
     of failure with the second from the same position.
@@ -74,6 +74,8 @@ val dep_seq: ('a * 'b) t -> ('a -> 'c t) -> ('a -> 'b -> 'c -> 'd) -> 'd t
     The charset must be Charset.full if the corresponding combinator
     accept the empty input *)
 val alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t
+
+val option: 'a -> Charset.t -> 'a t -> 'a t
 
 (** Parses with the given combinator and transforms the semantics with
     the given function *)

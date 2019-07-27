@@ -23,6 +23,7 @@ module type S = sig
   val find : 'a key -> t -> 'a elt
   val remove : 'a key -> t -> t
   val mem : 'a key -> t -> bool
+  val length : t -> int
 end
 
 module Make(Ty:Ty) = struct
@@ -31,6 +32,12 @@ module Make(Ty:Ty) = struct
   type t = Nil : t | Cons : 'a key * 'a elt * t -> t
 
   let empty = Nil
+
+  let length l =
+    let rec fn acc = function
+      | Nil -> acc
+      | Cons(_,_,l) -> fn (acc+1) l
+    in fn 0 l
 
   let add : 'a key -> 'a elt -> t -> t = fun k x l -> Cons(k,x,l)
 

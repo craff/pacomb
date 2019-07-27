@@ -58,6 +58,15 @@
     (system "./big_expr.exe 4 4 4 | ./calc_factor.exe")))
 
 (test
+  (name calc_ext_bench)
+  (modules calc_ext_bench)
+  (flags -ppx "./ppx/ppx_pacomb.exe")
+  (libraries unix pacomb)
+  (deps ../ppx/ppx_pacomb.exe big_expr.exe calc_ext_bench.exe)
+  (action
+    (system "./big_expr.exe 3 4 4 | ./calc_ext_bench.exe")))
+
+(test
   (name calc_ext)
   (modules calc_ext)
   (flags -ppx "./ppx/ppx_pacomb.exe")

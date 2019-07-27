@@ -211,6 +211,8 @@ let term ?name (x) =
 
 let alt ?name l =
   let l = List.filter (fun g -> g.d <> Fail) l in
+  let l = List.map (function { d = Alt(ls); _ } -> ls | x -> [x]) l in
+  let l = List.flatten l in
   match l with
   | [] -> fail ()
   | [g] -> g
@@ -318,6 +320,8 @@ let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
 (** helpers for the constructors of 'a grne *)
 let ne_alt l =
   let l = List.filter (fun g -> g <> EFail) l in
+  let l = List.map (function EAlt(ls) -> ls | x -> [x]) l in
+  let l = List.flatten l in
   match l with
   | [] -> EFail
   | [g] -> g
@@ -644,9 +648,9 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
                          let (cs2,c2) = fn l2 in
                          (Charset.union cs1 cs2, Comb.alt cs1 c1 cs2 c2)
                 in snd (fn gs)
-  | ESeq(g1,g2,f) -> Comb.seq (compile_ne g1) (compile g2) f
-  | EDSeq(g1,_,g2,f) ->
-     Comb.dep_seq (compile_ne g1) (fun x -> compile (g2 x)) f
+  | ESeq(g1,g2,f) -> Comb.seq (compile_ne g1) ~cs:(first_charset g2.ne) (compile g2) f
+  | EDSeq(g1,cs,g2,f) ->
+     Comb.dep_seq (compile_ne g1) ~cs (fun x -> compile (g2 x)) f
   | EAppl(g1,f) -> Comb.app (compile_ne g1) f
   | ELr(g,k,s) -> Comb.lr (compile_ne g) (first_charset s.ne) k (compile_ne s.ne)
   | ERkey k -> Comb.read_tbl k
@@ -683,8 +687,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   in
   match g.e with
   | Some x ->
-     let e = Comb.empty x in
-     if g.ne = EFail then e else Comb.alt Charset.full e (first_charset g.ne) cg
+     if g.ne = EFail then Comb.empty x else Comb.option x (first_charset g.ne) cg
   | None ->
      if g.ne = EFail then Comb.fail else cg
 
