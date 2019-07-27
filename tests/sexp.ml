@@ -14,8 +14,9 @@ let rec size e = match e.e with
 
 [%%parser
  let id = "[a-zA-Z_][a-zA-Z_0-9]*[']*"
- let rec sexp = (x::RE id)         => { l = x_lpos; r = x_rpos; e = Idt x }
-              ; '(' (l::sexps) ')' => { l = l_lpos; r = l_rpos; e = Lst (List.rev l) }
+ let rec sexp
+   = (x::RE id)         => { l = x_lpos; r = x_rpos; e = Idt x }
+   ; '(' (l::sexps) ')' => { l = l_lpos; r = l_rpos; e = Lst (List.rev l) }
  and sexps = () => []
            ; (l::sexps) (e::sexp) => e::l
 

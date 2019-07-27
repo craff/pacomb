@@ -1,19 +1,19 @@
 (** Parser combinator library *)
 
-(** Combinators are a standard approach to parsing in functional language. The
-    major advantage of combinators is that they allow manipulating grammars as
-    first class values. However, they generally suffer from two major defects.
+(** Combinators are a standard approach  to parsing in functional language.  The
+    major advantage of  combinators is that they allow  manipulating grammars as
+    first class values.  However, they generally suffer from  two major defects.
 
-    - Incomplete semantics. A grammar "(a|b)c" may fail to backtrack and try
-      "bc" if parsing for "ac" fails in "c". This is traditionally solved with
-      continuation: combinators must be given the function that will be used
-      to parse the remaining input.
+    - Incomplete semantics.  A grammar  "(a|b)c" may fail  to backtrack  and try
+      "bc" if parsing  for "ac" fails in "c". This  is traditionally solved with
+      continuation: combinators must be given the  function that will be used to
+      parse the remaining input.
 
-    - Exponential semantics. The parsing problem for context-free grammars can
-      be solved in polynomial time (O(n³) implementation are often proposed).
-      As combinator backtrack, they usually lead to an exponential behaviour.
-      This is solved here by a [cache] combinator, that avoids parsing twice
-      the same part of the input with the same grammar. *)
+    - Exponential semantics.  The parsing problem for  context-free grammars can
+      be solved  in polynomial time  (O(n³) implementation are  often proposed).
+      As combinator  backtrack, they usually  lead to an  exponential behaviour.
+      This is solved here by a [cache] combinator, that avoids parsing twice the
+      same part of the input with the same grammar. *)
 
 (** Environment holding information require for parsing. *)
 type 'a env =
@@ -41,16 +41,16 @@ type 'b err = unit -> 'b
 (** Type of a parsing continuation. *)
 type ('a, 'b) cont = Charset.t * ('b env -> 'b err -> 'a -> 'b)
 
-(** Type of a parser combinator with a semantic action of type ['a]. They type
-    ['r] represents the type of the continuation, it is universally quantified
+(** Type of a  parser combinator with a semantic action of  type ['a]. They type
+    ['r] represents the  type of the continuation, it  is universally quantified
     in the the definition of the type ['a t] below. *)
 type ('a, 'r) comb = 'r env -> ('a, 'r) cont -> 'r err -> 'r
 
-(** Type of a parser combinaton, with universally quantified continuation type
+(** Type of  a parser combinaton, with universally  quantified continuation type
     parameter. *)
 type 'a t = { comb : 'r. ('a, 'r) comb } [@@unboxed]
 
-(** [next env err] updates the current maximum position [env.max_pos] and then
+(** [next env  err] updates the current maximum position  [env.max_pos] and then
     calls the [err] function. *)
 let next : 'b env -> 'a err -> 'a = fun env err ->
   let (buf_max, col_max) = !(env.max_pos) in
@@ -72,6 +72,7 @@ let test cs e = Charset.mem cs (Input.get e.current_buf e.current_col)
 let fail : 'a t =
   { comb = fun env _ err -> next env err }
 
+(** Combinator used as default fied before compilation *)
 let assert_false : 'a t =
   { comb = fun _ _ _ -> assert false }
 
@@ -100,31 +101,39 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex ->
   { comb }
 
 (** Sequence combinator. *)
-let seq : 'a t -> ?cs:Charset.t -> 'b t -> ('a -> 'b -> 'c) -> 'c t = fun g1 ?(cs=Charset.full) g2 fn ->
-  let comb : type r. ('c, r) comb = fun env k err ->
-    g1.comb env (cs, fun env err v1 ->
-      g2.comb env (fst k, fun env err v2 ->
-        (try fun () -> snd k env err (fn v1 v2)
-         with Lex.NoParse -> fun () -> next env err) ()) err) err
+let seq : 'a t -> ?cs:Charset.t -> 'b t -> ('a -> 'b -> 'c) -> 'c t =
+  fun g1 ?(cs=Charset.full) g2 fn ->
+    let comb : type r. ('c, r) comb = fun env k err ->
+      g1.comb env (cs,
+        fun env err v1 ->
+          g2.comb env (fst k,
+            fun env err v2 ->
+              (try fun () -> snd k env err (fn v1 v2)
+               with Lex.NoParse -> fun () -> next env err) ()) err) err
   in
   { comb }
 
 (** Dependant sequence combinator. *)
-let dep_seq : ('a * 'b) t -> ?cs:Charset.t -> ('a -> 'c t) -> ('a -> 'b -> 'c -> 'd) -> 'd t
-   = fun g1 ?(cs=Charset.full) g2 fn ->
-  let comb : type r. ('d, r) comb = fun env k err ->
-    g1.comb env (cs, fun env err (v1,v2) ->
-      (try
-         let g = g2 v1 in
-         fun () -> g.comb env (fst k, fun env err v3 ->
-           (try
-              let v = fn v1 v2 v3 in
-              fun () -> snd k env err v
-            with Lex.NoParse -> fun () -> next env err) ()) err
-       with Lex.NoParse -> fun () -> next env err) ()) err
+let dep_seq : ('a * 'b) t -> ?cs:Charset.t -> ('a -> 'c t)
+              -> ('a -> 'b -> 'c -> 'd) -> 'd t =
+  fun g1 ?(cs=Charset.full) g2 fn ->
+    let comb : type r. ('d, r) comb = fun env k err ->
+      g1.comb env (cs, fun env err (v1,v2) ->
+        (try
+           let g = g2 v1 in
+           fun () -> g.comb env (fst k,
+             fun env err v3 ->
+             (try
+                let v = fn v1 v2 v3 in
+                fun () -> snd k env err v
+              with Lex.NoParse -> fun () -> next env err) ()) err
+         with Lex.NoParse -> fun () -> next env err) ()) err
   in
   { comb }
 
+(** option combinator,  contrary to [alt] apply to [empty],  it uses the charset
+    of the  continuation for prediction. Therefore  it is preferable not  to use
+    empty in [alt] and use [option] instead.*)
 let option: 'a -> Charset.t -> 'a t -> 'a t = fun x cs1 g1 ->
   let f1 = ref 0 and f2 = ref 0 in
   let comb : type r. ('a, r) comb = fun env k err ->
@@ -133,7 +142,7 @@ let option: 'a -> Charset.t -> 'a t -> 'a t = fun x cs1 g1 ->
     | (true , false) -> g1.comb env k err
     | (false, true ) -> snd k env err x
     | (true , true ) ->
-       (* one wants to avoid incrementing f2 in err or f1 in err. This way, if
+       (* one wants to  avoid incrementing f2 in err or f1 in  err. This way, if
           f1 parses 50% and f2 the other 50%, we have f1 ~ f2 *)
        if !f1 < !f2 then (g1.comb env k (fun () -> incr f1; snd k env err x))
        else (snd k env (fun () -> incr f2; g1.comb env k err) x)
@@ -167,6 +176,7 @@ let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn ->
   in
   { comb }
 
+(** functions to access the left position stacks *)
 let head_pos n env =
   let rec fn n stack =
     match stack with
@@ -219,8 +229,8 @@ let right_pos : (Pos.t -> 'a) t -> 'a t = fun g ->
   in
   { comb }
 
-(** [lr g gf] is the combinator used to eliminate left recursion. Intuitively,
-    it parses using the "grammar" [g gf*].  An equivalent combinator CANNOT be
+(** [lr g  gf] is the combinator used to  eliminate left recursion. Intuitively,
+    it parses using  the "grammar" [g gf*].  An equivalent  combinator CANNOT be
     defined as [seq Charset.full g cs (let rec r = seq cs r cs gf in r)]. *)
 let lr : 'a t -> Charset.t -> 'a Assoc.key -> 'a t -> 'a t = fun g cs key gf ->
   let comb : type r. ('a, r) comb = fun env k err ->
@@ -328,8 +338,8 @@ let cache : type a. a t -> a t = fun g ->
       | Error            :: l -> assert (l = []); err ()
       | Value(env,err,v) :: l ->
           match env0.key.eq env.key.k with
-          | NEq -> assert false
-          | Eq  -> snd k env (if l = [] then err else (fun () -> fn l)) v
+          | Assoc.NEq -> assert false
+          | Assoc.Eq  -> snd k env (if l = [] then err else (fun () -> fn l)) v
     in
     let l = try Input.Tbl.find cache buf0 col0 with Not_found -> [] in
     fn (List.rev l)
@@ -353,26 +363,26 @@ let handle_exception ?(error=fail_no_parse) f a =
     error ()
 
 (* NOTE: cs with blank_after = false makes no sens ? *)
-let partial_parse_buffer : type a. a t -> Lex.blank -> ?blank_after:bool
-
-                           -> ?cs:Charset.t -> Lex.buf -> int -> a * Lex.buf * int =
-    fun g blank_fun ?(blank_after=false) ?(cs=Charset.full) buf0 col0 ->
-  let max_pos = ref (buf0, col0) in
-  let err () =
-    let (buf, col) = !max_pos in
-    raise (Parse_error(buf, col))
-  in
-  let (buf, col) = blank_fun buf0 col0 in
-  let env =
-    { buf_before_blanks = buf0 ; col_before_blanks = col0
-    ; current_buf = buf ; current_col = col; lr = Assoc.empty
-    ; max_pos ; left_pos_stack = [] ; blank_fun ; key = Assoc.new_key () }
-  in
-  let k env _ v =
-    if blank_after then (v, env.current_buf, env.current_col)
-    else (v, env.buf_before_blanks, env.col_before_blanks)
-  in
-  g.comb env (cs, k) err
+let partial_parse_buffer
+    : type a. a t -> Lex.blank -> ?blank_after:bool
+                  -> ?cs:Charset.t -> Lex.buf -> int -> a * Lex.buf * int =
+  fun g blank_fun ?(blank_after=false) ?(cs=Charset.full) buf0 col0 ->
+    let max_pos = ref (buf0, col0) in
+    let err () =
+      let (buf, col) = !max_pos in
+      raise (Parse_error(buf, col))
+    in
+    let (buf, col) = blank_fun buf0 col0 in
+    let env =
+      { buf_before_blanks = buf0 ; col_before_blanks = col0
+        ; current_buf = buf ; current_col = col; lr = Assoc.empty
+        ; max_pos ; left_pos_stack = [] ; blank_fun ; key = Assoc.new_key () }
+    in
+    let k env _ v =
+      if blank_after then (v, env.current_buf, env.current_col)
+      else (v, env.buf_before_blanks, env.col_before_blanks)
+    in
+    g.comb env (cs, k) err
 
 let parse_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a =
   fun g blank_fun buf col ->
@@ -386,22 +396,22 @@ let parse_channel : type a. a t -> Lex.blank -> in_channel -> a =
   fun g b ic -> parse_buffer g b (Input.from_channel ic) 0
 
 let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
-    fun g blank_fun buf0 col0 ->
-  let max_pos = ref (buf0, col0) in
-  let err () =
-    let (buf, col) = !max_pos in
-    raise (Parse_error(buf, col))
-  in
-  let res = ref [] in
-  let k _ err v = res := v :: !res; err () in
-  let (buf, col) = blank_fun buf0 col0 in
-  let env =
-    { buf_before_blanks = buf0 ; col_before_blanks = col0
-    ; current_buf = buf ; current_col = col; lr = Assoc.empty
-    ; max_pos; blank_fun ; left_pos_stack = [] ; key = Assoc.new_key () }
-  in
-  let cs = Charset.singleton '\255' in
-  try
-    ignore ((add_eof g).comb env (cs,k) err);
-    assert false
-  with Parse_error _ as e -> if !res = [] then raise e; !res
+  fun g blank_fun buf0 col0 ->
+    let max_pos = ref (buf0, col0) in
+    let err () =
+      let (buf, col) = !max_pos in
+      raise (Parse_error(buf, col))
+    in
+    let res = ref [] in
+    let k _ err v = res := v :: !res; err () in
+    let (buf, col) = blank_fun buf0 col0 in
+    let env =
+      { buf_before_blanks = buf0 ; col_before_blanks = col0
+        ; current_buf = buf ; current_col = col; lr = Assoc.empty
+        ; max_pos; blank_fun ; left_pos_stack = [] ; key = Assoc.new_key () }
+    in
+    let cs = Charset.singleton '\255' in
+    try
+      ignore ((add_eof g).comb env (cs,k) err);
+      assert false
+    with Parse_error _ as e -> if !res = [] then raise e; !res

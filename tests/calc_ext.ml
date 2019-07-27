@@ -2,9 +2,9 @@ open Pacomb
 open Comb
 open Grammar
 
-(* factorisation ... just  a test for the ppx,
-   here left factorisation is done by the elimination of left recursion,
-   to the result is the same as with calc_prio.ml *)
+(* factorisation ... just a test for the ppx, here left factorisation is done by
+   the elimination of left recursion, to the result is the same as with
+   calc_prio.ml *)
 
 let eps = 1e-10
 
@@ -53,7 +53,8 @@ let rec eval env = function
        match f with
        | Def(f,params) ->
           let env = ref env in
-          Array.iteri (fun i id -> env := ((id,0),(Op0 args.(i))) :: !env) params;
+          let add i id = env := ((id,0),(Op0 args.(i))) :: !env in
+          Array.iteri add params;
           eval !env f
        | Op0(x) -> x
        | Op1(f) -> f args.(0)
@@ -86,11 +87,12 @@ let%parser lists sep f =
   ; '(' (l::ne_slist) ')' => Array.of_list (List.rev l)
 
 let%parser rec
-        expr pmax = (r::dseqf (expr pmax)
-                          (fun pe ->
-                            dseqf (op pe pmax)
-                              (fun pop -> seqf (expr pop)
-                                 (empty (fun (_,e2) pop b _ e1 -> (pop, Idt(b,[|e1;e2|])))))))
+  expr pmax = (r::dseqf (expr pmax)
+                 (fun pe ->
+                   dseqf (op pe pmax)
+                     (fun pop -> seqf (expr pop)
+                                   (empty (fun (_,e2) pop b _ e1 ->
+                                        (pop, Idt(b,[|e1;e2|])))))))
                                                   => r
             ; (x::FLOAT)                          => (0.0,Cst x)
             ; '(' (e::expr_top) ')'               => (0.0,e)

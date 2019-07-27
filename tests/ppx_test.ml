@@ -33,8 +33,9 @@ let%parser g : float grammar = (x::FLOAT) => x
 let _ = test g "42.42E-42" 42.42E-42
 let%parser g : string grammar = (x::RE "\\([a-zA-Z_][a-zA-Z_0-9]*\\)") => x
 let _ = test g "toto_x3" "toto_x3"
-let%parser g : 'a -> 'a -> float grammar = fun x y -> (x=y) (z::INT) => float z
-                                                    ; (x<>y) (z::FLOAT) => z
+let%parser g : 'a -> 'a -> float grammar =
+  fun x y -> (x=y) (z::INT) => float z
+           ; (x<>y) (z::FLOAT) => z
 let _ = test (g 0 0) "42" 42.0
 let _ = test (g 0 1) "42.0" 42.0
 
@@ -44,14 +45,18 @@ let%parser g0 : (int * int) grammar = (x::INT) => Pos.(x_lpos.col, x_rpos.col)
 let _ = test g0 " 123 " (1,4)
 let%parser g : (int * int) grammar = ((x,y)::g0) => (y,x)
 let _ = test g " 123 " (4,1)
-let%parser g : (int * int * int) grammar = (((x,y)=z)::g0) => Pos.(y,x,z_rpos.col)
+let%parser g : (int * int * int) grammar
+  = (((x,y)=z)::g0) => Pos.(y,x,z_rpos.col)
 let _ = test g " 123 " (4,1,4)
-let%parser g : (int * int * int) grammar = ((((x:int),(y:int))=z)::g0) => Pos.(y,x,z_rpos.col)
+let%parser g : (int * int * int) grammar =
+  ((((x:int),(y:int))=z)::g0) => Pos.(y,x,z_rpos.col)
 let _ = test g " 123 " (4,1,4)
 
 (* test rules and sequences *)
 type op = Add | Sub | Mul | Div
-let%parser bin = (x::INT) (op::('+'=>Add ; '-'=>Sub; '*'=>Mul; '/'=>Div)) (y::INT) => (x,op,y)
+let%parser bin = (x::INT)
+                   (op::('+'=>Add ; '-'=>Sub; '*'=>Mul; '/'=>Div))
+                   (y::INT) => (x,op,y)
 let _ = test bin "42 + 73" (42,Add,73)
 let%parser g = (x::INT) 'a' 'b' => x
              ; 'a' (x::INT) 'b' => x

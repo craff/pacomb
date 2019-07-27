@@ -117,12 +117,18 @@ let from_string : string -> regexp = fun s ->
     match (stk, acc, ts) with
     | (stk   , acc    , `Chr(c)::ts) -> build_re stk (push (Chr c) acc) ts
     | (stk   , acc    , `Set(s)::ts) -> build_re stk (push (Set s) acc) ts
-    | (stk   , Acc(Alt (re::l)::acc), `Str   ::ts) -> build_re stk (Acc(Alt(Str re::l) :: acc)) ts
-    | (stk   , Acc(Alt (re::l)::acc), `Pls   ::ts) -> build_re stk (Acc(Alt(Pls re::l) :: acc)) ts
-    | (stk   , Acc(Alt (re::l)::acc), `Opt   ::ts) -> build_re stk (Acc(Alt(Opt re::l) :: acc)) ts
-    | (stk   , Acc(re::acc), `Str   ::ts) -> build_re stk (Acc(Str re :: acc)) ts
-    | (stk   , Acc(re::acc), `Pls   ::ts) -> build_re stk (Acc(Pls re :: acc)) ts
-    | (stk   , Acc(re::acc), `Opt   ::ts) -> build_re stk (Acc(Opt re :: acc)) ts
+    | (stk   , Acc(Alt (re::l)::acc), `Str   ::ts) ->
+        build_re stk (Acc(Alt(Str re::l) :: acc)) ts
+    | (stk   , Acc(Alt (re::l)::acc), `Pls   ::ts) ->
+        build_re stk (Acc(Alt(Pls re::l) :: acc)) ts
+    | (stk   , Acc(Alt (re::l)::acc), `Opt   ::ts) ->
+        build_re stk (Acc(Alt(Opt re::l) :: acc)) ts
+    | (stk   , Acc(re::acc), `Str   ::ts) ->
+        build_re stk (Acc(Str re :: acc)) ts
+    | (stk   , Acc(re::acc), `Pls   ::ts) ->
+        build_re stk (Acc(Pls re :: acc)) ts
+    | (stk   , Acc(re::acc), `Opt   ::ts) ->
+        build_re stk (Acc(Opt re :: acc)) ts
     | (_     , _     , `Str   ::_ )
     | (_     , _     , `Pls   ::_ )
     | (_     , _     , `Opt   ::_ ) ->

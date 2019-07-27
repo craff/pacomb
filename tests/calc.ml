@@ -4,10 +4,6 @@ open Comb
 
 let show_sub = Array.length Sys.argv > 1 && Sys.argv.(1) = "-v"
 
-let float =
-  term(Lex.appl float_of_string
-         (Lex.regexp(Regexp.from_string
-                       "\\([-+]?[0-9]+\\([.][0-9]*\\)?\\([eE][-+]?[0-9]+\\)?\\)")))
 let%parser rec
         atom = (x::FLOAT)        => x
              ; (show_sub=false) '(' (e::expr) ')' => e

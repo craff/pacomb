@@ -14,7 +14,8 @@ let _ = Arg.parse spec
           (fun s -> raise (Bad ("don't know what to do with: "^s)))
           "test.exe [options]"
 
-let parse_string c = Comb.parse_string c (Lex.blank_charset (Charset.singleton ' '))
+let parse_string c =
+  Comb.parse_string c (Lex.blank_charset (Charset.singleton ' '))
 
 let assert_fail f =
   try ignore (f ()); assert false with Comb.Parse_error _ -> ()
@@ -45,7 +46,8 @@ let test3 = compile test3
 let test4 = fixpoint (fun r -> alt [empty 0; char_b; seq r char_a (+)])
 let test4 = compile test4
 
-let test5 = fixpoint (fun r -> alt [empty 0; seq r char_a (+); seq r char_b (+)])
+let test5 = fixpoint (fun r ->
+                alt [empty 0; seq r char_a (+); seq r char_b (+)])
 let test5 = compile test5
 
 let star g = fixpoint (fun r -> alt [seq r g (+); empty 0])
@@ -63,15 +65,17 @@ let star_pos g =
   let open Pos in
   fixpoint
     (fun r -> rpos(lpos(galt (gseq r g
-                                (fun (_,x,_) y lpos rpos -> (lpos.col,x+y,rpos.col)))
-                             (empty (fun lpos rpos -> (lpos.col,0,rpos.col))))))
+                (fun (_,x,_) y lpos rpos -> (lpos.col,x+y,rpos.col)))
+                          (empty (fun lpos rpos -> (lpos.col,0,rpos.col))))))
 
-let test7 = seq (plus (star_pos (char_a)) (term(Lex.char ',' ()))) char_b (fun x _ -> x)
+let test7 = seq (plus (star_pos (char_a))
+                   (term(Lex.char ',' ()))) char_b (fun x _ -> x)
 let test7 = compile test7
 
 let test8 = fixpoint
               (fun r -> alt [empty 0
-                            ;seq char_a (seq r char_b (fun x _ -> x + 1)) (fun _ x -> x)])
+                            ;seq char_a (seq r char_b (fun x _ -> x + 1))
+                               (fun _ x -> x)])
 let test9 = dseq (appl test8 (fun x -> (x, ())))
                  (let rec fn x =
                     if x <= 0 then empty 0
