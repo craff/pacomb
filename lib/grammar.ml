@@ -46,7 +46,7 @@ type 'a grammar =
    | Appl : 'a t * ('a -> 'b) -> 'b grdf   (** application *)
    | Seq  : 'a t * 'b t * ('a -> 'b -> 'c) -> 'c grdf
                                            (** sequence *)
-   | DSeq : ('a * 'b) t * ('a -> 'c t) * ('b -> 'c -> 'd) -> 'd grdf
+   | DSeq : ('a * 'b) t * Charset.t * ('a -> 'c t) * ('a -> 'b -> 'c -> 'd) -> 'd grdf
                                            (** dependant sequence *)
    | Lr   : 'a t * 'a Assoc.key * 'a t -> 'a grdf
                                            (** Lr(g1,g2) represents g1 g2* and is
@@ -75,7 +75,7 @@ and 'a grne =
   | EAlt  : 'a grne list -> 'a grne
   | EAppl : 'a grne * ('a -> 'b) -> 'b grne
   | ESeq  : 'a grne * 'b grammar * ('a -> 'b -> 'c) -> 'c grne
-  | EDSeq : ('a * 'b) grne * ('a -> 'c grammar) * ('b -> 'c -> 'd) -> 'd grne
+  | EDSeq : ('a * 'b) grne * Charset.t * ('a -> 'c grammar) * ('a -> 'b -> 'c -> 'd) -> 'd grne
   | ELr   : 'a grne * 'a Assoc.key * 'a grammar -> 'a grne
   | ERkey : 'a Assoc.key -> 'a grne
   | ERef  : 'a t -> 'a grne
@@ -126,7 +126,7 @@ let print_grammar ?(def=true) ch s =
     | EAlt(gs)      -> pr "(%a)" (prl pg "|") gs
     | EAppl(g,_)    -> pr "App(%a)" pg g
     | ESeq(g1,g2,_) -> pr "%a%a" pg g1 pv g2
-    | EDSeq(g1,_,_) -> pr "%a???" pg g1
+    | EDSeq(g1,_,_,_) -> pr "%a???" pg g1
     | ELr(g,_,s)    -> pr "%a(%a)*" pg g pv s
     | ERkey _       -> ()
     | ERef(g)       -> pr "%a" pv g
@@ -148,7 +148,7 @@ let print_grammar ?(def=true) ch s =
     | Alt(gs)      -> pr "(%a)" (prl pg "|") gs
     | Appl(g,_)    -> pr "App(%a)" pg g
     | Seq(g1,g2,_) -> pr "%a%a" pg g1 pg g2
-    | DSeq(g1,_,_) -> pr "%a???" pg g1
+    | DSeq(g1,_,_,_) -> pr "%a???" pg g1
     | Lr(g,_,s)    -> pr "%a(%a)*" pg g pg s
     | Rkey _       -> ()
     | Read(_,g)    -> pr "%a" pg g
@@ -226,7 +226,8 @@ let seq g1 g2 f = mkg (
   | _, Empty y -> Appl(g1, fun x -> f x y)
   | _ -> Seq(g1,g2,f))
 
-let dseq g1 g2 f = mkg (if g1.d = Fail then Fail else DSeq(g1,g2,f))
+let dseq g1 ?(cs=Charset.full) g2 f =
+  mkg (if g1.d = Fail then Fail else DSeq(g1,cs,g2,f))
 
 let seq1 g1 g2 = seq g1 g2 (fun x _ -> x)
 
@@ -284,6 +285,16 @@ let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
     set_grammar g0 (g g0);
     g0
 
+let memo g =
+  let tbl = Hashtbl_eq.create 8 in
+  (fun x ->
+    try Hashtbl_eq.find tbl x
+    with Not_found ->
+      let r = g x in Hashtbl_eq.add tbl x r; r)
+
+let dseq g1 ?cs g2 f = dseq g1 ?cs (memo g2) f
+let dseqf g1 ?cs g2 = dseq g1 ?cs g2 (fun x y f -> f x y)
+
 (** a function to defined indexed grammars *)
 let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
   let tbl = Hashtbl_eq.create 8 in
@@ -317,7 +328,7 @@ let ne_appl g f =
   | EFail          -> EFail
   | EAppl(g,h)     -> EAppl(g,fun x -> f (h x))
   | ESeq(g1,g2,h)  -> ESeq(g1,g2,fun x y -> f (h x y))
-  | EDSeq(g1,g2,h) -> EDSeq(g1,g2,fun x y -> f (h x y))
+  | EDSeq(g1,cs,g2,h) -> EDSeq(g1,cs,g2,fun x y z -> f (h x y z))
   | _              -> EAppl(g,f)
 
 let ne_seq g1 g2 f = match(g1,g2) with
@@ -326,9 +337,9 @@ let ne_seq g1 g2 f = match(g1,g2) with
   | _, {e=Some y;ne=EFail;_} -> ne_appl g1 (fun x -> f x y)
   | _, _                     -> ESeq(g1,g2,f)
 
-let ne_dseq g1 g2 f = match g1 with
-  | EFail  -> EFail
-  | _     -> EDSeq(g1,g2,f)
+let ne_dseq g1 ?(cs=Charset.full) g2 f = match g1 with
+  | EFail -> EFail
+  | _     -> EDSeq(g1,cs,g2,f)
 
 let ne_lr g k s =
   match (g, s) with
@@ -394,13 +405,13 @@ let factor_empty g =
                        | Some x -> match g2.e with
                                    | None -> None
                                    | Some y -> try Some(f x y) with NoParse -> None)
-    | DSeq(g1,g2,f) -> fn g1; (match g1.e with
+    | DSeq(g1,_,g2,f) -> fn g1; (match g1.e with
                        | None -> None
                        | Some (x,x') -> try
                                    let g2 = g2 x in fn g2;
                                                     match g2.e with
                                                     | None -> None
-                                                    | Some y -> Some(f x' y)
+                                                    | Some y -> Some(f x x' y)
                                  with NoParse -> None)
     | Lr(g1,_,g2)   -> fn g1; fn g2; g1.e
     | Rkey _        -> None
@@ -436,12 +447,12 @@ let factor_empty g =
                         | Some x -> ne_appl (get g2) (fun y -> f x y)
                       in
                       ne_alt [ga; gb]
-    | DSeq(g1,g2,f) -> hn g1; let ga = ne_dseq (get g1) g2 f in
+    | DSeq(g1,_,g2,f) -> hn g1; let ga = ne_dseq (get g1) g2 f in
                        let gb = match g1.e with
                          | None   -> EFail
                          | Some (x,x') ->
                             let g2 = g2 x in fn g2; hn g2;
-                            ne_appl (get g2) (f x') (* FIXME, fn called twice on g2 *)
+                            ne_appl (get g2) (f x x') (* FIXME, fn called twice on g2 *)
                        in
                        ne_alt [ga; gb]
     | Lr(g1,k,g2) -> hn g1; hn g2; ne_lr (get g1) k g2
@@ -468,7 +479,7 @@ let remove_push : type a. a grammar -> unit =
         | EAlt(gs) -> ne_alt (List.map (fn r) gs)
         | EAppl(g1,f) -> ne_appl (fn r g1) f
         | ESeq(g1,g2,f) -> ne_seq (fn r g1) g2 f
-        | EDSeq(g1,g2,f) -> ne_dseq (fn r g1) g2 f
+        | EDSeq(g1,_,g2,f) -> ne_dseq (fn r g1) g2 f
         | EPush(g1) -> push := true; fn true g1
         | ERead(n,g1) -> ne_read (if r then n else n+1) (fn r g1)
         | ERPos(g1) -> ne_rpos(fn r g1)
@@ -509,7 +520,7 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
       | ESeq(g1,g2,f) ->
          let (g1, s1) = fn g1 in
          (ne_seq g1 g2 f, seq s1 g2 f)
-      | EDSeq(g1,g2,f) ->
+      | EDSeq(g1,_,g2,f) ->
          let (g1, s1) = fn g1 in
          (ne_dseq g1 g2 f, dseq s1 g2 f)
       | EAlt(gs) ->
@@ -519,7 +530,7 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
          let (g1,s1) = fn g1 in
          (ne_lr g1 k s, lr s1 k s)
       | ERkey _ ->
-         (g, fail ())
+         assert false; (* handled in gn *)
       | EAppl(g1,f) ->
          let (g1,s) = fn g1 in
          (ne_appl g1 f, appl s f)
@@ -588,7 +599,9 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
     | ESeq(g,g2,_) ->
        let (shift, s as r) = fn g in
        if shift then (false, Charset.union s (snd (fn g2.ne))) else r
-    | EDSeq(g,_,_) -> fn g
+    | EDSeq(g,cs,_,_) ->
+       let (shift, _ as r) = fn g in
+       if shift then (false, cs) else r
     | EAppl(g,_) -> fn g
     | ELr(g,_,_) -> fn g
     | ERkey _ -> (true, Charset.empty)
@@ -632,7 +645,8 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
                          (Charset.union cs1 cs2, Comb.alt cs1 c1 cs2 c2)
                 in snd (fn gs)
   | ESeq(g1,g2,f) -> Comb.seq (compile_ne g1) (compile g2) f
-  | EDSeq(g1,g2,f) -> Comb.dep_seq (compile_ne g1) (fun x -> compile (g2 x)) f
+  | EDSeq(g1,_,g2,f) ->
+     Comb.dep_seq (compile_ne g1) (fun x -> compile (g2 x)) f
   | EAppl(g1,f) -> Comb.app (compile_ne g1) f
   | ELr(g,k,s) -> Comb.lr (compile_ne g) (first_charset s.ne) k (compile_ne s.ne)
   | ERkey k -> Comb.read_tbl k

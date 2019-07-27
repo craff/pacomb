@@ -47,7 +47,14 @@ val seqf : 'a grammar -> ('a -> 'b) grammar -> 'b grammar
 (** [dseq g1 g2 f)] is a dependant sequence, the grammar [g2] used after [g1] may
     depend upon the semantics of [g1]. This is not very efficient as the grammar
     [g2] must be compiled at parsing time. It is a good idea to memoize [g2] *)
-val dseq : ('a * 'b) grammar -> ('a -> 'c grammar) -> ('b -> 'c -> 'd) -> 'd grammar
+val dseq : ('a * 'b) grammar
+           -> ?cs:Charset.t -> ('a -> 'c grammar)
+           -> ('a -> 'b -> 'c -> 'd) -> 'd grammar
+
+(** usefull derivation*)
+val dseqf : ('a * 'b) grammar
+            -> ?cs:Charset.t -> ('a -> ('a -> 'b -> 'c) grammar)
+            -> 'c grammar
 
 (** [lpos g] is identical to [g] but passes the position just before parsing with
     [g] to the semantical action of [g] *)
@@ -102,6 +109,7 @@ val fixpoint : ?name:string -> ('a grammar -> 'a grammar) -> 'a grammar
 val grammar_family : ?param_to_string:('a -> string) -> string
   -> ('a -> 'b grammar) * (('a -> 'b grammar) -> unit)
 
+val memo : ('a -> 'b grammar) -> ('a -> 'b grammar)
 (**
    {[
    (* Declare the grammar family *)

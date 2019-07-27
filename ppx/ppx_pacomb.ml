@@ -82,8 +82,12 @@ let exp_to_term exp =
   match exp.pexp_desc with
   | Pexp_constant (Pconst_char _) ->
      app loc (grmod "term") (app2 loc (lxmod "char") exp unit_)
+  | Pexp_construct({txt = Lident "CHAR"; _}, Some s) ->
+     app loc (grmod "term") (app2 loc (lxmod "char") s unit_)
   | Pexp_constant (Pconst_string _) ->
      app loc (grmod "term") (app2 loc (lxmod "string") exp unit_)
+  | Pexp_construct({txt = Lident "STR"; _}, Some s) ->
+     app loc (grmod "term") (app2 loc (lxmod "string") s unit_)
   | Pexp_construct({txt = Lident "INT"; _}, None) ->
      app loc (grmod "term") (app loc (lxmod "int") unit_)
   | Pexp_construct({txt = Lident "FLOAT"; _}, None) ->
@@ -115,7 +119,8 @@ let rec exp_to_rule e =
   match e.pexp_desc with
   | Pexp_apply({ pexp_desc =
       Pexp_apply({ pexp_desc = Pexp_ident
-         { txt = Lident("="|"<"|">"|"<="|">="|"<>"); _ }; _}, _); _} as cond,
+                                 { txt = Lident("="|"<"|">"|"<="|">="|"<>"|"=="|"!="|
+                                           "not"|"&&"|"||"); _ }; _}, _); _} as cond,
       (Nolabel,a3)::rest) ->
      let (rule,_) = exp_to_rule (Exp.apply a3 rest) in
      (rule, Some cond)
@@ -209,10 +214,11 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
        | _ -> [exp]
      in
      let prios = fn e in
-     let (name,param) =
+     let (name,param,_) =
        match name_param with None -> assert false
                            | Some x -> x
      in
+     let param = mknoloc (Lident param) in
      let loc = e.pexp_loc in
      let rec gn acc l =
        match l with
@@ -280,14 +286,15 @@ let vb_to_parser rec_ vb =
     in
     let (name,do_warn) = treat_pat vb.pvb_pat in
     let (param,exp) = match vb.pvb_expr.pexp_desc with
-      | Pexp_fun (Nolabel, None, { ppat_desc = Ppat_var param; _ }, exp) ->
+      | Pexp_fun (Nolabel, None, param, exp) when rec_ = Recursive ->
          (Some param, exp)
       | _ -> (None, vb.pvb_expr)
     in
     let name_param = match param with
       | None -> None
       | Some p -> Some ( mkloc (Lident name.txt) name.loc
-                       , mkloc (Lident p.txt) p.loc)
+                       , "blabla"  (* FIXME *)
+                       , p)
     in
     let (changed,rules) = exp_to_grammar ?name_param exp in
     if changed && do_warn then
@@ -298,7 +305,7 @@ let vb_to_parser rec_ vb =
         app loc (grmod "cache") rules
       else rules
     in
-    (loc,changed,name,vb.pvb_pat,param,rules)
+    (loc,changed,name,vb.pvb_pat,name_param,rules)
   in
   let ls = List.map gn vb in
   let (gr,orig) = List.partition
@@ -315,10 +322,10 @@ let vb_to_parser rec_ vb =
            Vb.mk ~loc pat
              (app loc (grmod "declare_grammar")
                 (Exp.constant ~loc:name.loc (Const.string name.txt)))
-           | Some _ ->
-              Vb.mk ~loc (Pat.tuple [pat; Pat.var (mkloc (set name) name.loc)])
-                (app loc (grmod "grammar_family")
-                   (Exp.constant ~loc:name.loc (Const.string name.txt)))
+        | Some _ ->
+           Vb.mk ~loc (Pat.tuple [pat; Pat.var (mkloc (set name) name.loc)])
+             (app loc (grmod "grammar_family")
+                (Exp.constant ~loc:name.loc (Const.string name.txt)))
       in
       [vd]
     in
@@ -339,10 +346,10 @@ let vb_to_parser rec_ vb =
            app2 loc (grmod "set_grammar")
              (Exp.ident (Location.mkloc (Lident name.txt) name.loc))
              rules
-           | Some n ->
-              app loc
-                (Exp.ident (Location.mkloc (Lident (set name)) name.loc))
-                (Exp.fun_ ~loc Nolabel None (Pat.var n) rules)
+        | Some (_,pn,pat) ->
+           app loc
+             (Exp.ident (Location.mkloc (Lident (set name)) name.loc))
+             (Exp.fun_ ~loc Nolabel None (Pat.alias pat (mknoloc pn)) rules)
       in
       [Vb.mk ~loc (Pat.any ()) exp]
     in
@@ -405,10 +412,19 @@ let pacomb_mapper _argv =
   (* the mapper that use the previous one inside [[%% parse]] *)
   { default_mapper with
     structure_item = (fun mapper item ->
-      match item with
-      | { pstr_desc = Pstr_extension (({ txt = "parser"; _ }, PStr str), _); _} ->
-         default_mapper.structure_item map_all (str_to_parser str)
-      | other -> default_mapper.structure_item mapper other)
+      match item.pstr_desc with
+      | Pstr_extension (({ txt = "parser"; _ }, PStr str), _) ->
+         map_all.structure_item map_all (str_to_parser str)
+      | _ -> default_mapper.structure_item mapper item)
+  ; expr = (fun mapper exp ->
+      match exp.pexp_desc with
+      | Pexp_extension ({ txt = "parser"; _ }, PStr str) ->
+         let exp = match str with
+             [{pstr_desc = Pstr_eval(e,_); _}] -> e
+           | _ -> assert false
+         in
+         map_all.expr map_all (exp_to_parser exp)
+      | _ -> default_mapper.expr mapper exp)
   }
 
 let () =

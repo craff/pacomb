@@ -65,7 +65,7 @@ val seq : 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t
 (** [sdep_seq c1 c2 f] is a dependant sequence, contrary to [seq c1 c2 f],
     the combinator used to parse after [c1] depends upon the value
     returned by [c1]. It s a good idea to memoize the function c2. *)
-val dep_seq: ('a * 'b) t -> ('a -> 'c t) -> ('b -> 'c -> 'd) -> 'd t
+val dep_seq: ('a * 'b) t -> ('a -> 'c t) -> ('a -> 'b -> 'c -> 'd) -> 'd t
 
 (** Combinator parsing with the first combinator and in case
     of failure with the second from the same position.

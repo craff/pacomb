@@ -77,7 +77,7 @@ let test9 = dseq (appl test8 (fun x -> (x, ())))
                     if x <= 0 then empty 0
                     else seq (fn (x-1)) char_a (fun x _  -> x+1)
                        in fn)
-                 (fun _ x -> x)
+                 (fun _ _ x -> x)
 let test8 = compile test8
 let test9 = compile test9
 
