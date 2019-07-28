@@ -97,22 +97,21 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex ->
   { comb }
 
 (** Sequence combinator. *)
-let seq : 'a t -> ?cs:Charset.t -> 'b t -> ('a -> 'b -> 'c) -> 'c t =
-  fun g1 ?(cs=Charset.full) g2 fn ->
+let seq : 'a t -> ?cs:Charset.t -> ('a -> 'b) t -> 'b t =
+  fun g1 ?(cs=Charset.full) g2 ->
     let comb : type r. ('c, r) comb = fun env k err ->
       g1.comb env (cs,
         fun env err v1 ->
           g2.comb env (fst k,
             fun env err v2 ->
-              (try fun () -> snd k env err (fn v1 v2)
+              (try fun () -> snd k env err (v2 v1)
                with Lex.NoParse -> fun () -> next env err) ()) err) err
   in
   { comb }
 
 (** Dependant sequence combinator. *)
-let dep_seq : ('a * 'b) t -> ?cs:Charset.t -> ('a -> 'c t)
-              -> ('a -> 'b -> 'c -> 'd) -> 'd t =
-  fun g1 ?(cs=Charset.full) g2 fn ->
+let dseq : ('a * 'b) t -> ?cs:Charset.t -> ('a -> ('b -> 'c) t) -> 'c t =
+  fun g1 ?(cs=Charset.full) g2 ->
     let comb : type r. ('d, r) comb = fun env k err ->
       g1.comb env (cs, fun env err (v1,v2) ->
         (try
@@ -120,7 +119,7 @@ let dep_seq : ('a * 'b) t -> ?cs:Charset.t -> ('a -> 'c t)
            fun () -> g.comb env (fst k,
              fun env err v3 ->
              (try
-                let v = fn v1 v2 v3 in
+                let v = v3 v2 in
                 fun () -> snd k env err v
               with Lex.NoParse -> fun () -> next env err) ()) err
          with Lex.NoParse -> fun () -> next env err) ()) err

@@ -88,11 +88,11 @@ let%parser lists sep f =
   ; '(' (l::ne_slist) ')' => Array.of_list (List.rev l)
 
 let%parser rec
-  expr pmax = (r::dseqf (expr pmax)
+  expr pmax = (r::dseq (expr pmax)
                  (fun pe ->
-                   dseqf (op pe pmax)
-                     (fun pop -> seqf (expr pop)
-                                   (empty (fun (_,e2) pop b _ e1 ->
+                   dseq (op pe pmax)
+                     (fun pop -> seq (expr pop)
+                                   (empty (fun (_,e2) b e1 ->
                                         (pop, Idt(b,[|e1;e2|])))))))
                                                   => r
             ; (x::FLOAT)                          => (0.0,Cst x)

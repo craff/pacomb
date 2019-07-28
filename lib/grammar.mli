@@ -37,24 +37,17 @@ val alt : ?name:string -> 'a grammar list -> 'a grammar
 
 (** [seq g1 g2 f] parse with g1 and then with g2 for the rest of the input, uses
     [f] to combine both semantics *)
-val seq : 'a grammar -> 'b grammar -> ('a -> 'b -> 'c) -> 'c grammar
+val seq : 'a grammar -> ('a -> 'b) grammar -> 'b grammar
 
-(** usefull derivations from [seq] *)
 val seq1 : 'a grammar -> 'b grammar -> 'a grammar
 val seq2 : 'a grammar -> 'b grammar -> 'b grammar
-val seqf : 'a grammar -> ('a -> 'b) grammar -> 'b grammar
 
-(** [dseq  g1 ~cs g2 f)]  is a dependant  sequence, the grammar [g2]  used after
-    [g1] may depend  upon the semantics of  [g1]. This is not  very efficient as
-    the  grammar [g2]  must be  compiled at  parsing time.  [g2] is  memoized by
-    default *)
+(** [dseq g1 ~cs g2)] is a  dependant sequence, the grammar [g2] used after [g1]
+    may depend  upon the semantics  of [g1]. This is  not very efficient  as the
+    grammar [g2] must be compiled at  parsing time.  [g2] is memoized by default
+    to partially overcome this fact. *)
 val dseq : ('a * 'b) grammar
-           -> ?cs:Charset.t -> ('a -> 'c grammar)
-           -> ('a -> 'b -> 'c -> 'd) -> 'd grammar
-
-(** usefull derivation*)
-val dseqf : ('a * 'b) grammar
-            -> ?cs:Charset.t -> ('a -> ('a -> 'b -> 'c) grammar)
+            -> ?cs:Charset.t -> ('a -> ('b -> 'c) grammar)
             -> 'c grammar
 
 (** [lpos  g] is identical  to [g] but passes  the position just  before parsing
@@ -65,15 +58,10 @@ val lpos : (Pos.t -> 'a) grammar -> 'a grammar
     [g] to the semantical action of [g] *)
 val rpos : (Pos.t -> 'a) grammar -> 'a grammar
 
-(** variants of seqf with the position of the first iterm *)
-val seqf_pos : 'a grammar -> (Pos.t -> 'a -> Pos.t -> 'b) grammar -> 'b grammar
-val seqf_lpos : 'a grammar -> (Pos.t -> 'a -> 'b) grammar -> 'b grammar
-val seqf_rpos : 'a grammar -> ('a -> Pos.t -> 'b) grammar -> 'b grammar
-
-(** variants of seq2 with the position of the first iterm *)
-val seq2_pos : 'a grammar -> (Pos.t -> Pos.t -> 'b) grammar -> 'b grammar
-val seq2_lpos : 'a grammar -> (Pos.t -> 'b) grammar -> 'b grammar
-val seq2_rpos : 'a grammar -> (Pos.t -> 'b) grammar -> 'b grammar
+(** variants of seq with the position of the first iterm *)
+val seq_pos : 'a grammar -> (Pos.t * 'a * Pos.t -> 'b) grammar -> 'b grammar
+val seq_lpos : 'a grammar -> (Pos.t * 'a -> 'b) grammar -> 'b grammar
+val seq_rpos : 'a grammar -> ('a * Pos.t -> 'b) grammar -> 'b grammar
 
 (** [cache  g] avoid to  parse twice  the same input  with [g] by  memoizing the
     result of  the first parsing. Using  [cache] allows to recover  a polynomial

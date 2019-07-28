@@ -145,15 +145,27 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
      let (rule,cond) = exp_to_rule rule in
      let loc_a = action.pexp_loc in
      let gn (acts_fn, rule) (name, item, loc_e) = match name with
-       | None    -> (acts_fn, (false, false, false, item, loc_e) :: rule)
+       | None    ->
+          let pat = Pat.any () in
+          let acts_fn exp = Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp) in
+          (acts_fn, (false, false, item, loc_e) :: rule)
        | Some (None, pat) ->
           let acts_fn exp = Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp) in
-          (acts_fn, (false,true,false,item,loc_e) :: rule)
+          (acts_fn, (false,false,item,loc_e) :: rule)
        | Some (Some id, pat) ->
           let id_pos = mkloc (id.txt ^ "_pos") id.loc in
           let id_lpos = mkloc (id.txt ^ "_lpos") id.loc in
           let id_rpos = mkloc (id.txt ^ "_rpos") id.loc in
           let has_id_pos = has_ident id_pos.txt action in
+          let has_id_lpos = has_id_pos || has_ident id_lpos.txt action in
+          let has_id_rpos = has_id_pos || has_ident id_rpos.txt action in
+          let pat =
+            match has_id_lpos, has_id_rpos with
+            | false, false -> pat
+            | true, false -> Pat.tuple [Pat.var id_lpos; pat]
+            | false, true -> Pat.tuple [pat; Pat.var id_rpos]
+            | true, true -> Pat.tuple [Pat.var id_lpos; pat; Pat.var id_rpos]
+          in
           let acts_fn =
             if has_id_pos then
               let pat = Pat.var id_pos in
@@ -170,21 +182,8 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
               (fun exp -> Exp.let_ Nonrecursive vb (acts_fn exp))
             else acts_fn
           in
-          let (acts_fn,rpos) =
-            if has_id_pos || has_ident id_rpos.txt action then
-              ((fun exp -> Exp.fun_ ~loc:loc_a Nolabel None
-                             (Pat.var id_rpos) (acts_fn exp)), true)
-            else (acts_fn, false)
-          in
           let acts_fn exp = Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp) in
-          let (acts_fn,lpos) =
-            if has_id_pos || has_ident id_lpos.txt action then
-              ((fun exp -> Exp.fun_ ~loc:loc_a Nolabel None
-                             (Pat.var id_lpos) (acts_fn exp)), true)
-            else
-              (acts_fn, false)
-          in
-          (acts_fn, (lpos,true,rpos,item,loc_e) :: rule)
+          (acts_fn, (has_id_lpos,has_id_rpos,item,loc_e) :: rule)
      in
      let (acts_fn, rule) = List.fold_left gn (acts_fn, []) rule in
      let rule = List.rev rule in
@@ -200,16 +199,12 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
           add_attribute exp att
 
      in
-     let fn (lpos,has_id,rpos,item,loc_e) exp =
-       let f = match (lpos,has_id,rpos) with
-         | false, false, false -> "seq2"
-         | false, true , false -> "seqf"
-         | true , false, false -> "seq2_lpos"
-         | true , true , false -> "seqf_lpos"
-         | false, false, true  -> "seq2_rpos"
-         | false, true , true  -> "seqf_rpos"
-         | true , false, true  -> "seq2_pos"
-         | true , true , true  -> "seqf_pos"
+     let fn (lpos,rpos,item,loc_e) exp =
+       let f = match (lpos,rpos) with
+         | false, false -> "seq"
+         | true , false -> "seq_lpos"
+         | false, true  -> "seq_rpos"
+         | true , true  -> "seq_pos"
        in
        app2 (merge_loc loc_e exp.pexp_loc) (grmod f) item exp
      in

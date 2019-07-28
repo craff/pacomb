@@ -35,22 +35,21 @@ val empty : 'a -> 'a t
     the corresponding semantic value. *)
 val lexeme : 'a Lex.lexeme -> 'a t
 
-(** [seq g1  g2 fn] sequences the  parsers [g1] and [g2].   The resulting parser
+(**  [seq g1  g2] sequences  the parsers  [g1] and  [g2].  The  resulting parser
     starts by parsing  using [g1], and then  parses the rest of  the input using
-    [g2]. The function  [fn] is used to combine the  semantic values returned by
-    parsing with [g1] and [g2]. The charset if the set of characters accepted by
-    [g2] at the beginning of input. *)
-val seq : 'a t -> ?cs:Charset.t -> 'b t -> ('a -> 'b -> 'c) -> 'c t
+    [g2]. The result of  parsing with [g2] is then apply to  the result of [g1].
+    The charset if  the set of characters  accepted by [g2] at  the beginning of
+    input. *)
+val seq : 'a t -> ?cs:Charset.t -> ('a -> 'b) t -> 'b t
 
-(** [sdep_seq c1 c2  f] is a dependant sequence, contrary to [seq  c1 c2 f], the
-    combinator  used to  parse after  [c1] depends  upon the  value returned  by
-    [c1]. It  s a good idea  to memoize the function  c2.  The charset is  an in
+(**  [dseq  c1 c2]  is  a  dependant sequence,  contrary  to  [seq c1  c2],  the
+    combinator used to parse after [c1] depends upon the first value returned by
+    [c1]. It is  a good idea to memoize  the function c2.  The charset  is an in
     [seq], but you have to take a set that works for all possible values of type
-    ['a].  The separation  of ['a]  and  ['b] in  the smeantics  of [g1]  allows
-    depends on the smallest  set of possible vaue which is  important in case of
+    ['a].  The separation  of ['a] and ['b]  in the smeantics of  [g1] allows to
+    depend on the  smallest set of possible  vaue which is important  in case of
     memoisation. *)
-val dep_seq: ('a * 'b) t -> ?cs:Charset.t -> ('a -> 'c t)
-             -> ('a -> 'b -> 'c -> 'd) -> 'd t
+val dseq: ('a * 'b) t -> ?cs:Charset.t -> ('a -> ('b -> 'c) t)  -> 'c t
 
 (** Combinator parsing with the first combinator and in case of failure with the
     second from  the same  position.  The optionnal  charset corresponds  to the

@@ -20,6 +20,7 @@ let parse_string c =
 let assert_fail f =
   try ignore (f ()); assert false with Pos.Parse_error _ -> ()
 
+let seq g1 g2 f = seq g1 (appl g2 (fun y x -> f x y))
 let char_a = term(Lex.char 'a' 1)
 let char_b = term(Lex.char 'b' 1)
 let char_c = term(Lex.char 'c' 1)
@@ -69,10 +70,9 @@ let test8 = fixpoint
                                (fun _ x -> x)])
 let test9 = dseq (appl test8 (fun x -> (x, ())))
                  (let rec fn x =
-                    if x <= 0 then empty 0
-                    else seq (fn (x-1)) char_a (fun x _  -> x+1)
+                    if x <= 0 then empty (fun () -> 0)
+                    else seq (fn (x - 1)) char_a (fun x _ () -> x () + 1)
                        in fn)
-                 (fun _ _ x -> x)
 
 let test10 = seq char_a (layout Lex.noblank (seq char_a char_b (+))) (+)
 
