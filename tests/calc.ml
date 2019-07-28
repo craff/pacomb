@@ -1,6 +1,7 @@
 open Pacomb
+open Lex
+open Pos
 open Grammar
-open Comb
 
 let show_sub = Array.length Sys.argv > 1 && Sys.argv.(1) = "-v"
 
@@ -18,19 +19,19 @@ and expr = (a::prod)               => a
          ; (x::expr) '+' (y::prod) => x+.y
          ; (x::expr) '-' (y::prod) => x-.y
 
-let g = compile expr
-
+let top = expr
 let blank = Lex.blank_charset (Charset.singleton ' ')
 
 let _ =
   try
     while true do
-      try
+      let f () =
+        Printf.printf "=> %!";
         let line = input_line stdin in
-        let n = parse_string g blank line in
+        let n = parse_string top blank line in
         Printf.printf "%f\n%!" n
-      with Parse_error (_,c) ->
-        Printf.eprintf "parse error at %d\n%!" c
+      in
+      handle_exception f ()
     done
   with
     End_of_file -> ()

@@ -1,6 +1,8 @@
 open Pacomb
+open Lex
+open Pos
 open Grammar
-open Comb
+
 
 let gamma_gen n =
   let b = Buffer.create (2*n) in
@@ -28,12 +30,9 @@ let char_a = term(Lex.char 'a' 1)
 let char_b = term(Lex.char 'b' 1)
 let char_c = term(Lex.char 'c' 1)
 
-[%%parser
-  let [@cached] rec g =        () => ()
+let%parser [@cached] rec g =   () => ()
                       ; 'a' g 'b' => ()
-                      ; 'a' g 'c' => ()]
-
-let g = compile g
+                      ; 'a' g 'c' => ()
 
 let n = int_of_string Sys.argv.(1)
 

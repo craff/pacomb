@@ -4,9 +4,8 @@
 + {{:#ppx} OCaml syntax extension}
 + {{:#limitations} Limitation}
 + {!Pacomb.Grammar} The main module to build grammars
-+ {!Pacomb.Comb} Our combinator library, contains the function to call the parser
-+ {!Pacomb.Lex} lexing and blanks
-+ {!Pacomb.Pos} positions in file
++ {!Pacomb.Lex} lexing and blanks and [give_up]
++ {!Pacomb.Pos} positions in file and handling of exceptions
 + {!Pacomb.Input} build input buffer from string, channel, ...
 + {!Pacomb.Charset} an efficient representation of character sets
 
@@ -85,9 +84,10 @@ epat ::= lid
 invalid, use [__] instead.
 
 In action code (expression right of [=>]), a [lid_lpos] or [lid_rpos] will
-denote respectively the left and right position of the item named [lid].  If
-the item is matched by a tuple and you want to use its positon you must use
-[pat = lid] syntax to give a name to the whole item.
+denote respectively the left and right position of the item named [lid].  a
+[lid_pos] will group both [lid_lpos] and [lid_rpos] in a record of type
+[Pos.interval]. If the item is matched by a tuple and you want to use its positon
+you must use [pat = lid] syntax to give a name to the whole item.
 
 Beware that inside the scope of the extension, you can use the syntax for
 grammars every where. This allows for some nesting as in:

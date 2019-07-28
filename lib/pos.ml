@@ -8,6 +8,8 @@ type pos = { name : string  (** file's name *)
            ; phantom : bool (** is the postion a "phantom", i.e. not really
                                 in the file *) }
 
+type interval = { start : pos; end_ : pos }
+
 type t = pos
 
 let max_pos p1 p2 =
@@ -30,3 +32,44 @@ let get_pos : Input.buffer -> int -> pos = fun b n ->
     utf8_col = if !compute_utf8_col then utf8_col_num b n else (-1);
     phantom = false
   }
+
+type style = OCaml | Short
+
+let print_pos ?(style=OCaml) () ch pos =
+  let open Printf in
+  let format : (_,_,_) format = match style with
+    | OCaml -> "File %S, line %d, character %d"
+    | Short -> "%S:%d:%d"
+  in
+  fprintf ch format pos.name pos.line pos.col
+
+let print_interval ?(style=OCaml) () ch { start; end_ } =
+  let open Printf in
+  if start.line = end_.line then
+    let format : (_,_,_) format = match style with
+      | OCaml -> "File %S, line %d, characters %d-%d"
+      | Short -> "%S:%d:%d-%d"
+    in
+    fprintf ch format start.name start.line start.col end_.col
+  else
+    let format : (_,_,_) format = match style with
+      | OCaml -> "File %S, line %d, character %d - line %d, character %d"
+      | Short -> "%S:%d:%d-%d:%d"
+    in
+    fprintf ch format start.name start.line start.col end_.line end_.col
+
+let print_buf_pos ?(style=OCaml) () ch (buf,col) =
+  print_pos ~style () ch (get_pos buf col)
+
+(** exception returned by the parser *)
+exception Parse_error of Input.buffer * int
+
+let fail_no_parse (_:exn) = exit 1
+
+(** A helper to handle exceptions *)
+let handle_exception ?(error=fail_no_parse) ?(style=OCaml) f a =
+  try f a with Parse_error(buf, pos) as e ->
+    let red fmt = "\027[31m" ^^ fmt ^^ "\027[0m%!" in
+    Printf.eprintf (red "Parse error: %a.\n")
+      (print_buf_pos ~style ()) (buf, pos);
+    error e

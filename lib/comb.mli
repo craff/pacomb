@@ -10,28 +10,6 @@
 (** The type of combinator *)
 type 'a t
 
-(** [give_up ()] will reject the current parsing rule from the action code *)
-val give_up : unit -> 'a
-
-(** Exception raised by the function below when parsing fails *)
-exception Parse_error of Input.buffer * int
-
-(** [handle_exception  fn v] applies  the function [fn]  to [v] and  handles the
-    [Parse_error] exception. In  particular, a parse error  message is presented
-    to the  user in case of  a failure, then  [error ()] is called.  The default
-    [error] is [fun () -> exit 1]. *)
-val handle_exception : ?error:(unit -> 'b) -> ('a -> 'b) -> 'a -> 'b
-
-(** Parse a whole input buffer. the eof combinator is added at
-    the end of the given combinator *)
-val parse_buffer : 'a t -> Lex.blank -> Input.buffer -> int -> 'a
-
-(** Parse a whole string *)
-val parse_string : 'a t -> Lex.blank -> string -> 'a
-
-(** Parse a whole input channel *)
-val parse_channel : 'a t -> Lex.blank -> in_channel -> 'a
-
 (** Partial parsing.  Beware, the returned position is not  the maximum position
     that can be reached by the grammar. The charset is the character accepted at
     the end of input. Mainly useful with 'eof' when [blank_after] is [true]. *)

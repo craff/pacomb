@@ -1,21 +1,20 @@
 open Pacomb
-open Comb
+open Lex
+open Pos
 open Grammar
 
 let bspace = Lex.blank_charset (Charset.singleton ' ')
 
 let test ?(blank=bspace) g s r =
-  let g = compile g in
   assert (parse_string g blank s = r)
 
 let tests ?(blank=bspace) g l =
   List.iter (fun (s,r) -> test ~blank g s r) l
 
 let test_fail ?(blank=bspace) g s =
-  let g = compile g in
   try
     let _ = parse_string g blank s in assert false
-  with Comb.Parse_error _ -> ()
+  with Parse_error _ -> ()
 
 let tests_fail ?(blank=bspace) g l =
   List.iter (test_fail ~blank g) l
@@ -34,7 +33,7 @@ let _ = test g "42.42E-42" 42.42E-42
 let%parser g : string grammar = (x::RE "\\([a-zA-Z_][a-zA-Z_0-9]*\\)") => x
 let _ = test g "toto_x3" "toto_x3"
 let%parser g : 'a -> 'a -> float grammar =
-  fun x y -> (x=y) (z::INT) => float z
+  fun x y -> (x=y) (z::INT) => float_of_int z
            ; (x<>y) (z::FLOAT) => z
 let _ = test (g 0 0) "42" 42.0
 let _ = test (g 0 1) "42.0" 42.0

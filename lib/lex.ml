@@ -11,6 +11,9 @@ type blank = buf -> int -> buf * int
 (** Exception to be raised when the input is rejected *)
 exception NoParse
 
+(** [give_up ()] rejects parsing from a corresponding semantic action. *)
+let give_up : unit -> 'a = fun _ -> raise NoParse
+
 (** Terminal: same as blank with a value returned *)
 type 'a lexeme = buf -> int -> 'a * buf * int
 type 'a terminal = { n : string    (** name *)
@@ -19,10 +22,14 @@ type 'a terminal = { n : string    (** name *)
                                        at the beginning of input *) }
 type 'a t = 'a terminal
 
-(** Test wether a terminal accept the empty sequence *)
 let s0 = Input.from_string ""
+let s1 = Input.from_string "\255 "(* for eof to passe the test *)
 let accept_empty : type a. a t -> bool = fun t ->
-  try ignore(t.f s0 0); true with NoParse -> false
+  try ignore(t.f s0 0);
+      try let (_,_,col) = t.f s1 0 in col <> 1
+      with NoParse -> true
+  with NoParse -> false
+
 
 (** Combinators to create terminals *)
 
@@ -32,8 +39,8 @@ let accept_empty : type a. a t -> bool = fun t ->
 let eof : ?name:string -> 'a -> 'a t = fun ?(name="EOF") x ->
   { n = name
   ; c = Charset.singleton '\255'
-  ; f = fun s n ->
-        if Input.is_empty s n then (x, s, n) else raise NoParse
+  ; f = fun s n -> let (c,s,n) = Input.read s n in
+                   if c = '\255' then (x,s,n) else raise NoParse
   }
 
 let sp = Printf.sprintf

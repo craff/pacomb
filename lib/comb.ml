@@ -60,10 +60,6 @@ let next : 'b env -> 'a err -> 'a = fun env err ->
     env.max_pos := (env.current_buf, env.current_col);
   err ()
 
-(** [give_up ()] rejects parsing from a corresponding semantic action. *)
-let give_up : unit -> 'a =
-  fun _ -> raise Lex.NoParse
-
 (** [test cs env] returns [true] if and only if the next character to parse in
     the environment [env] is in the character set [cs]. *)
 let test cs e = Charset.mem cs (Input.get e.current_buf e.current_col)
@@ -346,23 +342,7 @@ let cache : type a. a t -> a t = fun g ->
   in
   { comb }
 
-let eof : unit t = lexeme (Lex.eof ()).f
-
-let add_eof : type a. a t -> a t = fun g -> seq g eof (fun v _ -> v)
-
-exception Parse_error of Input.buffer * int
-
-(** A helper to hangle exceptions *)
-let fail_no_parse () = exit 1
-
-let handle_exception ?(error=fail_no_parse) f a =
-  try f a with Parse_error(buf, pos) ->
-    let red fmt = "\027[31m" ^^ fmt ^^ "\027[0m%!" in
-    Printf.eprintf (red "Parse error: file %S, line %d, character %d.\n")
-      (Input.filename buf) (Input.line_num buf) (Input.utf8_col_num buf pos);
-    error ()
-
-(* NOTE: cs with blank_after = false makes no sens ? *)
+(* NOTE: cs with blank_after = false makes no sense ? *)
 let partial_parse_buffer
     : type a. a t -> Lex.blank -> ?blank_after:bool
                   -> ?cs:Charset.t -> Lex.buf -> int -> a * Lex.buf * int =
@@ -370,7 +350,7 @@ let partial_parse_buffer
     let max_pos = ref (buf0, col0) in
     let err () =
       let (buf, col) = !max_pos in
-      raise (Parse_error(buf, col))
+      raise (Pos.Parse_error(buf, col))
     in
     let (buf, col) = blank_fun buf0 col0 in
     let env =
@@ -384,23 +364,12 @@ let partial_parse_buffer
     in
     g.comb env (cs, k) err
 
-let parse_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a =
-  fun g blank_fun buf col ->
-    let cs = Charset.singleton '\255' in
-    let (v,_,_) = partial_parse_buffer (add_eof g) blank_fun ~cs buf col in v
-
-let parse_string : type a. a t -> Lex.blank -> string -> a =
-  fun g b s -> parse_buffer g b (Input.from_string s) 0
-
-let parse_channel : type a. a t -> Lex.blank -> in_channel -> a =
-  fun g b ic -> parse_buffer g b (Input.from_channel ic) 0
-
 let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
   fun g blank_fun buf0 col0 ->
     let max_pos = ref (buf0, col0) in
     let err () =
       let (buf, col) = !max_pos in
-      raise (Parse_error(buf, col))
+      raise (Pos.Parse_error(buf, col))
     in
     let res = ref [] in
     let k _ err v = res := v :: !res; err () in
@@ -412,6 +381,6 @@ let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
     in
     let cs = Charset.singleton '\255' in
     try
-      ignore ((add_eof g).comb env (cs,k) err);
+      ignore (g.comb env (cs,k) err);
       assert false
-    with Parse_error _ as e -> if !res = [] then raise e; !res
+    with Pos.Parse_error _ as e -> if !res = [] then raise e; !res

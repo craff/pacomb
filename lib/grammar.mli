@@ -144,3 +144,23 @@ val grammar_name : 'a grammar -> string
 
 (** allows to rename a grammar *)
 val give_name : string -> 'a grammar -> 'a grammar
+
+(** Parse a whole input buffer. the eof combinator is added at
+    the end of the given combinator *)
+val parse_buffer : 'a grammar -> Lex.blank -> Input.buffer -> int -> 'a
+
+(** Parse a whole string *)
+val parse_string : 'a grammar -> Lex.blank -> string -> 'a
+
+(** Parse a whole input channel *)
+val parse_channel : 'a grammar -> Lex.blank -> in_channel -> 'a
+
+(** Partial parsing.  Beware, the returned position is not  the maximum position
+    that can be reached by the grammar. The charset is the character accepted at
+    the end of input. Mainly useful with 'eof' when [blank_after] is [true]. *)
+val partial_parse_buffer : 'a grammar -> Lex.blank -> ?blank_after:bool ->
+        ?cs:Charset.t -> Input.buffer -> int -> 'a * Input.buffer * int
+
+(** Returns all possible parse trees.  Usefull for natural languages but also to
+    debug ambiguity in a supposed non ambiguous grammar. *)
+val parse_all_buffer : 'a grammar -> Lex.blank -> Input.buffer -> int -> 'a list

@@ -1,5 +1,6 @@
 open Pacomb
-open Comb
+open Lex
+open Pos
 open Grammar
 
 (* factorisation ... just a test for the ppx, here left factorisation is done by
@@ -117,22 +118,19 @@ let%parser cmd =
           env := ((id,Array.length params),Def(e,params)) :: !env;
           prios := (id,(p,a)) :: !prios)
 
-let cmd = compile cmd
-
 let blank = Lex.blank_charset (Charset.singleton ' ')
 
 let _ =
   try
     while true do
-      try
-        Printf.printf "=>%!";
-        let line = input_line stdin in
-        parse_string cmd blank line ()
-      with Parse_error (_,c) ->
-           Printf.eprintf "parse error at %d\n%!" c
-         | Unbound(s,n) ->
-           Printf.eprintf "unbound %s with arity %d\n%!" s n
-
+      let f () =
+        try
+          Printf.printf "=> %!";
+          let line = input_line stdin in
+          parse_string cmd blank line ()
+        with Unbound(s,n) ->
+          Printf.eprintf "unbound %s with arity %d\n%!" s n
+      in handle_exception f ()
     done
   with
     End_of_file -> ()

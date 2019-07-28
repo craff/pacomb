@@ -711,3 +711,31 @@ let grammar_info g =
   (g.e <> None, cs)
 
 let grammar_name g = g.n
+
+(** functions to actually use the parser *)
+let add_eof g = seq1 g (term (eof ()))
+
+(* NOTE: cs with blank_after = false makes no sense ? *)
+let partial_parse_buffer
+    : type a. a t -> Lex.blank -> ?blank_after:bool
+                  -> ?cs:Charset.t -> Lex.buf -> int -> a * Lex.buf * int =
+  fun g blank_fun ?(blank_after=false) ?(cs=Charset.full) buf0 col0 ->
+    let g = compile g in
+    Comb.partial_parse_buffer g blank_fun ~blank_after ~cs buf0 col0
+
+let parse_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a =
+  fun g blank_fun buf col ->
+    let cs = Charset.singleton '\255' in
+    let g = add_eof g in
+    let (v,_,_) = partial_parse_buffer g blank_fun ~cs buf col in v
+
+let parse_string : type a. a t -> Lex.blank -> string -> a =
+  fun g b s -> parse_buffer g b (Input.from_string s) 0
+
+let parse_channel : type a. a t -> Lex.blank -> in_channel -> a =
+  fun g b ic -> parse_buffer g b (Input.from_channel ic) 0
+
+let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
+  fun g blank_fun buf0 col0 ->
+    let g = compile (add_eof g) in
+    Comb.parse_all_buffer g blank_fun buf0 col0

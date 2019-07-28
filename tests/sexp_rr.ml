@@ -1,5 +1,5 @@
 open Pacomb
-open Comb
+open Pos
 open Grammar
 
 type sexp = { l: Pos.t; r: Pos.t; e : sexp' }
@@ -12,18 +12,15 @@ let rec size e = match e.e with
   | Lst l -> List.fold_left (fun a e -> a + size e) 1 l
 
 
-[%%parser
- let id = "[a-zA-Z_][a-zA-Z_0-9]*[']*"
- let rec sexp = (x::RE id)         => { l = x_lpos; r = x_rpos; e = Idt x }
+let id = "[a-zA-Z_][a-zA-Z_0-9]*[']*"
+
+let%parser rec sexp = (x::RE id)   => { l = x_lpos; r = x_rpos; e = Idt x }
               ; '(' (l::sexps) ')' => { l = l_lpos; r = l_rpos; e = Lst l }
- and sexps = () => []
+and sexps = () => []
            ; (e::sexp) (l::sexps) => e::l
 
- let blank = Lex.blank_charset (Charset.from_string " \t\n\r")
+let blank = Lex.blank_charset (Charset.from_string " \t\n\r")
 
- let g = compile sexp
-
- let _ =
-   let e = parse_channel g blank stdin in
-   Printf.printf "=> %d\n%!" (size e)
-]
+let _ =
+  let e = handle_exception (parse_channel sexp blank) stdin in
+  Printf.printf "=> %d\n%!" (size e)

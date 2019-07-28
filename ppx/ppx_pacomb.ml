@@ -150,17 +150,35 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
           let acts_fn exp = Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp) in
           (acts_fn, (false,true,false,item,loc_e) :: rule)
        | Some (Some id, pat) ->
+          let id_pos = mkloc (id.txt ^ "_pos") id.loc in
+          let id_lpos = mkloc (id.txt ^ "_lpos") id.loc in
           let id_rpos = mkloc (id.txt ^ "_rpos") id.loc in
+          let has_id_pos = has_ident id_pos.txt action in
+          let acts_fn =
+            if has_id_pos then
+              let pat = Pat.var id_pos in
+              let vb = [
+                  Vb.mk pat
+                    (Exp.record
+                       [( mknoloc (Ldot(Lident "Pos","start"))
+                        , Exp.ident (mkloc (Lident id_lpos.txt) id.loc))
+                       ;( mknoloc (Ldot(Lident "Pos","end_"))
+                        , Exp.ident (mkloc (Lident id_rpos.txt) id.loc))]
+                       None)]
+
+              in
+              (fun exp -> Exp.let_ Nonrecursive vb (acts_fn exp))
+            else acts_fn
+          in
           let (acts_fn,rpos) =
-            if has_ident id_rpos.txt action then
+            if has_id_pos || has_ident id_rpos.txt action then
               ((fun exp -> Exp.fun_ ~loc:loc_a Nolabel None
                              (Pat.var id_rpos) (acts_fn exp)), true)
             else (acts_fn, false)
           in
           let acts_fn exp = Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp) in
-          let id_lpos = mkloc (id.txt ^ "_lpos") id.loc in
           let (acts_fn,lpos) =
-            if has_ident id_lpos.txt action then
+            if has_id_pos || has_ident id_lpos.txt action then
               ((fun exp -> Exp.fun_ ~loc:loc_a Nolabel None
                              (Pat.var id_lpos) (acts_fn exp)), true)
             else

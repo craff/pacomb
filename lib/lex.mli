@@ -40,6 +40,10 @@ type 'a t = 'a terminal
  *)
 exception NoParse
 
+(** [give_up ()] rejects parsing from a corresponding semantic action.
+    Can be used both in the semantics of terminals and parsing rules. *)
+val give_up : unit -> 'a
+
 (** {2 Combinators to create terminals} *)
 
 (**  Terminal  accepting  then  end  of   a  buffer  only.   remark:  [eof]  is

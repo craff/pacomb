@@ -8,6 +8,8 @@ type pos = { name : string  (** file's name *)
            ; phantom : bool (** is the postion a "phantom", i.e. not really
                                 in the file *) }
 
+type interval = { start : pos; end_ : pos }
+
 (** Abbreviation *)
 type t = pos
 
@@ -22,3 +24,25 @@ val compute_utf8_col : bool ref
 
 (** Get a position from an input buffer and a column number *)
 val get_pos : Input.buffer -> int -> pos
+
+(** Style for printing positions: *)
+type style = OCaml (** like OCaml *)
+           | Short (** like gcc *)
+
+val print_pos : ?style:style -> unit -> out_channel -> pos -> unit
+
+val print_interval : ?style:style -> unit -> out_channel -> interval -> unit
+
+val print_buf_pos : ?style:style -> unit -> out_channel
+                    -> (Input.buffer * int) -> unit
+
+(** Exception raised by the function below when parsing fails *)
+exception Parse_error of Input.buffer * int
+
+(** [handle_exception  fn v] applies  the function [fn]  to [v] and  handles the
+    [Parse_error] exception. In  particular, a parse error  message is presented
+    to the user  in case of a failure,  then [error e] is called where  e is the
+    raised exception.   The default  [error] is  [fun _ ->  exit 1].  [raise] is
+    another possibility. *)
+val handle_exception : ?error:(exn -> 'b) -> ?style:style
+                       -> ('a -> 'b) -> 'a -> 'b
