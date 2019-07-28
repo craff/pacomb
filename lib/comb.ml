@@ -21,7 +21,7 @@ type 'a env =
   (** Function used to ignore blanks. *)
   ; left_pos_stack    : Pos.t list
   (** Used to get correct position when eliminating left recursion *)
-  ; max_pos           : (Lex.buf * int) ref
+  ; max_pos           : (Lex.buf * int * string list ref) ref
   (** Maximum position reached by the parser (for error reporting). *)
   ; current_buf       : Input.buffer
   (** Current input buffer (or input stream). *)
@@ -53,11 +53,21 @@ type 'a t = { comb : 'r. ('a, 'r) comb } [@@unboxed]
 (** [next env  err] updates the current maximum position  [env.max_pos] and then
     calls the [err] function. *)
 let next : 'b env -> 'a err -> 'a = fun env err ->
-  let (buf_max, col_max) = !(env.max_pos) in
+  let (buf_max, col_max, _) = !(env.max_pos) in
   let line_max = Input.line buf_max in
   let line = Input.line env.current_buf in
   if line > line_max || (line = line_max && env.current_col > col_max) then
-    env.max_pos := (env.current_buf, env.current_col);
+    env.max_pos := (env.current_buf, env.current_col, ref []);
+  err ()
+
+let next_msg : string -> 'b env -> 'a err -> 'a = fun msg env err ->
+  let (buf_max, col_max, msgs) = !(env.max_pos) in
+  let line_max = Input.line buf_max in
+  let line = Input.line env.current_buf in
+  if line = line_max && env.current_col = col_max then
+    msgs := msg :: !msgs
+  else if line > line_max || (line = line_max && env.current_col > col_max) then
+    env.max_pos := (env.current_buf, env.current_col, ref [msg]);
   err ()
 
 (** [test cs env] returns [true] if and only if the next character to parse in
@@ -68,7 +78,11 @@ let test cs e = Charset.mem cs (Input.get e.current_buf e.current_col)
 let fail : 'a t =
   { comb = fun env _ err -> next env err }
 
-(** Combinator used as default fied before compilation *)
+(** Combinator that always fails and report an error message. *)
+let error : string -> 'a t = fun msg ->
+  { comb = fun env _ err -> next_msg msg  env err }
+
+(** Combinator used as default field before compilation *)
 let assert_false : 'a t =
   { comb = fun _ _ _ -> assert false }
 
@@ -347,10 +361,10 @@ let partial_parse_buffer
     : type a. a t -> Lex.blank -> ?blank_after:bool
                   -> ?cs:Charset.t -> Lex.buf -> int -> a * Lex.buf * int =
   fun g blank_fun ?(blank_after=false) ?(cs=Charset.full) buf0 col0 ->
-    let max_pos = ref (buf0, col0) in
+    let max_pos = ref (buf0, col0, ref []) in
     let err () =
-      let (buf, col) = !max_pos in
-      raise (Pos.Parse_error(buf, col))
+      let (buf, col, msgs) = !max_pos in
+      raise (Pos.Parse_error(buf, col, !msgs))
     in
     let (buf, col) = blank_fun buf0 col0 in
     let env =
@@ -366,10 +380,10 @@ let partial_parse_buffer
 
 let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
   fun g blank_fun buf0 col0 ->
-    let max_pos = ref (buf0, col0) in
+    let max_pos = ref (buf0, col0, ref []) in
     let err () =
-      let (buf, col) = !max_pos in
-      raise (Pos.Parse_error(buf, col))
+      let (buf, col, msgs) = !max_pos in
+      raise (Pos.Parse_error(buf, col, !msgs))
     in
     let res = ref [] in
     let k _ err v = res := v :: !res; err () in

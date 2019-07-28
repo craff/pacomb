@@ -188,17 +188,19 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
      in
      let (acts_fn, rule) = List.fold_left gn (acts_fn, []) rule in
      let rule = List.rev rule in
+     let finalise action =
+       let loc = action.pexp_loc in
+       match action.pexp_desc with
+       | Pexp_construct({txt = Lident "ERR"; _}, Some s) ->
+          app loc (grmod "error") s
+       | _ ->
+          app loc (grmod "empty") (acts_fn action)
+     in
      let action =
        try exp_to_grammar ~acts_fn action
        with
-       | Exit ->
-          let loc = action.pexp_loc in
-          app loc (grmod "empty") (acts_fn action)
-       | Warn att ->
-          let loc = action.pexp_loc in
-          let exp = app loc (grmod "empty") (acts_fn action) in
-          add_attribute exp att
-
+       | Exit     -> finalise action
+       | Warn att -> add_attribute (finalise action) att
      in
      let fn (lpos,has_id,rpos,item,loc_e) exp =
        let f = match (lpos,has_id,rpos) with

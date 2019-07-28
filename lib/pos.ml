@@ -62,14 +62,15 @@ let print_buf_pos ?(style=OCaml) () ch (buf,col) =
   print_pos ~style () ch (get_pos buf col)
 
 (** exception returned by the parser *)
-exception Parse_error of Input.buffer * int
+exception Parse_error of Input.buffer * int * string list
 
 let fail_no_parse (_:exn) = exit 1
 
 (** A helper to handle exceptions *)
 let handle_exception ?(error=fail_no_parse) ?(style=OCaml) f a =
-  try f a with Parse_error(buf, pos) as e ->
+  try f a with Parse_error(buf, pos, msgs) as e ->
     let red fmt = "\027[31m" ^^ fmt ^^ "\027[0m%!" in
     Printf.eprintf (red "Parse error: %a.\n")
       (print_buf_pos ~style ()) (buf, pos);
+    List.iter (fun msg -> Printf.printf "  %s\n%!" msg) msgs;
     error e

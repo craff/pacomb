@@ -40,7 +40,7 @@ val print_buf_pos : ?style:style -> unit -> out_channel
                     -> (Input.buffer * int) -> unit
 
 (** Exception raised by the function below when parsing fails *)
-exception Parse_error of Input.buffer * int
+exception Parse_error of Input.buffer * int * string list
 
 (** [handle_exception  fn v] applies  the function [fn]  to [v] and  handles the
     [Parse_error] exception. In  particular, a parse error  message is presented
