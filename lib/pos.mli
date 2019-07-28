@@ -29,10 +29,13 @@ val get_pos : Input.buffer -> int -> pos
 type style = OCaml (** like OCaml *)
            | Short (** like gcc *)
 
+(** printting for position *)
 val print_pos : ?style:style -> unit -> out_channel -> pos -> unit
 
+(** and interval *)
 val print_interval : ?style:style -> unit -> out_channel -> interval -> unit
 
+(** [print_buf_pos () ch (buf,pos) = print_pos () ch (get_pos buf pos)] *)
 val print_buf_pos : ?style:style -> unit -> out_channel
                     -> (Input.buffer * int) -> unit
 
