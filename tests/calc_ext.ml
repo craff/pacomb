@@ -90,14 +90,17 @@ let%parser lists sep f =
 let%parser rec
   expr pmax = (r::dseqf (expr pmax)
                  (fun pe ->
-                   dseqf (op pe pmax)
+                   alt [error "except op bin"
+                   ;dseqf (op pe pmax)
                      (fun pop -> seqf (expr pop)
                                    (empty (fun (_,e2) pop b _ e1 ->
-                                        (pop, Idt(b,[|e1;e2|])))))))
+                                        (pop, Idt(b,[|e1;e2|])))))]))
                                                   => r
             ; (x::FLOAT)                          => (0.0,Cst x)
-            ; '(' (e::expr_top) ')'               => (0.0,e)
+            ; '(' (e::expr_top) => ( ')'             => (0.0,e)
+                                   ; ()              => ERR "expect closing parenthesis")
             ; (id::ident) (l::lists ',' expr_top) => (0.0, Idt(id,l))
+            ; ()                                  => ERR (Printf.sprintf "expect expression priority <= %f" pmax)
 
 and expr_top = ((__,e)::expr 1000.0) => e
 
@@ -130,7 +133,7 @@ let _ =
           parse_string cmd blank line ()
         with Unbound(s,n) ->
           Printf.eprintf "unbound %s with arity %d\n%!" s n
-      in handle_exception f ()
+      in handle_exception ~error:(fun _ -> ()) f ()
     done
   with
     End_of_file -> ()
