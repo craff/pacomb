@@ -607,10 +607,16 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
            (shift || shift', Charset.union s s')) (false, Charset.empty) gs
     | ESeq(g,g2,_) ->
        let (shift, s as r) = fn g in
-       if shift then (false, Charset.union s (snd (fn g2.ne))) else r
+       if shift then
+         begin
+           let (shift, s') = fn g2.ne in
+           assert (not shift);
+           (false, Charset.union s s')
+         end
+       else r
     | EDSeq(g,cs,_,_) ->
-       let (shift, _ as r) = fn g in
-       if shift then (false, cs) else r
+       let (shift, s as r) = fn g in
+       if shift then (false, Charset.union s cs) else r
     | EAppl(g,_) -> fn g
     | ELr(g,_,_) -> fn g
     | ERkey _ -> (true, Charset.empty)
@@ -631,6 +637,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
     | None ->
        g.charset <- Some Charset.empty;
        let (shift, r) = fn g.ne in
+       assert (not shift);
        g.charset <- Some r;
        (shift, r)
   in snd (fn g)
