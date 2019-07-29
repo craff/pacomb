@@ -29,18 +29,18 @@ let%parser op pmin pmax =
           | RightAssoc -> pmin < p && p <= pmax
         in
         if not good then give_up ();
+        let p = match a with
+          | RightAssoc -> p
+          | _          -> p -. 1e-10
+        in
         (p,f)
     with Not_found -> give_up ()
 
 let%parser rec
-  expr pmax = (r::dseq (expr pmax)
-                    ~ae:false ~cs:(Charset.from_string "-&~^+=*/\\$!:")
-                    (fun pe ->
-                      dseq (op pe pmax) ~ae:false
-                        ~cs:(Charset.from_string "-+0-9(")
-                        (fun pop -> seq (expr pop)
-                           (empty (fun (_,e2) b e1 -> (pop, b e1 e2))))))
-                                                  => r
+ expr pmax = ((pe,e1)>:expr pmax [@ae false] [@cs Charset.from_string "-&~^+=*/\\$!:"])
+               ((pop,b)>:op pe pmax [@ae false] [@cs Charset.from_string "-+0-9(a-zA-Z"])
+               ((__,e2)::expr pop)
+                      =>  (pop, b e1 e2)
             ; (x::FLOAT)                          => (0.0,x)
             ; '(' (e::expr_top) ')'               => (0.0,e)
 

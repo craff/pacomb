@@ -72,11 +72,15 @@ let%parser op pmin pmax =
   (c::bin) =>
     try let (p,a) = List.assoc c !prios in
         let good = match a with
-          | NonAssoc -> pmin < p && p < pmax
-          | LeftAssoc -> pmin <= p && p < pmax
+          | NonAssoc   -> pmin < p && p < pmax
+          | LeftAssoc  -> pmin <= p && p < pmax
           | RightAssoc -> pmin < p && p <= pmax
         in
         if not good then give_up ();
+        let p = match a with
+          | RightAssoc -> p
+          | _          -> p -. 1e-10
+        in
         (p,c)
     with Not_found -> give_up ()
 
@@ -88,15 +92,10 @@ let%parser lists sep f =
   ; '(' (l::ne_slist) ')' => Array.of_list (List.rev l)
 
 let%parser rec
-  expr pmax = (r::dseq (expr pmax)
-                  ~ae:false ~cs:(Charset.from_string "-&~^+=*/\\$!:")
-                 (fun pe ->
-                   dseq (op pe pmax)
-                     ~ae:false ~cs:(Charset.from_string "-+0-9(a-zA-Z")
-                     (fun pop -> seq (expr pop)
-                                   (empty (fun (_,e2) b e1 ->
-                                        (pop, Idt(b,[|e1;e2|])))))))
-                                                  => r
+ expr pmax = ((pe,e1)>:expr pmax [@ae false] [@cs Charset.from_string "-&~^+=*/\\$!:"])
+               ((pop,b)>:op pe pmax [@ae false] [@cs Charset.from_string "-+0-9(a-zA-Z"])
+               ((__,e2)::expr pop)
+                      =>  (pop, Idt(b,[|e1;e2|]))
             ; (x::FLOAT)                          => (0.0,Cst x)
             ; '(' (e::expr_top) ')'               => (0.0,e)
             ; (id::ident) (l::lists ',' expr_top) => (0.0, Idt(id,l))
