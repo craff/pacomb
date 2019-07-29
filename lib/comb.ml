@@ -74,11 +74,11 @@ let assert_false : 'a t =
 
 (** Combinator accepting the empty input only. *)
 let empty : 'a -> 'a t = fun x ->
-  { comb = fun env k err -> snd k env err x }
+  { comb = fun env (_,kf) err -> kf env err x }
 
 (** Combinator accepting the given lexeme (or terminal). *)
 let lexeme : 'a Lex.lexeme -> 'a t = fun lex ->
-  let comb : type r. ('a, r) comb = fun env k err ->
+  let comb : type r. ('a, r) comb = fun env (_, k) err ->
     (try
        let (v, buf_before_blanks, col_before_blanks) =
          lex env.current_buf env.current_col
@@ -91,36 +91,39 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex ->
            { env with buf_before_blanks ; col_before_blanks
                     ; current_buf ; current_col; lr = Assoc.empty }
          in
-         snd k env err v
+         k env err v
      with Lex.NoParse -> fun () -> next env err) ()
   in
   { comb }
 
 (** Sequence combinator. *)
-let seq : 'a t -> ?cs:Charset.t -> ('a -> 'b) t -> 'b t =
-  fun g1 ?(cs=Charset.full) g2 ->
-    let comb : type r. ('c, r) comb = fun env k err ->
+let seq : 'a t -> ?ae:bool -> ?cs:Charset.t -> ('a -> 'b) t -> 'b t =
+  fun g1 ?(ae=true) ?(cs=Charset.full) g2 ->
+    let comb : type r. ('c, r) comb = fun env (csk,kf) err ->
+      let cs = if ae then Charset.union cs csk else cs in
       g1.comb env (cs,
         fun env err v1 ->
-          g2.comb env (fst k,
+          g2.comb env (csk,
             fun env err v2 ->
-              (try fun () -> snd k env err (v2 v1)
+              (try fun () -> kf env err (v2 v1)
                with Lex.NoParse -> fun () -> next env err) ()) err) err
   in
   { comb }
 
 (** Dependant sequence combinator. *)
-let dseq : ('a * 'b) t -> ?cs:Charset.t -> ('a -> ('b -> 'c) t) -> 'c t =
-  fun g1 ?(cs=Charset.full) g2 ->
-    let comb : type r. ('d, r) comb = fun env k err ->
+let dseq : ('a * 'b) t -> ?ae:bool -> ?cs:Charset.t
+           -> ('a -> ('b -> 'c) t) -> 'c t =
+  fun g1 ?(ae=true) ?(cs=Charset.full) g2 ->
+    let comb : type r. ('d, r) comb = fun env (csk, k) err ->
+      let cs = if ae then Charset.union cs csk else cs in
       g1.comb env (cs, fun env err (v1,v2) ->
         (try
            let g = g2 v1 in
-           fun () -> g.comb env (fst k,
+           fun () -> g.comb env (csk,
              fun env err v3 ->
              (try
                 let v = v3 v2 in
-                fun () -> snd k env err v
+                fun () -> k env err v
               with Lex.NoParse -> fun () -> next env err) ()) err
          with Lex.NoParse -> fun () -> next env err) ()) err
   in
@@ -131,16 +134,16 @@ let dseq : ('a * 'b) t -> ?cs:Charset.t -> ('a -> ('b -> 'c) t) -> 'c t =
     empty in [alt] and use [option] instead.*)
 let option: 'a -> Charset.t -> 'a t -> 'a t = fun x cs1 g1 ->
   let f1 = ref 0 and f2 = ref 0 in
-  let comb : type r. ('a, r) comb = fun env k err ->
-    match (test cs1 env, test (fst k) env) with
+  let comb : type r. ('a, r) comb = fun env (csk, kf as k) err ->
+    match (test cs1 env, test csk env) with
     | (false, false) -> next env err
     | (true , false) -> g1.comb env k err
-    | (false, true ) -> snd k env err x
+    | (false, true ) -> kf env err x
     | (true , true ) ->
        (* one wants to  avoid incrementing f2 in err or f1 in  err. This way, if
           f1 parses 50% and f2 the other 50%, we have f1 ~ f2 *)
-       if !f1 < !f2 then (g1.comb env k (fun () -> incr f1; snd k env err x))
-       else (snd k env (fun () -> incr f2; g1.comb env k err) x)
+       if !f1 < !f2 then (g1.comb env k (fun () -> incr f1; kf env err x))
+       else (kf env (fun () -> incr f2; g1.comb env k err) x)
   in
   { comb }
 
@@ -164,9 +167,9 @@ let alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t =
 
 (** Application of a semantic function to alter a combinator. *)
 let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn ->
-  let comb : type r. ('b, r) comb = fun env k err ->
-    g.comb env (fst k, fun env err v ->
-      (try let v = fn v in fun () -> snd k env err v
+  let comb : type r. ('b, r) comb = fun env (csk,kf) err ->
+    g.comb env (csk, fun env err v ->
+      (try let v = fn v in fun () -> kf env err v
        with Lex.NoParse -> fun () -> next env err) ()) err
   in
   { comb }
@@ -188,23 +191,23 @@ let tail_pos env =
 
 (** Pushes the current position to the (left position) stack. *)
 let push : 'a t -> 'a t = fun g ->
-  let comb : type r. ('a, r) comb = fun env k err ->
+  let comb : type r. ('a, r) comb = fun env (csk, kf) err ->
     let pos = Pos.get_pos env.current_buf env.current_col in
     let env = { env with left_pos_stack = pos :: env.left_pos_stack } in
-    let k0 env err v = snd k { env with left_pos_stack = tail_pos env } err v in
-    g.comb env (fst k, k0) err
+    let kf env err v = kf { env with left_pos_stack = tail_pos env } err v in
+    g.comb env (csk, kf) err
   in
   { comb }
 
 (** Read the n-th position from the (left position) stack. *)
 let read : int -> (Pos.t -> 'a) t -> 'a t = fun n g ->
-  let comb : type r. ('a, r) comb = fun env k err ->
+  let comb : type r. ('a, r) comb = fun env (csk, kf) err ->
     let pos = head_pos n env in
-    let k0 env err fn =
-      (try let v = fn pos in (fun () -> snd k env err v)
+    let kf env err fn =
+      (try let v = fn pos in (fun () -> kf env err v)
        with Lex.NoParse -> fun () -> next env err) ()
     in
-    g.comb env (fst k, k0) err
+    g.comb env (csk, kf) err
   in
   { comb }
 
@@ -213,14 +216,14 @@ let left_pos : (Pos.t -> 'a) t -> 'a t = fun g -> push (read 0 g)
 
 (** Read the position after parsing. *)
 let right_pos : (Pos.t -> 'a) t -> 'a t = fun g ->
-  let comb : type r. ('a, r) comb = fun env k err ->
-    let k0 env err fn =
+  let comb : type r. ('a, r) comb = fun env (csk, kf) err ->
+    let kf env err fn =
       (try
          let pos = Pos.get_pos env.buf_before_blanks env.col_before_blanks in
-         let v = fn pos in fun () -> snd k env err v
+         let v = fn pos in fun () -> kf env err v
        with Lex.NoParse -> fun () -> next env err) ()
     in
-    g.comb env (fst k, k0) err
+    g.comb env (csk, kf) err
   in
   { comb }
 
@@ -228,19 +231,19 @@ let right_pos : (Pos.t -> 'a) t -> 'a t = fun g ->
     it parses using  the "grammar" [g gf*].  An equivalent  combinator CANNOT be
     defined as [seq Charset.full g cs (let rec r = seq cs r cs gf in r)]. *)
 let lr : 'a t -> Charset.t -> 'a Assoc.key -> 'a t -> 'a t = fun g cs key gf ->
-  let comb : type r. ('a, r) comb = fun env k err ->
-    let csk = Charset.union cs (fst k) in
+  let comb : type r. ('a, r) comb = fun env (cs0,kf) err ->
+    let csk = Charset.union cs cs0 in
     let rec klr env err v =
-      match test cs env, test (fst k) env with
+      match test cs env, test cs0 env with
       | (true, true) ->
         let err () =
           let lr = Assoc.add key v env.lr in
           let env0 = { env with lr } in
           gf.comb env0 (csk, klr) err
         in
-        snd k env err v
+        kf env err v
       | false, true ->
-         snd k env err v
+         kf env err v
       | true, false ->
          let lr = Assoc.add key v env.lr in
          let env0 = { env with lr } in
@@ -254,9 +257,9 @@ let lr : 'a t -> Charset.t -> 'a Assoc.key -> 'a t -> 'a t = fun g cs key gf ->
 
 (** combinator to access the value stored by lr*)
 let read_tbl : 'a Assoc.key -> 'a t = fun key ->
-  let comb : type r. ('a, r) comb = fun env k err ->
+  let comb : type r. ('a, r) comb = fun env (_,kf) err ->
     let v = try Assoc.find key env.lr with Not_found -> assert false in
-    snd k env err v
+    kf env err v
   in
   { comb }
 
@@ -284,7 +287,7 @@ let default_layout_config : layout_config =
 (** Combinator changing the "blank function". *)
 let change_layout : ?config:layout_config -> Lex.blank -> 'a t -> 'a t =
     fun ?(config=default_layout_config) blank_fun g ->
-  let comb : type r. ('a, r) comb = fun env k err ->
+  let comb : type r. ('a, r) comb = fun env (_,kf) err ->
     let (s, n) as buf =
       if config.old_blanks_before then (env.current_buf, env.current_col)
       else (env.buf_before_blanks, env.col_before_blanks)
@@ -295,7 +298,7 @@ let change_layout : ?config:layout_config -> Lex.blank -> 'a t -> 'a t =
     in
     let old_blank_fun = env.blank_fun in
     let env = { env with blank_fun ; current_buf = s ; current_col = n } in
-    g.comb env (fst k, fun env err v ->
+    g.comb env (Charset.full, fun env err v ->
       let (s, n) as buf =
         if config.new_blanks_after then (env.current_buf, env.current_col)
         else (env.buf_before_blanks, env.col_before_blanks)
@@ -308,7 +311,7 @@ let change_layout : ?config:layout_config -> Lex.blank -> 'a t -> 'a t =
         { env with blank_fun = old_blank_fun
         ; current_buf = s ; current_col = n }
       in
-      snd k env err v) err
+      kf env err v) err
   in
   { comb }
 
@@ -319,22 +322,22 @@ type 'a result =
 (** Combinator for caching a grammar, to avoid exponential behavior. *)
 let cache : type a. a t -> a t = fun g ->
   let cache = Input.Tbl.create () in
-  let comb : type b. (a, b) comb = fun env0 k err ->
+  let comb : type b. (a, b) comb = fun env0 (_,kf) err ->
     let {current_buf = buf0; current_col = col0; _} = env0 in
     let add_elt elt =
       let l = try Input.Tbl.find cache buf0 col0 with Not_found -> [] in
       Input.Tbl.add cache buf0 col0 (elt :: l)
     in
-    let k0 env err v = add_elt (Value(env, err, v)); snd k env err v in
+    let k0 env err v = add_elt (Value(env, err, v)); kf env err v in
     let err0 () = add_elt Error; err () in
     let rec fn l =
       match l with
-      | []                    -> g.comb env0 (fst k, k0) err0
+      | []                    -> g.comb env0 (Charset.full, k0) err0
       | Error            :: l -> assert (l = []); err ()
       | Value(env,err,v) :: l ->
           match env0.key.eq env.key.k with
           | Assoc.NEq -> assert false
-          | Assoc.Eq  -> snd k env (if l = [] then err else (fun () -> fn l)) v
+          | Assoc.Eq  -> kf env (if l = [] then err else (fun () -> fn l)) v
     in
     let l = try Input.Tbl.find cache buf0 col0 with Not_found -> [] in
     fn (List.rev l)
@@ -357,11 +360,11 @@ let partial_parse_buffer
         ; current_buf = buf ; current_col = col; lr = Assoc.empty
         ; max_pos ; left_pos_stack = [] ; blank_fun ; key = Assoc.new_key () }
     in
-    let k env _ v =
+    let kf env _ v =
       if blank_after then (v, env.current_buf, env.current_col)
       else (v, env.buf_before_blanks, env.col_before_blanks)
     in
-    g.comb env (cs, k) err
+    g.comb env (cs, kf) err
 
 let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
   fun g blank_fun buf0 col0 ->
@@ -371,7 +374,7 @@ let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
       raise (Pos.Parse_error(buf, col))
     in
     let res = ref [] in
-    let k _ err v = res := v :: !res; err () in
+    let kf _ err v = res := v :: !res; err () in
     let (buf, col) = blank_fun buf0 col0 in
     let env =
       { buf_before_blanks = buf0 ; col_before_blanks = col0
@@ -380,6 +383,6 @@ let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
     in
     let cs = Charset.singleton '\255' in
     try
-      ignore (g.comb env (cs,k) err);
+      ignore (g.comb env (cs,kf) err);
       assert false
     with Pos.Parse_error _ as e -> if !res = [] then raise e; !res

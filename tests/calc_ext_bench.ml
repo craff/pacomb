@@ -33,9 +33,10 @@ let%parser op pmin pmax =
     with Not_found -> give_up ()
 
 let%parser rec
-  expr pmax = (r::dseq (expr pmax) ~cs:(Charset.from_string "-&~^+=*/\\$!:")
+  expr pmax = (r::dseq (expr pmax)
+                    ~ae:false ~cs:(Charset.from_string "-&~^+=*/\\$!:")
                     (fun pe ->
-                      dseq (op pe pmax)
+                      dseq (op pe pmax) ~ae:false
                         ~cs:(Charset.from_string "-+0-9(")
                         (fun pop -> seq (expr pop)
                            (empty (fun (_,e2) b e1 -> (pop, b e1 e2))))))

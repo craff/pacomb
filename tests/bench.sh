@@ -33,3 +33,7 @@ dune exec $opts -- ./big_expr.exe 5 4 4 | time dune exec $opts ./calc_factor.exe
 
 echo "testing the calculator (with ocamlyacc)"
 dune exec $opts -- ./big_expr.exe 5 4 4 | time dune exec $opts ./calc_yacc/calc.exe > /dev/null
+
+echo "testing the calculator (with dseq and extensible)"
+echo "SLOW AND NEEDS A LOT OF MEMORY"
+dune exec $opts -- ./big_expr.exe 5 4 4 | time dune exec $opts ./calc_ext_bench.exe > /dev/null

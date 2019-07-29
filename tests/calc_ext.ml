@@ -89,8 +89,10 @@ let%parser lists sep f =
 
 let%parser rec
   expr pmax = (r::dseq (expr pmax)
+                  ~ae:false ~cs:(Charset.from_string "-&~^+=*/\\$!:")
                  (fun pe ->
                    dseq (op pe pmax)
+                     ~ae:false ~cs:(Charset.from_string "-+0-9(a-zA-Z")
                      (fun pop -> seq (expr pop)
                                    (empty (fun (_,e2) b e1 ->
                                         (pop, Idt(b,[|e1;e2|])))))))

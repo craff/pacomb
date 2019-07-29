@@ -39,17 +39,19 @@ val lexeme : 'a Lex.lexeme -> 'a t
     starts by parsing  using [g1], and then  parses the rest of  the input using
     [g2]. The result of  parsing with [g2] is then apply to  the result of [g1].
     The charset if  the set of characters  accepted by [g2] at  the beginning of
-    input. *)
-val seq : 'a t -> ?cs:Charset.t -> ('a -> 'b) t -> 'b t
+    input.  And [ae]  must be  false  only if  [g2]  does not  accept the  empty
+    sequence.*)
+val seq : 'a t -> ?ae:bool -> ?cs:Charset.t -> ('a -> 'b) t -> 'b t
 
 (**  [dseq  c1 c2]  is  a  dependant sequence,  contrary  to  [seq c1  c2],  the
     combinator used to parse after [c1] depends upon the first value returned by
-    [c1]. It is  a good idea to memoize  the function c2.  The charset  is an in
-    [seq], but you have to take a set that works for all possible values of type
-    ['a].  The separation  of ['a] and ['b]  in the smeantics of  [g1] allows to
-    depend on the  smallest set of possible  vaue which is important  in case of
+    [c1]. It is a good idea to memoize  the function c2. [ae] and [cs] are as in
+    [seq], but  you have to  take values that works  for all possible  values of
+    type ['a].  The separation of ['a] and  ['b] in the smeantics of [g1] allows
+    to depend on the smallest set of possible vaue which is important in case of
     memoisation. *)
-val dseq: ('a * 'b) t -> ?cs:Charset.t -> ('a -> ('b -> 'c) t)  -> 'c t
+val dseq: ('a * 'b) t -> ?ae:bool -> ?cs:Charset.t
+          -> ('a -> ('b -> 'c) t)  -> 'c t
 
 (** Combinator parsing with the first combinator and in case of failure with the
     second from  the same  position.  The optionnal  charset corresponds  to the
