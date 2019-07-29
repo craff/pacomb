@@ -130,7 +130,6 @@ let _ = assert (parse_string test0 "b" = 1)
 let _ = assert (parse_string test0b "ab" = 2)
 let _ = assert (parse_string test0b "a b" = 2)
 let _ = assert (parse_string test0b "  a  b  " = 2)
-
 let _ = assert (parse_string test1 (na 1) = 1)
 let _ = assert (parse_string test1 "" = 0)
 let _ = assert (parse_string test2 (na 10) = 10)
