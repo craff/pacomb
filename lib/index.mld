@@ -65,7 +65,9 @@ qitems ::= ()                                               Grammar.empty
        | non_empty_qitems                                          itself
 non_empty_qitems ::= qitem                                         itself
        | non_empty_qitems qitems                              Grammar.seq
-qitem ::= item | (epat :: item)         give a name if used in the action
+qitem ::= item
+       | (epat :: item)                 give a name if used in the action
+       | ((epat,epat) >: item)                     as above, but for dseq
 item ::= '...'                                  Grammar.term(Lex.char ())
        | CHAR(c)                                 Grammar.term(Lex.char c)
        | "..."                                Grammar.term(Lex.string ())
@@ -105,7 +107,27 @@ let%parser rec
 
 But when using this, beware that [x] is not available before the final action
 code, it can not be used for selecting  grammar rule. [(p::prio) => (x::g p) => x]
-will report [p] as unbounded.
+will report [p] as unbounded. To solve this, you can use dependent sequences,
+using [(x,y)>:item] will allow [x] (but not [y]) to be used both in the action
+and the rule. The separation with dependent and non dependent part is crucial
+as dependent grammar are memoised and you don't want "noise". Here is an
+exemple of grammar using this to implement an extensible calculator
+(see [tests/calc_ext.ml]):
+{[
+let%parser rec
+ expr pmax = ((pe,e1)>:expr pmax [@ae false] [@cs Charset.from_string "-&~^+=*/\\$!:"])
+               ((pop,b)>:op pe pmax [@ae false] [@cs Charset.from_string "-+0-9(a-zA-Z"])
+               ((__,e2)::expr pop)
+                      =>  (pop, b e1 e2)
+            ; (x::FLOAT)                          => (0.0,x)
+            ; '(' (e::expr_top) ')'               => (0.0,e)
+]}
+
+In this example, the [ae] and [cs] attribute allows to tell if
+the rest of the rule accepts an empty input ([ae]) and to give a possible
+character set at the beginning of this input. These must cover all values of
+the parameter to be correct. This can improve parsing performance a lot but
+is not mandatory for correction.
 
 Here are the meaning of let bindings for grammars through the ppx extension:
 - non recursive let bindings correspond to just a name for the grammar.
