@@ -288,6 +288,7 @@ let catalan =
   fn
 
 let _ =
+  Printf.printf "checking the number of parsetrees on an ambiguous example\n%!";
   for i = 0 to !catalan_max do
     let s = String.make i 'a' in
     let j = List.length (parse_all_string test13 s)
@@ -313,6 +314,19 @@ let chrono_parse g s =
   r
 
 let _ =
+  Printf.printf "sequence of 'a' right recursice\n%!";
+  for i = 10 downto 1 do
+    ignore (chrono_parse test1 (na (!seq_max/i * 1000)))
+  done
+
+let _ =
+  Printf.printf "sequence of 'a' left recursice\n%!";
+  for i = 10 downto 1 do
+    ignore (chrono_parse test3 (na (!seq_max/i * 1000)))
+  done
+
+let _ =
+  Printf.printf "sequence of comma separated sequences of 'a'\n%!";
   for i = 10 downto 1 do
     ignore (chrono_parse test6 (nas (!seq_max/i)))
   done
