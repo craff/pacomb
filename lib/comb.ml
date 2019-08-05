@@ -189,25 +189,25 @@ let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
               with Lex.NoParse -> fun () -> next env err) ()) err
          with Lex.NoParse -> fun () -> next env err) ()) err
 
+(** [test cs env] returns [true] if and only if the next character to parse in
+    the environment [env] is in the character set [cs]. *)
+let test cs e = Charset.mem cs (Input.get e.current_buf e.current_col)
+
 (** option combinator,  contrary to [alt] apply to [empty],  it uses the charset
     of the  continuation for prediction. Therefore  it is preferable not  to use
     empty in [alt] and use [option] instead.*)
-let option: 'a -> 'a t -> 'a t = fun x g1 ->
-  let f1 = ref 0 and f2 = ref 0 in
+let option: 'a -> Charset.t -> 'a t -> 'a t = fun x cs1 g1 ->
   fun env k err ->
-       (* one wants to  avoid incrementing f2 in err or f1 in  err. This way, if
-          f1 parses 50% and f2 the other 50%, we have f1 ~ f2 *)
-       if !f1 < !f2 then (g1 env k (fun () -> incr f1; k env err x))
-       else (k env (fun () -> incr f2; g1 env k err) x)
+    if test cs1 env then k env err x else g1 env k (fun () -> k env err x)
 
 (** Alternatives combinator. *)
-let alt : type a. a t -> a t -> a t = fun g1 g2 ->
-  let f1 = ref 0 and f2 = ref 0 in
+let alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t = fun cs1 g1 cs2 g2 ->
   fun env k err ->
-    (* one wants to avoid incrementing f2 in err or f1 in err. This way, if f1
-       parses 50% and f2 the other 50%, we have f1 ~ f2 *)
-    if !f1 < !f2 then (g1 env k (fun () -> incr f1; g2 env k err))
-    else (g2 env k (fun () -> incr f2; g1 env k err))
+    match (test cs1 env, test cs2 env) with
+    | (false, false) -> next env err
+    | (true , false) -> g1 env k err
+    | (false, true ) -> g2 env k err
+    | (true , true ) -> g1 env k (fun () -> g2 env k err)
 
 (** Application of a semantic function to alter a combinator. *)
 let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k err ->

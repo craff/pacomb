@@ -579,6 +579,54 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
        if s.ne <> EFail then g.ne <- ne_lr g1 g.k s;
      end
 
+(** compute the characters set accepted at the beginning of the input *)
+let first_charset : type a. a grne -> Charset.t = fun g ->
+
+  let rec fn : type a. a grne -> bool * Charset.t = fun g ->
+    match g with
+    | EFail -> (false, Charset.empty)
+    | ETerm(c) -> (false, c.c)
+    | EAlt(gs) ->
+       List.fold_left (fun (shift,s) g ->
+           let (shift',s') = fn g in
+           (shift || shift', Charset.union s s')) (false, Charset.empty) gs
+    | ESeq(g,g2) ->
+       let (shift, s as r) = fn g in
+       if shift then
+         begin
+           let (shift, s') = fn g2.ne in
+           assert (not shift);
+           (false, Charset.union s s')
+         end
+       else r
+    | EDSeq(g,_) ->
+       let (shift, _ as r) = fn g in
+       if shift then (false, Charset.full) else r (* FIXME, reintroduce or not ? *)
+    | EAppl(g,_) -> fn g
+    | ELr(g,_,_) -> fn g
+    | ERkey _ -> (true, Charset.empty)
+    | ERef g -> gn g
+    | EPush g -> fn g
+    | ERead(_,g) -> fn g
+    | ERPos g -> fn g
+    | ECache g -> fn g
+    | ELayout(_,g,cfg) -> if cfg.old_blanks_before
+                             && not cfg.old_blanks_after
+                          then fn g else (false, Charset.full)
+    | ETmp -> assert false
+
+  and gn : type a. a grammar -> bool * Charset.t = fun g ->
+    assert g.recursive;
+    match g.charset with
+    | Some c -> (false, c)
+    | None ->
+       g.charset <- Some Charset.empty;
+       let (shift, r) = fn g.ne in
+       assert (not shift);
+       g.charset <- Some r;
+       (shift, r)
+  in snd (fn g)
+
 let split_list l =
   let rec fn acc1 acc2 =
     function [] -> acc1, acc2
@@ -607,10 +655,13 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
 
  and compile_alt : type a. a grne list -> a Comb.t = fun gs ->
    let rec fn = function
-     | [] -> Comb.fail
-     | [g] -> compile_ne g
-     | l -> let (l1,l2) = split_list l in Comb.alt (fn l1) (fn l2)
-   in fn gs
+     | [] -> (Charset.empty, Comb.fail)
+     | [g] -> (first_charset g, compile_ne g)
+     | l -> let (l1,l2) = split_list l in
+            let (cs1,c1) = fn l1 in
+            let (cs2,c2) = fn l2 in
+            (Charset.union cs1 cs2, Comb.alt cs1 c1 cs2 c2)
+   in snd (fn gs)
 
  and compile : type a. bool -> a grammar -> a Comb.t = fun ne g ->
   factor_empty g;
@@ -638,7 +689,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   let e = if ne then None else g.e in
   match e with
   | Some x ->
-     if g.ne = EFail then Comb.empty x else Comb.option x cg
+     if g.ne = EFail then Comb.empty x else Comb.option x (first_charset g.ne) cg
   | None ->
      if g.ne = EFail then Comb.fail else cg
 
