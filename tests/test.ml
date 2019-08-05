@@ -31,7 +31,9 @@ let test0 = alt [char_a; char_b]
 
 let test0b = seq char_a char_b (+)
 
-let test1 = fixpoint (fun r -> alt [empty 0; seq char_a r (+)])
+let test1 = fixpoint (fun r -> alt [empty 0; seq char_a r (fun x y -> Printf.printf "%d + %d\n%!" x y; x + y)])
+
+let test1_lazy = fixpoint (fun r -> alt [empty (lazy 0); seq char_a r (fun x y -> lazy (let y = Lazy.force y in Printf.printf "%d + %d\n%!" x y; x + y))])
 
 let test2 = fixpoint (fun r -> alt [empty 0
                                   ; seq char_a r (+)
@@ -123,6 +125,7 @@ let test15 = term (Lex.float ())
 let test16 = term (Lex.char_lit ())
 let test17 = term (Lex.string_lit ())
 
+(*
 let _ = assert (parse_string test0 "a" = 1)
 let _ = assert_fail (fun () -> parse_string test0 "")
 let _ = assert_fail (fun () -> parse_string test0 "c")
@@ -132,6 +135,10 @@ let _ = assert (parse_string test0b "a b" = 2)
 let _ = assert (parse_string test0b "  a  b  " = 2)
 
 let _ = assert (parse_string test1 (na 1) = 1)
+ *)
+(*let _ = assert (parse_string test1 (na 10000) = 10000)*)
+let _ = assert (Lazy.force (parse_string test1_lazy (na 10000)) = 10000)
+               (*
 let _ = assert (parse_string test1 "" = 0)
 let _ = assert (parse_string test2 (na 10) = 10)
 let _ = assert (parse_string test2 "" = 0)
@@ -272,31 +279,6 @@ let parse_all_string g s =
   let s = Input.from_string s in
   parse_all_buffer g Lex.noblank s 0
 
-let catalan =
-  let memo = Hashtbl.create 128 in
-  let rec fn n =
-    if n = 0 then 1 else if n = 1 then 1 else
-    try Hashtbl.find memo n
-    with Not_found ->
-      let r = ref 0 in
-      for i = 0 to n-1 do
-        r := fn i * fn (n - i - 1) + !r
-      done;
-      Hashtbl.add memo n !r;
-      !r
-  in
-  fn
-
-let _ =
-  Printf.printf "checking the number of parsetrees on an ambiguous example\n%!";
-  for i = 0 to !catalan_max do
-    let s = String.make i 'a' in
-    let j = List.length (parse_all_string test13 s)
-    and k = catalan i in
-    Printf.printf "catalan: %d=%d=%d\n%!" i j k ;
-    assert (j = k)
-  done
-
 let nas p =
   let rec fn p =
     if p = 0 then []
@@ -330,3 +312,29 @@ let _ =
   for i = 10 downto 1 do
     ignore (chrono_parse test6 (nas (!seq_max/i)))
   done
+
+let catalan =
+  let memo = Hashtbl.create 128 in
+  let rec fn n =
+    if n = 0 then 1 else if n = 1 then 1 else
+    try Hashtbl.find memo n
+    with Not_found ->
+      let r = ref 0 in
+      for i = 0 to n-1 do
+        r := fn i * fn (n - i - 1) + !r
+      done;
+      Hashtbl.add memo n !r;
+      !r
+  in
+  fn
+
+let _ =
+  Printf.printf "checking the number of parsetrees on an ambiguous example\n%!";
+  for i = 0 to !catalan_max do
+    let s = String.make i 'a' in
+    let j = List.length (parse_all_string test13 s)
+    and k = catalan i in
+    Printf.printf "catalan: %d=%d=%d\n%!" i j k ;
+    assert (j = k)
+  done
+                *)

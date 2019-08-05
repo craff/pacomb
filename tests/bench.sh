@@ -8,7 +8,7 @@ cd tests
 dune build $opts calc.exe test.exe big_expr.exe hard.exe
 
 echo general tests
-dune exec $opts -- ./test.exe --catalan 15 --sequence 10000
+dune exec $opts -- ./test.exe --catalan 12 --sequence 10000
 
 echo testing a grammar with cache
 dune exec $opts -- ./hard.exe 100000

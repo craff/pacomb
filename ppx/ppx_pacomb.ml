@@ -74,6 +74,9 @@ let rec exp_to_pattern e =
   | Pexp_open(_,m,e) ->
      let (name, pat) = exp_to_pattern e in
      (name, Pat.open_ ~loc m  pat)
+  | Pexp_lazy(e) ->
+     let (name, pat) = exp_to_pattern e in
+     (name, Pat.lazy_ ~loc pat)
   | _ -> warn loc "expression eft of \"::\" does not represent a pattern"
 
 (* transform an expression into a terminal *)

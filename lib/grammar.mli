@@ -33,7 +33,7 @@ val term : ?name:string -> 'a Lex.terminal -> 'a grammar
 val appl : ?name:string -> 'a grammar -> ('a -> 'b) -> 'b grammar
 
 (** [alt [g1;g2;...;gn]] parses with [g1] and if it fails then [g2] and so on *)
-val alt : ?name:string -> 'a grammar list -> 'a grammar
+val alt : ?name:string -> ?exclusive:bool -> 'a grammar list -> 'a grammar
 
 (** [seq g1 g2 f] parse with g1 and then with g2 for the rest of the input, uses
     [f] to combine both semantics *)
@@ -46,8 +46,7 @@ val seq2 : 'a grammar -> 'b grammar -> 'b grammar
     may depend  upon the semantics  of [g1]. This is  not very efficient  as the
     grammar [g2] must be compiled at  parsing time.  [g2] is memoized by default
     to partially overcome this fact. *)
-val dseq : ('a * 'b) grammar -> ?ae:bool -> ?cs:Charset.t
-           -> ('a -> ('b -> 'c) grammar) -> 'c grammar
+val dseq : ('a * 'b) grammar -> ('a -> ('b -> 'c) grammar) -> 'c grammar
 
 (** [lpos  g] is identical  to [g] but passes  the position just  before parsing
     with [g] to the semantical action of [g] *)
@@ -121,11 +120,6 @@ val grammar_family : ?param_to_string:('a -> string) -> string
     parsing see the [Comb] module *)
 val compile : 'a grammar -> 'a Comb.t
 
-(** [grammar_info g]  returns [(b,cs)] where [b] is true  is the grammar accepts
-    the  empty input  and  where [cs]  is  the characters  set  accepted at  the
-    beginnning of the input. *)
-val grammar_info : 'a grammar -> bool * Charset.t
-
 (** gives the grammar name *)
 val grammar_name : 'a grammar -> string
 
@@ -146,7 +140,7 @@ val parse_channel : 'a grammar -> Lex.blank -> in_channel -> 'a
     that can be reached by the grammar. The charset is the character accepted at
     the end of input. Mainly useful with 'eof' when [blank_after] is [true]. *)
 val partial_parse_buffer : 'a grammar -> Lex.blank -> ?blank_after:bool ->
-        ?cs:Charset.t -> Input.buffer -> int -> 'a * Input.buffer * int
+        Input.buffer -> int -> 'a * Input.buffer * int
 
 (** Returns all possible parse trees.  Usefull for natural languages but also to
     debug ambiguity in a supposed non ambiguous grammar. *)

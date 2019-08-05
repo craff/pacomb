@@ -11,10 +11,9 @@
 type 'a t
 
 (** Partial parsing.  Beware, the returned position is not  the maximum position
-    that can be reached by the grammar. The charset is the character accepted at
-    the end of input. Mainly useful with 'eof' when [blank_after] is [true]. *)
+    that can be reached by the grammar.  *)
 val partial_parse_buffer : 'a t -> Lex.blank -> ?blank_after:bool ->
-        ?cs:Charset.t -> Input.buffer -> int -> 'a * Input.buffer * int
+        Input.buffer -> int -> 'a * Input.buffer * int
 
 (** Returns all possible parse trees.  Usefull for natural languages but also to
     debug ambiguity in a supposed non ambiguous grammar. *)
@@ -38,32 +37,27 @@ val lexeme : 'a Lex.lexeme -> 'a t
 (**  [seq g1  g2] sequences  the parsers  [g1] and  [g2].  The  resulting parser
     starts by parsing  using [g1], and then  parses the rest of  the input using
     [g2]. The result of  parsing with [g2] is then apply to  the result of [g1].
-    The charset if  the set of characters  accepted by [g2] at  the beginning of
-    input.  And [ae]  must be  false  only if  [g2]  does not  accept the  empty
-    sequence.*)
-val seq : 'a t -> ?ae:bool -> ?cs:Charset.t -> ('a -> 'b) t -> 'b t
+ *)
+val seq : 'a t -> ('a -> 'b) t -> 'b t
 
-(**  [dseq  c1 c2]  is  a  dependant sequence,  contrary  to  [seq c1  c2],  the
+(** [dseq c1 c2] is a dependant sequence, contrary to [seq c1 c2], the
     combinator used to parse after [c1] depends upon the first value returned by
-    [c1]. It is a good idea to memoize  the function c2. [ae] and [cs] are as in
-    [seq], but  you have to  take values that works  for all possible  values of
-    type ['a].  The separation of ['a] and  ['b] in the smeantics of [g1] allows
-    to depend on the smallest set of possible vaue which is important in case of
-    memoisation. *)
-val dseq: ('a * 'b) t -> ?ae:bool -> ?cs:Charset.t
-          -> ('a -> ('b -> 'c) t)  -> 'c t
+    [c1]. It is a good idea to memoize the function c2.  The separation of ['a]
+    and ['b] in the smeantics of [g1] allows to depend on the smallest set of
+    possible vaue which is important in case of memoisation. *)
+val dseq: ('a * 'b) t -> ('a -> ('b -> 'c) t)  -> 'c t
 
 (** Combinator parsing with the first combinator and in case of failure with the
     second from  the same  position.  The optionnal  charset corresponds  to the
     charaters accepted at the beginning of  the input for each combinators.  The
     charset  must be  Charset.full if  the corresponding  combinator accept  the
     empty input *)
-val alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t
+val alt : 'a t -> 'a t -> 'a t
 
 (** [option a ~cs  c] is an optimisation for [alt (empty a)  ~cs c].  In fact it
     is better to use [alt] with grammar  not accepting empty and use [option] to
     deal with an empty case *)
-val option: 'a -> Charset.t -> 'a t -> 'a t
+val option: 'a -> 'a t -> 'a t
 
 (** Parses with the given combinator and transforms the semantics with the given
     function *)
@@ -83,11 +77,11 @@ val read : int -> (Pos.t -> 'a) t -> 'a t
 (** Same as above with the position to the right *)
 val right_pos : (Pos.t -> 'a) t -> 'a t
 
-(** [lr ~cs c1 v c2] is an optimized version  of [let rec r = seq c1 (seq r c2)]
+(** [lr c1 v c2] is an optimized version  of [let rec r = seq c1 (seq r c2)]
     which is  illegal as it  is left recursive  and loops. The  optional charset
     indicates the characteres accepted by [c2] at the beginning of input. [v] is
     like variable bound in [c2], see [read_tbl] below *)
-val lr : 'a t -> Charset.t -> 'a Assoc.key -> 'a t -> 'a t
+val lr : 'a t -> 'a Assoc.key -> 'a t -> 'a t
 
 (** combinator to  access the value stored by  lr. It must be uses  as prefix of
     [c2] in [lr c1 c2].  For instance, the coding  of [let rec r = seq c1 (seq r
