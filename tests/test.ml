@@ -48,7 +48,7 @@ let star g = fixpoint (fun r -> alt [seq r g (+); empty 0])
 
 let plus g sep =
   let g' = appl g (fun x -> [x]) in
-  fixpoint (fun r -> alt [seq (seq1 g sep) r (fun x y -> x::y); g'])
+  fixpoint (fun r -> alt [seq r (seq2 sep g) (fun y x -> x::y); g'])
 
 let test6 = plus (star (char_a)) (term(Lex.char ',' ()))
 
@@ -148,10 +148,10 @@ let _ = assert (parse_string test5 "aaa" = 3)
 let _ = assert (parse_string test5 "" = 0)
 let _ = assert (parse_string test5 "ababa" = 5)
 let _ = assert (parse_string test6 "a" = [1])
-let _ = assert (parse_string test6 "a,aa,aaa,aa,a," = [1;2;3;2;1;0])
+let _ = assert (parse_string test6 "a,aa,aaa,aa,a," = List.rev [1;2;3;2;1;0])
 let _ = assert (parse_string test7 "b" = [(0,0,0)])
 let _ = assert (parse_string test7 "ab" = [(0,1,1)])
-let _ = assert (parse_string test7 "a,aa,aaab" = [(0,1,1);(2,2,4);(5,3,8)])
+let _ = assert (parse_string test7 "a,aa,aaab" = List.rev [(0,1,1);(2,2,4);(5,3,8)])
 let _ = assert (parse_string test8 "" = 0)
 let _ = assert (parse_string test8 "ab" = 1)
 let _ = assert (parse_string test8 "aaaabbbb" = 4)
@@ -294,7 +294,7 @@ let chrono_parse g s =
 let _ =
   Printf.printf "sequence of 'a' right recursive\n%!";
   for i = 10 downto 1 do
-    ignore (chrono_parse test1 (na (!seq_max/i * 5)))
+    ignore (chrono_parse test1 (na (!seq_max/i * 1)))
   done
 
 
