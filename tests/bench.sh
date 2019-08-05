@@ -16,8 +16,8 @@ dune exec $opts -- ./hard.exe 100000
 echo "testing sexp (with grammar/combinator)"
 dune exec $opts -- ./big_sexp.exe 5_000_000 | time dune exec $opts ./sexp.exe > /dev/null
 
-#echo "testing sexp with right recursion (with grammar/combinator)"
-#dune exec $opts -- ./big_sexp.exe 5_000_000 | time dune exec $opts ./sexp_rr.exe > /dev/null
+echo "testing sexp with right recursion (with grammar/combinator)"
+dune exec $opts -- ./big_sexp.exe 5_000_000 | time dune exec $opts ./sexp_rr.exe > /dev/null
 
 echo "testing sexp (with ocamlyacc)"
 dune exec $opts -- ./big_sexp.exe 5_000_000 | time dune exec $opts ./sexp_yacc/sexp.exe > /dev/null

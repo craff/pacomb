@@ -130,10 +130,8 @@ let _ = assert (parse_string test0 "b" = 1)
 let _ = assert (parse_string test0b "ab" = 2)
 let _ = assert (parse_string test0b "a b" = 2)
 let _ = assert (parse_string test0b "  a  b  " = 2)
-
 let _ = assert (parse_string test1 (na 1) = 1)
 let _ = assert (parse_string test1 (na 10) = 10)
-
 let _ = assert (parse_string test1 "" = 0)
 let _ = assert (parse_string test2 (na 10) = 10)
 let _ = assert (parse_string test2 "" = 0)
@@ -291,10 +289,11 @@ let chrono_parse g s =
   r
 
 (*  too slow ... *)
+
 let _ =
   Printf.printf "sequence of 'a' right recursive\n%!";
   for i = 10 downto 1 do
-    ignore (chrono_parse test1 (na (!seq_max/i * 1)))
+    ignore (chrono_parse test1 (na (!seq_max/i * 1000)))
   done
 
 
