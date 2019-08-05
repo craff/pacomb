@@ -40,7 +40,7 @@ type 'a grammar =
    | Fail : 'a grdf                        (** grammar that always fais *)
    | Empty : 'a -> 'a grdf                 (** accept only the empty input *)
    | Term : 'a Lex.t -> 'a grdf            (** terminals *)
-   | Alt  : bool * 'a t list -> 'a grdf    (** alternatived *)
+   | Alt  : 'a t list -> 'a grdf           (** alternatives *)
    | Appl : 'a t * ('a -> 'b) -> 'b grdf   (** application *)
    | Seq  : 'a t * ('a -> 'b) t -> 'b grdf
    (** sequence *)
@@ -69,7 +69,7 @@ type 'a grammar =
  and 'a grne =
    | EFail : 'a grne
    | ETerm : 'a terminal -> 'a grne
-   | EAlt  : bool * 'a grne list -> 'a grne
+   | EAlt  : 'a grne list -> 'a grne
    | EAppl : 'a grne * ('a -> 'b) -> 'b grne
    | ESeq  : 'a grne * ('a -> 'b) t -> 'b grne
    | EDSeq : ('a * 'b) grne * ('a -> ('b -> 'c) t) -> 'c grne
@@ -120,7 +120,7 @@ let print_grammar ?(def=true) ch s =
     match g with
     | EFail         -> pr "0"
     | ETerm t       -> pr "%s" t.n
-    | EAlt(_,gs)      -> pr "(%a)" (prl pg "|") gs
+    | EAlt(gs)      -> pr "(%a)" (prl pg "|") gs
     | EAppl(g,_)    -> pr "App(%a)" pg g
     | ESeq(g1,g2)   -> pr "%a%a" pg g1 pv g2
     | EDSeq(g1,_)   -> pr "%a???" pg g1
@@ -142,7 +142,7 @@ let print_grammar ?(def=true) ch s =
     | Fail         -> pr "0"
     | Empty _      -> pr "1"
     | Term t       -> pr "%s" t.n
-    | Alt(_,gs)    -> pr "(%a)" (prl pg "|") gs
+    | Alt(gs)    -> pr "(%a)" (prl pg "|") gs
     | Appl(g,_)    -> pr "App(%a)" pg g
     | Seq(g1,g2)   -> pr "%a%a" pg g1 pg g2
     | DSeq(g1,_)   -> pr "%a???" pg g1
@@ -206,15 +206,14 @@ let term ?name (x) =
   let name = match name with None -> x.Lex.n | Some n -> n in
   mkg ~name (Term x)
 
-let alt ?name ?(exclusive=false) l =
+let alt ?name l =
   let l = List.filter (fun g -> g.d <> Fail) l in
-  let l = List.map (function { d = Alt(e,ls); _ } when e = exclusive
-                                                       -> ls | x -> [x]) l in
+  let l = List.map (function { d = Alt(ls); _ } -> ls | x -> [x]) l in
   let l = List.flatten l in
   match l with
   | [] -> fail ()
   | [g] -> g
-  | l   -> mkg ?name (Alt(exclusive,l))
+  | l   -> mkg ?name (Alt(l))
 
 let appl ?name g f = mkg ?name (if g.d = Fail then Fail else Appl(g,f))
 
@@ -306,14 +305,14 @@ let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
     ) tbl)
 
 (** helpers for the constructors of 'a grne *)
-let ne_alt exclusive l =
+let ne_alt l =
   let l = List.filter (fun g -> g <> EFail) l in
-  let l = List.map (function EAlt(e,ls) when e = exclusive -> ls | x -> [x]) l in
+  let l = List.map (function EAlt(ls) -> ls | x -> [x]) l in
   let l = List.flatten l in
   match l with
   | [] -> EFail
   | [g] -> g
-  | l   -> EAlt(exclusive,l)
+  | l   -> EAlt(l)
 
 let ne_appl g f =
   match g with
@@ -384,7 +383,7 @@ let factor_empty g =
     | Fail -> None
     | Empty x -> Some x
     | Term _     -> None
-    | Alt(_,gs) -> List.iter fn gs;
+    | Alt(gs) -> List.iter fn gs;
                    let gn acc g = match acc with Some _ -> acc | None -> g.e in
                    List.fold_left gn None gs
     | Appl(g,f) -> fn g; (match g.e with
@@ -434,7 +433,7 @@ let factor_empty g =
     | Fail -> EFail
     | Empty _ -> EFail
     | Term(x) -> ETerm(x)
-    | Alt(ex,gs) -> List.iter hn gs; ne_alt ex (List.map get gs)
+    | Alt(gs) -> List.iter hn gs; ne_alt (List.map get gs)
     | Appl(g,f) -> hn g; ne_appl (get g) f
     | Seq(g1,g2) -> hn g1; hn g2;
                     let ga = ne_seq (get g1) g2 in
@@ -442,7 +441,7 @@ let factor_empty g =
                       | None   -> EFail
                       | Some x -> ne_appl (get g2) (fun y -> y x)
                     in
-                    ne_alt false [ga; gb]
+                    ne_alt [ga; gb]
     | DSeq(g1,g2) -> hn g1; let ga = ne_dseq (get g1) g2 in
                        let gb = match g1.e with
                          | None   -> EFail
@@ -451,7 +450,7 @@ let factor_empty g =
                                              ne_appl (get g2) (fun y -> y x')
                             (* FIXME, fn called twice on g2 x *)
                        in
-                       ne_alt false [ga; gb]
+                       ne_alt [ga; gb]
     | Lr(g1,k,g2) -> hn g1; hn g2; ne_lr (get g1) k g2
     | Rkey k    -> ERkey k
     | LPos(g1) -> hn g1; ne_lpos (get g1)
@@ -471,7 +470,7 @@ let remove_push : type a. a grammar -> unit =
     let cache = ref false in
     let rec fn : type a. bool -> a grne -> a grne =
       fun r -> function
-        | EAlt(ex,gs) -> ne_alt ex (List.map (fn r) gs)
+        | EAlt(gs) -> ne_alt (List.map (fn r) gs)
         | EAppl(g1,f) -> ne_appl (fn r g1) f
         | ESeq(g1,g2) -> ne_seq (fn r g1) g2
         | EDSeq(g1,g2) -> ne_dseq (fn r g1) g2
@@ -518,9 +517,9 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
       | EDSeq(g1,g2) ->
          let (g1, s1) = fn g1 in
          (ne_dseq g1 g2, dseq s1 g2)
-      | EAlt(ex,gs) ->
+      | EAlt(gs) ->
          let (gs,ss) = List.split (List.map fn gs) in
-         (ne_alt ex gs, alt ~exclusive:ex ss)
+         (ne_alt gs, alt ss)
       | ELr(g1,k,s)   ->
          let (g1,s1) = fn g1 in
          (ne_lr g1 k s, lr s1 k s)
@@ -592,7 +591,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   match g with
   | EFail -> Comb.fail
   | ETerm(c) -> Comb.lexeme c.f
-  | EAlt(ex,gs) -> compile_alt ex gs
+  | EAlt(gs) -> compile_alt gs
   | ESeq(g1,g2) -> Comb.seq (compile_ne g1) (compile false g2)
   | EDSeq(g1,g2) -> Comb.dseq (compile_ne g1) (fun x -> compile false (g2 x))
   | EAppl(g1,f) -> Comb.app (compile_ne g1) f
@@ -606,7 +605,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   | ELayout(b,g,cfg) -> Comb.change_layout ~config:cfg b (compile_ne g)
   | ETmp -> assert false
 
- and compile_alt : type a. bool -> a grne list -> a Comb.t = fun _ gs ->
+ and compile_alt : type a. a grne list -> a Comb.t = fun gs ->
    let rec fn = function
      | [] -> Comb.fail
      | [g] -> compile_ne g

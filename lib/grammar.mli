@@ -33,7 +33,7 @@ val term : ?name:string -> 'a Lex.terminal -> 'a grammar
 val appl : ?name:string -> 'a grammar -> ('a -> 'b) -> 'b grammar
 
 (** [alt [g1;g2;...;gn]] parses with [g1] and if it fails then [g2] and so on *)
-val alt : ?name:string -> ?exclusive:bool -> 'a grammar list -> 'a grammar
+val alt : ?name:string -> 'a grammar list -> 'a grammar
 
 (** [seq g1 g2 f] parse with g1 and then with g2 for the rest of the input, uses
     [f] to combine both semantics *)

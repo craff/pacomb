@@ -71,7 +71,7 @@ let next : env -> err -> res  = fun env err ->
 
 let before r1 r2 =
   match (r1,r2) with
-  | (R(env1,_,_,_), R(env2,_,_,_)) ->
+  | (Term(env1,_,_,_), Term(env2,_,_,_)) ->
      let p1 = Input.line_offset env1.current_buf + env1.current_col in
      let p2 = Input.line_offset env2.current_buf + env2.current_col in
      p1 <= p2
@@ -79,7 +79,7 @@ let before r1 r2 =
 
 let same r1 r2 =
   match (r1,r2) with
-  | (R(env1,_,_,_), R(env2,_,_,_)) ->
+  | (Term(env1,_,_,_), Term(env2,_,_,_)) ->
     let p1 = Input.line_offset env1.current_buf + env1.current_col in
     let p2 = Input.line_offset env2.current_buf + env2.current_col in
     p1 = p2
@@ -119,17 +119,17 @@ let scheduler : ?all:bool -> env -> 'a t -> ('a * env) list = fun ?(all=false) e
       | [] -> (match !tbl1 with
                | [] -> raise Exit
                | _  -> let t0,t1 = extract !tbl1 in tbl0 := t0; tbl1 := t1)
-      | S :: _ -> assert false
-      | (R(env,k,Some err,x)) :: l ->
-                                 tbl0 := R(env,k,None,x)::l;
+      | Skip :: _ -> assert false
+      | (Term(env,k,Some err,x)) :: l ->
+                                 tbl0 := Term(env,k,None,x)::l;
                                  (try
                                    let r = err () in
-                                   if r <> S then tbl1 := insert r !tbl1
+                                   if r <> Skip then tbl1 := insert r !tbl1
                                  with Not_found -> ())
-      | (R(env,k,None,x) as r0) :: l -> tbl0 := l;
+      | (Term(env,k,None,x) as r0) :: l -> tbl0 := l;
                                   (try
                                      let r = k env (fun _ -> raise Not_found) x in
-                                     if r <> S then
+                                     if r <> Skip then
                                        begin
                                          if same r r0 then
                                            tbl0 := r :: !tbl0
@@ -165,7 +165,7 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
            { env with buf_before_blanks ; col_before_blanks
                     ; current_buf ; current_col; lr = Assoc.empty }
          in
-         R (env,k, Some err, v)
+         Term (env,k, Some err, v)
      with Lex.NoParse -> fun () -> next env err) ()
 
 (** Sequence combinator. *)
@@ -338,7 +338,7 @@ let cache : type a. a t -> a t = fun g ->
         | (_, false) -> assert false (* Too late ?*)
         | (l, _    ) -> ptr := (k :: l, true)
       end;
-      S
+      Skip
     with Not_found ->
       let ptr = ref ([k], true) in
       Input.Tbl.add cache buf0 col0 ptr;
