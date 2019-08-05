@@ -33,6 +33,7 @@ val empty : 'a -> 'a t
 (** [lexeme l] is  a parser accepting the lexeme (or  terminal) [l], and returns
     the corresponding semantic value. *)
 val lexeme : 'a Lex.lexeme -> 'a t
+val direct_lexeme : 'a Lex.lexeme -> 'a t
 
 (**  [seq g1  g2] sequences  the parsers  [g1] and  [g2].  The  resulting parser
     starts by parsing  using [g1], and then  parses the rest of  the input using

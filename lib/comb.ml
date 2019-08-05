@@ -168,6 +168,25 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
          Term (env,k, Some err, v)
      with Lex.NoParse -> fun () -> next env err) ()
 
+(** Same as above but does not return to the scheduler, to use if
+    one knows the error has not changed, so the scheduler will do
+    nothing. *)
+let direct_lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
+    (try
+       let (v, buf_before_blanks, col_before_blanks) =
+         lex env.current_buf env.current_col
+       in
+       let (current_buf, current_col) =
+         env.blank_fun buf_before_blanks col_before_blanks
+       in
+       fun () ->
+         let env =
+           { env with buf_before_blanks ; col_before_blanks
+                    ; current_buf ; current_col; lr = Assoc.empty }
+         in
+         k env err v
+     with Lex.NoParse -> fun () -> next env err) ()
+
 (** Sequence combinator. *)
 let seq : 'a t -> ('a -> 'b) t -> 'b t = fun g1 g2 env kf err ->
   g1 env (
@@ -198,7 +217,7 @@ let test cs e = Charset.mem cs (Input.get e.current_buf e.current_col)
     empty in [alt] and use [option] instead.*)
 let option: 'a -> Charset.t -> 'a t -> 'a t = fun x cs1 g1 ->
   fun env k err ->
-    if test cs1 env then k env err x else g1 env k (fun () -> k env err x)
+    if test cs1 env then g1 env k (fun () -> k env err x) else k env err x
 
 (** Alternatives combinator. *)
 let alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t = fun cs1 g1 cs2 g2 ->

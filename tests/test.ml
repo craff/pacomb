@@ -31,9 +31,7 @@ let test0 = alt [char_a; char_b]
 
 let test0b = seq char_a char_b (+)
 
-let test1 = fixpoint (fun r -> alt [empty 0; seq char_a r (fun x y -> Printf.printf "%d + %d\n%!" x y; x + y)])
-
-let test1_lazy = fixpoint (fun r -> alt [empty (lazy 0); seq char_a r (fun x y -> lazy (let y = Lazy.force y in Printf.printf "%d + %d\n%!" x y; x + y))])
+let test1 = fixpoint (fun r -> alt [empty 0; seq char_a r (+)])
 
 let test2 = fixpoint (fun r -> alt [empty 0
                                   ; seq char_a r (+)
@@ -125,7 +123,6 @@ let test15 = term (Lex.float ())
 let test16 = term (Lex.char_lit ())
 let test17 = term (Lex.string_lit ())
 
-(*
 let _ = assert (parse_string test0 "a" = 1)
 let _ = assert_fail (fun () -> parse_string test0 "")
 let _ = assert_fail (fun () -> parse_string test0 "c")
@@ -135,10 +132,8 @@ let _ = assert (parse_string test0b "a b" = 2)
 let _ = assert (parse_string test0b "  a  b  " = 2)
 
 let _ = assert (parse_string test1 (na 1) = 1)
- *)
-(*let _ = assert (parse_string test1 (na 10000) = 10000)*)
-let _ = assert (Lazy.force (parse_string test1_lazy (na 10000)) = 10000)
-               (*
+let _ = assert (parse_string test1 (na 10) = 10)
+
 let _ = assert (parse_string test1 "" = 0)
 let _ = assert (parse_string test2 (na 10) = 10)
 let _ = assert (parse_string test2 "" = 0)
@@ -295,14 +290,16 @@ let chrono_parse g s =
   Printf.printf "%f seconds\n%!" (t1 -. t0);
   r
 
+(*  too slow ... *)
 let _ =
-  Printf.printf "sequence of 'a' right recursice\n%!";
+  Printf.printf "sequence of 'a' right recursive\n%!";
   for i = 10 downto 1 do
-    ignore (chrono_parse test1 (na (!seq_max/i * 1000)))
+    ignore (chrono_parse test1 (na (!seq_max/i * 5)))
   done
 
+
 let _ =
-  Printf.printf "sequence of 'a' left recursice\n%!";
+  Printf.printf "sequence of 'a' left recursive\n%!";
   for i = 10 downto 1 do
     ignore (chrono_parse test3 (na (!seq_max/i * 1000)))
   done
@@ -310,7 +307,7 @@ let _ =
 let _ =
   Printf.printf "sequence of comma separated sequences of 'a'\n%!";
   for i = 10 downto 1 do
-    ignore (chrono_parse test6 (nas (!seq_max/i)))
+    ignore (chrono_parse test6 (nas (!seq_max/i/4)))
   done
 
 let catalan =
@@ -337,4 +334,3 @@ let _ =
     Printf.printf "catalan: %d=%d=%d\n%!" i j k ;
     assert (j = k)
   done
-                *)
