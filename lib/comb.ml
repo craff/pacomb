@@ -88,6 +88,17 @@ let rec eval : type a.a app -> a = fun (A(x,args)) ->
   in
   fn x args
 
+let eval_largs : type a. a cont -> a cont =
+  let rec fn : type a b. (a,b) args -> (a,b) args = function
+    | End -> End
+    | Arg(args,x) -> Arg(fn args, x)
+    | LArg(args,x) -> Arg(fn args, eval x)
+    | App(args,x) -> App(fn args,x)
+    | Gra(_,_) -> assert false (* not in continuation, FIXME use a phantom type param *)
+    | Cns(_,_) -> assert false  (* not in continuation *)
+  in
+  fun (C(k,args)) -> C(k,fn args)
+
 (** [next env  err] updates the current maximum position  [env.max_pos] and then
     calls the [err] function. *)
 let next : env -> err -> res  = fun env err ->
@@ -194,7 +205,7 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
            { env with buf_before_blanks ; col_before_blanks
                     ; current_buf ; current_col; lr = Assoc.empty }
          in
-         Lexm (env,k, Some err, v)
+         Lexm (env,eval_largs k, Some err, v)
      with Lex.NoParse -> fun () -> next env err) ()
 
 (** Same as above but does not return to the scheduler, to use if
@@ -278,7 +289,7 @@ let push : 'a t -> 'a t = fun g  env k err ->
     let env = { env with left_pos_stack = pos :: env.left_pos_stack } in
     let k env err v = callk k { env with left_pos_stack = tail_pos env } err v in
     g env (ink k) err (* NOTE: Need acces to env, so callk necessary
-                         for left pos, this is ok *)
+                         for left pos, this is ok, push are factored *)
 
 (** Read the n-th position from the (left position) stack. *)
 let read : int -> (Pos.t -> 'a) t -> 'a t = fun n g env (C(k,args)) err ->
@@ -295,7 +306,7 @@ let right_pos : type a.(Pos.t -> a) t -> a t = fun g env k err ->
       callk k env err (A(fn,Gra(args,pos)))
     in
     g env (ink k) err (* NOTE: Need acces to env, so callk necessary,
-                         FIXME: bad for right recursion *)
+                         tel user to absolutely avoid that, take position from parsetree *)
 
 (** [lr g  gf] is the combinator used to  eliminate left recursion. Intuitively,
     it parses using  the "grammar" [g gf*].  An equivalent  combinator CANNOT be
@@ -305,9 +316,12 @@ let right_pos : type a.(Pos.t -> a) t -> a t = fun g env k err ->
 let lr : 'a t -> 'a Assoc.key -> 'a t -> 'a t = fun g key gf env k err ->
     let rec klr env err v =
       let err () =
-          let lr = Assoc.add key (eval v) env.lr in
-          let env0 = { env with lr } in
-          gf env0 (ink klr) err
+          (try
+            let lr = Assoc.add key (eval v) env.lr in
+            let env0 = { env with lr } in
+            fun () -> gf env0 (ink klr) err
+          with
+            Lex.NoParse -> err) ()
         in
         callk k env err v
     in
