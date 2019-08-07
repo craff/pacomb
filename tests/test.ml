@@ -32,12 +32,16 @@ let test0 = alt [char_a; char_b]
 let test0b = seq char_a char_b (+)
 
 let test1 = fixpoint (fun r -> alt [empty 0; seq char_a r (+)])
+let test1pl = fixpoint (fun r -> alt [empty 0; lpos (seq char_a r (fun x y _ -> x + y))])
+let test1pr = fixpoint (fun r -> alt [empty 0; rpos (seq char_a r (fun x y _ -> x + y))])
 
 let test2 = fixpoint (fun r -> alt [empty 0
                                   ; seq char_a r (+)
                                   ; seq char_b r (+)])
 
 let test3 = fixpoint (fun r -> alt [empty 0; seq r char_a (+)])
+let test3pl = fixpoint (fun r -> alt [empty 0; lpos (seq r char_a (fun x y _ -> x + y))])
+let test3pr = fixpoint (fun r -> alt [empty 0; lpos (seq r char_a (fun x y _ -> x + y))])
 
 let test4 = fixpoint (fun r -> alt [empty 0; char_b; seq r char_a (+)])
 
@@ -296,11 +300,35 @@ let _ =
     ignore (chrono_parse test1 (na (!seq_max/i * 1000)))
   done
 
+let _ =
+  Printf.printf "sequence of 'a' right recursive, with left pos\n%!";
+  for i = 10 downto 1 do
+    ignore (chrono_parse test1pl (na (!seq_max/i * 10)))
+  done
+
+let _ =
+  Printf.printf "sequence of 'a' right recursive, with right pos\n%!";
+  for i = 10 downto 1 do
+    ignore (chrono_parse test1pr (na (!seq_max/i * 10)))
+  done
+
 
 let _ =
   Printf.printf "sequence of 'a' left recursive\n%!";
   for i = 10 downto 1 do
     ignore (chrono_parse test3 (na (!seq_max/i * 1000)))
+  done
+
+let _ =
+  Printf.printf "sequence of 'a' left recursive with left pos\n%!";
+  for i = 10 downto 1 do
+    ignore (chrono_parse test3pl (na (!seq_max/i * 1000)))
+  done
+
+let _ =
+  Printf.printf "sequence of 'a' left recursive with right pos\n%!";
+  for i = 10 downto 1 do
+    ignore (chrono_parse test3pr (na (!seq_max/i * 1000)))
   done
 
 let _ =
