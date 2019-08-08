@@ -303,13 +303,13 @@ let _ =
 let _ =
   Printf.printf "sequence of 'a' right recursive, with left pos\n%!";
   for i = 10 downto 1 do
-    ignore (chrono_parse test1pl (na (!seq_max/i * 10)))
+    ignore (chrono_parse test1pl (na (!seq_max/i * 1000)))
   done
 
 let _ =
   Printf.printf "sequence of 'a' right recursive, with right pos\n%!";
   for i = 10 downto 1 do
-    ignore (chrono_parse test1pr (na (!seq_max/i * 10)))
+    ignore (chrono_parse test1pr (na (!seq_max/i * 1000)))
   done
 
 
