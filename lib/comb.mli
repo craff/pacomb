@@ -68,21 +68,23 @@ val app : 'a t -> ('a -> 'b) -> 'b t
     parsing input as argument to the action *)
 val left_pos : (Pos.t -> 'a) t -> 'a t
 
+(** Same as above with the position to the right *)
+val right_pos : (Pos.t -> 'a) t -> 'a t
+
 (** To eliminate left  recursion, lpos has to be left factored.   if lpos is one
     single combinator, this adds a lot of closures in action code. To solve this
     problem, lpos is  splitted in two combinators, one that  pushes the position
     to a stack and pops after parsing and another that reads the position. *)
-val push : 'a t -> 'a t
-val read : int -> (Pos.t -> 'a) t -> 'a t
-
-(** Same as above with the position to the right *)
-val right_pos : (Pos.t -> 'a) t -> 'a t
+val read_pos : Pos.t Assoc.key -> (Pos.t -> 'a) t -> 'a t
 
 (** [lr c1 v c2] is an optimized version  of [let rec r = seq c1 (seq r c2)]
     which is  illegal as it  is left recursive  and loops. The  optional charset
     indicates the characteres accepted by [c2] at the beginning of input. [v] is
     like variable bound in [c2], see [read_tbl] below *)
 val lr : 'a t -> 'a Assoc.key -> 'a t -> 'a t
+
+(** Same as above, but also store the position *)
+val lr_pos : 'a t -> 'a Assoc.key -> Pos.t Assoc.key -> 'a t -> 'a t
 
 (** combinator to  access the value stored by  lr. It must be uses  as prefix of
     [c2] in [lr c1 c2].  For instance, the coding  of [let rec r = seq c1 (seq r
