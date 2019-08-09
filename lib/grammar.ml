@@ -6,7 +6,7 @@ type layout_config = Comb.layout_config
 type 'a grammar =
   { mutable d : 'a grdf   (** the definition of the grammar *)
   ; n : string            (** name of the grammar *)
-  ; k : 'a Assoc.key      (** a key used mainly to detect recursion *)
+  ; k : 'a Comb.key       (** a key used mainly to detect recursion *)
   ; recursive : bool      (** really means declared first and defined after,
                               using declare/set_grammar *)
   ; mutable phase : phase (** which transformation phase reached for that
@@ -44,12 +44,12 @@ type 'a grammar =
    (** sequence *)
    | DSeq : ('a * 'b) t * Charset.t * ('a -> ('b -> 'c) t) -> 'c grdf
    (** dependant sequence *)
-   | Lr   : 'a t * 'a Assoc.key * Pos.t Assoc.key option * 'a t -> 'a grdf
+   | Lr   : 'a t * 'a Comb.key * Pos.t Assoc.key option * 'a t -> 'a grdf
    (** Lr(g1,g2) represents g1 g2* and is used to eliminate left recursion.  It
                                                can not be exposed as left
                                                recursion under Lr is not
                                                supported *)
-   | Rkey : 'a Assoc.key -> 'a grdf
+   | Rkey : 'a Comb.key -> 'a grdf
    | LPos : Pos.t Assoc.key option * (Pos.t -> 'a) t -> 'a grdf
    (** read the postion before parsing*)
    | RPos : (Pos.t -> 'a) t -> 'a grdf     (** read the postion after parsing *)
@@ -69,9 +69,9 @@ type 'a grammar =
    | EAppl : 'a grne * ('a -> 'b) -> 'b grne
    | ESeq  : 'a grne * ('a -> 'b) t -> 'b grne
    | EDSeq : ('a * 'b) grne * Charset.t * ('a -> ('b -> 'c) t) -> 'c grne
-   | ELr   : 'a grne * 'a Assoc.key * Pos.t Assoc.key option * 'a grammar
+   | ELr   : 'a grne * 'a Comb.key * Pos.t Assoc.key option * 'a grammar
                -> 'a grne
-   | ERkey : 'a Assoc.key -> 'a grne
+   | ERkey : 'a Comb.key -> 'a grne
    | ERef  : 'a t -> 'a grne
    | ELPos : Pos.t Assoc.key option * (Pos.t -> 'a) grne -> 'a grne
    | ERPos : (Pos.t -> 'a) grne -> 'a grne

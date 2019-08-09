@@ -77,14 +77,18 @@ val right_pos : (Pos.t -> 'a) t -> 'a t
     to a stack and pops after parsing and another that reads the position. *)
 val read_pos : Pos.t Assoc.key -> (Pos.t -> 'a) t -> 'a t
 
+(** key used by lr below *)
+type 'a app
+type 'a key = 'a app Assoc.key
+
 (** [lr c1 v c2] is an optimized version  of [let rec r = seq c1 (seq r c2)]
     which is  illegal as it  is left recursive  and loops. The  optional charset
     indicates the characteres accepted by [c2] at the beginning of input. [v] is
     like variable bound in [c2], see [read_tbl] below *)
-val lr : 'a t -> 'a Assoc.key -> 'a t -> 'a t
+val lr : 'a t -> 'a key -> 'a t -> 'a t
 
 (** Same as above, but also store the position *)
-val lr_pos : 'a t -> 'a Assoc.key -> Pos.t Assoc.key -> 'a t -> 'a t
+val lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t
 
 (** combinator to  access the value stored by  lr. It must be uses  as prefix of
     [c2] in [lr c1 c2].  For instance, the coding  of [let rec r = seq c1 (seq r
@@ -92,7 +96,7 @@ val lr_pos : 'a t -> 'a Assoc.key -> Pos.t Assoc.key -> 'a t -> 'a t
     ommited the actions.  This way of  coding left recursion avoids to transform
     the action and  produce closure. The code for elimination  of left recursion
     is also much simpler *)
-val read_tbl : 'a Assoc.key -> 'a t
+val read_tbl : 'a key -> 'a t
 
 (** Access to a reference to a combinator, used by Grammar.compile for recursive
     grammars (not for left recursion *)

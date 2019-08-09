@@ -315,18 +315,19 @@ let read_pos : Pos.t Assoc.key -> (Pos.t -> 'a) t -> 'a t =
     let pos = try Assoc.find key env.lr with Not_found -> assert false in
     g env (arg k pos) err
 
+(** key used by lr below *)
+type 'a key = 'a app Assoc.key
 
 (** [lr g  gf] is the combinator used to  eliminate left recursion. Intuitively,
     it parses using  the "grammar" [g gf*].  An equivalent  combinator CANNOT be
     defined as [seq Charset.full g cs (let rec r = seq cs r cs gf in r)].
     NOTE: left recusion forces evaluation and this is good!
 *)
-let lr : 'a t -> 'a Assoc.key -> 'a t -> 'a t = fun g key gf env k err ->
+let lr : 'a t -> 'a key -> 'a t -> 'a t = fun g key gf env k err ->
     let rec klr env err v =
       let err () =
         (try
-            let x = eval v in
-            let lr = Assoc.add key x env.lr in
+            let lr = Assoc.add key v env.lr in
             let env0 = { env with lr } in
             fun () -> gf env0 (ink klr) err
           with
@@ -336,14 +337,13 @@ let lr : 'a t -> 'a Assoc.key -> 'a t -> 'a t = fun g key gf env k err ->
     in
     g env (ink klr) err
 
-let lr_pos : 'a t -> 'a Assoc.key -> Pos.t Assoc.key -> 'a t -> 'a t =
+let lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t =
   fun g key pkey gf env k err ->
     let pos = Pos.get_pos env.current_buf env.current_col in
     let rec klr env err v =
       let err () =
         (try
-            let x = eval v in
-            let lr = Assoc.add key x env.lr in
+            let lr = Assoc.add key v env.lr in
             let lr = Assoc.add pkey pos lr in
             let env0 = { env with lr } in
             fun () -> gf env0 (ink klr) err
@@ -355,9 +355,9 @@ let lr_pos : 'a t -> 'a Assoc.key -> Pos.t Assoc.key -> 'a t -> 'a t =
     g env (ink klr) err
 
 (** combinator to access the value stored by lr*)
-let read_tbl : 'a Assoc.key -> 'a t = fun key env k err ->
+let read_tbl : 'a key -> 'a t = fun key env k err ->
     let v = try Assoc.find key env.lr with Not_found -> assert false in
-    callk k env err (A(v,End))
+    callk k env err v
 
 
 (** Combinator under a refrerence used to implement recursive grammars. *)
