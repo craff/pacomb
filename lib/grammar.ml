@@ -620,7 +620,7 @@ let split_list l =
 let rec compile_ne : type a. bool -> a grne -> a Comb.t = fun direct g ->
   match g with
   | EFail -> Comb.fail
-  | ETerm(c) -> (*if direct then Comb.direct_lexeme c.f else *) Comb.lexeme c.f
+  | ETerm(c) -> if direct then Comb.direct_lexeme c.f else Comb.lexeme c.f
   | EAlt(gs) -> compile_alt gs
   | ESeq(g1,g2) -> Comb.seq (compile_ne direct g1) (compile false true g2)
   | EDSeq(g1,g2) -> Comb.dseq (compile_ne direct g1) (fun x -> compile false true (g2 x))

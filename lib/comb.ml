@@ -52,7 +52,11 @@ type err = unit -> res
                    we are already parsing the same grammar at the same position. *)
 
 (** Type of a parsing continuation. *)
- and 'a cont = C : (env -> err -> 'b app -> res) * ('a,'b,[`Ct]) args -> 'a cont [@unboxed]
+ and 'a cont =
+   | C : (env -> err -> 'b app -> res) * ('a,'b,[`Ct]) args
+         -> 'a cont [@unboxed]
+   | P : (env -> err -> 'b app -> res) * ('a,'b,[`Ct]) args * Pos.t ref
+         -> 'a cont [@unboxed]
 
  and 'a app = A : 'b * ('b,'a,[`At]) args -> 'a app [@unboxed]
 
@@ -60,7 +64,7 @@ type err = unit -> res
    | End : ('a,'a,'t) args
    | Arg : ('b, 'c,'t) args * 'a -> ('a -> 'b,'c,'t) args
    | LArg : ('b, 'c,'t) args * 'a app -> ('a -> 'b,'c,'t) args
-   | RPos : ('b, 'c,'t) args  -> (Pos.t -> 'b,'c,'t) args
+   | RPos : ('b, 'c,'t) args * Pos.t ref -> (Pos.t -> 'b,'c,'t) args
    | App : ('b, 'c, 't) args * ('a -> 'b) -> ('a,'c,'t) args
    | Cns : ('b,'c,[`Ct]) args * ('a, 'b,[`At]) args -> ('a,'c,[`At]) args
 
@@ -75,32 +79,47 @@ let ink f = C(f,End)
 let callk : type a.a cont -> env -> err -> a app -> res =
   fun k env err x ->
   match (k,x) with
-  | C(k,args2), A(x,args1) -> k env err (A(x,Cns(args2, args1)))
+  | C(k,args2)   , A(x,args1) -> k env err (A(x,Cns(args2, args1)))
+  | P(k,args2,rp), A(x,args1) ->
+     rp := Pos.get_pos env.buf_before_blanks env.col_before_blanks;
+     k env err (A(x,Cns(args2, args1)))
 
-let rec eval : type a.env -> a app -> a = fun env (A(x,args)) ->
+let arg k x = match k with
+  | C(k,args)    -> C(k,Arg(args,x))
+  | P(k,args,rp) -> P(k,Arg(args,x),rp)
+
+let larg k x = match k with
+  | C(k,args)    -> C(k,LArg(args,x))
+  | P(k,args,rp) -> P(k,LArg(args,x),rp)
+
+let app k x = match k with
+  | C(k,args)    -> C(k,App(args,x))
+  | P(k,args,rp) -> P(k,App(args,x),rp)
+
+
+let rec eval : type a. a app -> a = fun (A(x,args)) ->
   let rec fn : type a b x. a -> (a,b,x) args -> b = fun x args ->
     match args with
     | End -> x
     | Arg(args,y) -> fn (x y) args
-    | LArg(args,y) -> fn (x (eval env y)) args
-    | RPos(args) ->
-       let pos = Pos.get_pos env.buf_before_blanks env.col_before_blanks in
-       fn (x pos) args
+    | LArg(args,y) -> fn (x (eval y)) args
+    | RPos(args,rp) -> fn (x !rp) args
     | App(args,f) -> fn (f x) args
     | Cns(args1,args2) -> fn (fn x args2) args1
   in
   fn x args
 
-let eval_largs : type a. env -> a cont -> a cont = fun env (C(k,args)) ->
+let eval_largs : type a. a cont -> a cont = fun k ->
   let rec fn : type a b. (a,b,[`Ct]) args -> (a,b,[`Ct]) args = function
     | End -> End
     | Arg(args,x) -> Arg(fn args, x)
-    | LArg(args,x) ->
-       Arg(fn args, eval env x)
-    | RPos(args) -> RPos(fn args)
+    | LArg(args,x) -> Arg(fn args, eval x)
+    | RPos(args,rp) -> RPos(fn args,rp)
     | App(args,x) -> App(fn args,x)
   in
-  C(k,fn args)
+  match k with
+  | C(k,args)    -> C(k,fn args)
+  | P(k,args,rp) -> P(k,fn args,rp)
 
 (** [next env  err] updates the current maximum position  [env.max_pos] and then
     calls the [err] function. *)
@@ -149,7 +168,7 @@ let scheduler : ?all:bool -> env -> 'a t -> ('a * env) list = fun ?(all=false) e
   let res = ref [] in
   let k env err x =
     (try
-       res := (eval env x,env)::!res;
+       res := (eval x,env)::!res;
        if all then err () else raise Exit
     with Lex.NoParse -> next env err);
   in
@@ -204,12 +223,12 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
          env.blank_fun buf_before_blanks col_before_blanks
        in
        fun () ->
-         let x = eval_largs env k in
+         let k = eval_largs k in
          let env =
            { env with buf_before_blanks ; col_before_blanks
                     ; current_buf ; current_col; lr = Assoc.empty }
          in
-         Lexm (env,x, Some err, v)
+         Lexm (env,k, Some err, v)
      with Lex.NoParse -> fun () -> next env err) ()
 
 (** Same as above but does not return to the scheduler, to use if
@@ -224,28 +243,27 @@ let direct_lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
          env.blank_fun buf_before_blanks col_before_blanks
        in
        fun () ->
-         let x = eval_largs env k in
+         let k = eval_largs k in
          let env =
            { env with buf_before_blanks ; col_before_blanks
                     ; current_buf ; current_col; lr = Assoc.empty }
          in
-         callk x env err (A(v,End))
+         callk k env err (A(v,End))
      with Lex.NoParse -> fun () -> next env err) ()
 
 (** Sequence combinator. *)
-let seq : 'a t -> ('a -> 'b) t -> 'b t = fun g1 g2 env (C(k,args)) err ->
-  g1 env (ink (fun env err x ->
-            g2 env (C(k,LArg(args,x))) err)) err
+let seq : 'a t -> ('a -> 'b) t -> 'b t = fun g1 g2 env k err ->
+  g1 env (ink (fun env err x -> g2 env (larg k x) err)) err
 
 (** Dependant sequence combinator. *)
 let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
-  fun g1 g2 env (C(k,args)) err ->
+  fun g1 g2 env k err ->
     g1 env (ink(fun env err vs ->
         (try
-           let (v1,v2) = eval env vs in (* This forces the evaluation of v2 ...
+           let (v1,v2) = eval vs in (* This forces the evaluation of v2 ...
                                        FIXME: understand the consequence and document *)
            let g = g2 v1 in
-           fun () -> g env (C(k,Arg(args,v2))) err
+           fun () -> g env (arg k v2) err
          with Lex.NoParse -> fun () -> next env err) ())) err
 
 (** [test cs env] returns [true] if and only if the next character to parse in
@@ -270,22 +288,26 @@ let alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t = fun cs1 g1 cs2 g2 ->
     | (true , true ) -> g1 env k (fun () -> g2 env k err)
 
 (** Application of a semantic function to alter a combinator. *)
-let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn env (C(k,args)) err ->
-    g env (C(k,App(args,fn))) err
+let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k err ->
+    g env (app k fn) err
 
 (** Read the position after parsing. *)
-let right_pos : type a.(Pos.t -> a) t -> a t = fun g env (C(k,args)) err ->
-    g env (C(k,RPos(args))) err
+let right_pos : type a.(Pos.t -> a) t -> a t = fun g env k err ->
+  let k = match k with
+    | C(k,args)    -> let rp = ref Pos.phantom in P(k,RPos(args,rp),rp)
+    | P(k,args,rp) -> P(k,RPos(args,rp),rp)
+  in
+  g env k err
 
 (** Read the position before parsing. *)
-let left_pos : (Pos.t -> 'a) t -> 'a t = fun g  env (C(k,args)) err ->
+let left_pos : (Pos.t -> 'a) t -> 'a t = fun g  env k err ->
     let pos = Pos.get_pos env.current_buf env.current_col in
-    g env (C(k,Arg(args,pos))) err
+    g env (arg k pos) err
 
 (** Read lpos from the lr table. *)
-let read_pos : Pos.t Assoc.key -> (Pos.t -> 'a) t -> 'a t = fun key g env (C(k,args)) err ->
+let read_pos : Pos.t Assoc.key -> (Pos.t -> 'a) t -> 'a t = fun key g env k err ->
     let pos = try Assoc.find key env.lr with Not_found -> assert false in
-    g env (C(k,Arg(args,pos))) err
+    g env (arg k pos) err
 
 
 (** [lr g  gf] is the combinator used to  eliminate left recursion. Intuitively,
@@ -297,7 +319,7 @@ let lr : 'a t -> 'a Assoc.key -> 'a t -> 'a t = fun g key gf env k err ->
     let rec klr env err v =
       let err () =
         (try
-            let x = eval env v in
+            let x = eval v in
             let lr = Assoc.add key x env.lr in
             let env0 = { env with lr } in
             fun () -> gf env0 (ink klr) err
@@ -314,7 +336,7 @@ let lr_pos : 'a t -> 'a Assoc.key -> Pos.t Assoc.key -> 'a t -> 'a t =
     let rec klr env err v =
       let err () =
         (try
-            let x = eval env v in
+            let x = eval v in
             let lr = Assoc.add key x env.lr in
             let lr = Assoc.add pkey pos lr in
             let env0 = { env with lr } in
