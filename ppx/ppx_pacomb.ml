@@ -114,25 +114,20 @@ let exp_to_rule_item (e, loc_e) =  match e.pexp_desc with
   | Pexp_apply({pexp_desc = Pexp_ident { txt = Lident ">:"; _}; _},
               [(Nolabel,{pexp_desc = Pexp_tuple([dpat;epat]); _})
               ;(Nolabel, exp) ]) ->
-     let ae =
-       try
-         let (_,s) = List.find (fun (s,_) -> s.txt = "ae") e.pexp_attributes in
-         match s with
-             PStr [{pstr_desc = Pstr_eval (e,_); _}] -> Printf.eprintf "ae\n%!"; Some e
-           | _ -> raise Not_found
-       with Not_found -> None
-     in
      let cs =
        try
-         let (_,s) = List.find (fun (s,_) -> s.txt = "cs") e.pexp_attributes in
+         let (_,s) = List.find (fun (s,_) -> s.txt = "cs")
+                       exp.pexp_attributes
+         in
          match s with
-             PStr [{pstr_desc = Pstr_eval (e,_); _}] -> Printf.eprintf "cs\n%!"; Some e
-           | _ -> raise Not_found
+         | PStr [{pstr_desc = Pstr_eval (e,_); _}] ->
+           Printf.eprintf "cs\n%!"; Some e
+         | _ -> raise Not_found
        with Not_found -> None
      in
      let (name, pat) = exp_to_pattern epat in
      let (_, dpat) = exp_to_pattern dpat in
-     (Some (name, pat), Some (dpat,ae,cs), exp_to_term exp, loc_e)
+     (Some (name, pat), Some (dpat,cs), exp_to_term exp, loc_e)
   | _ ->
      (None, None, exp_to_term e, loc_e)
 
@@ -143,9 +138,10 @@ let rec exp_to_rule e =
   let loc_e = e.pexp_loc in
   match e.pexp_desc with
   | Pexp_apply({ pexp_desc =
-      Pexp_apply({ pexp_desc = Pexp_ident
-                                 { txt = Lident("="|"<"|">"|"<="|">="|"<>"|"=="|"!="|
-                                           "not"|"&&"|"||"); _ }; _}, _); _} as cond,
+      Pexp_apply({ pexp_desc =
+        Pexp_ident
+          { txt = Lident("="|"<"|">"|"<="|">="|"<>"|"=="|"!="|
+                         "not"|"&&"|"||"); _ }; _}, _); _} as cond,
       (Nolabel,a3)::rest) ->
      let (rule,_) = exp_to_rule (Exp.apply a3 rest) in
      (rule, Some cond)
@@ -172,10 +168,14 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
      let gn (acts_fn, rule) (name, dep, item, loc_e) = match name with
        | None    ->
           let pat = Pat.any () in
-          let acts_fn exp = Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp) in
+          let acts_fn exp =
+            Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp)
+          in
           (acts_fn, (false, false, dep, item, loc_e) :: rule)
        | Some (None, pat) ->
-          let acts_fn exp = Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp) in
+          let acts_fn exp =
+            Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp)
+          in
           (acts_fn, (false,false,dep,item,loc_e) :: rule)
        | Some (Some id, pat) ->
           let id_pos = mkloc (id.txt ^ "_pos") id.loc in
@@ -207,7 +207,9 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
               (fun exp -> Exp.let_ Nonrecursive vb (acts_fn exp))
             else acts_fn
           in
-          let acts_fn exp = Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp) in
+          let acts_fn exp =
+            Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp)
+          in
           (acts_fn, (has_id_lpos,has_id_rpos,dep,item,loc_e) :: rule)
      in
      let (acts_fn, rule) = List.fold_left gn (acts_fn, []) rule in
@@ -225,14 +227,10 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
 
      in
      let fn (lpos,rpos,dep,item,loc_e) exp =
-       let app_aecs f ae cs =
-         let args = match ae with
-           | None -> []
-           | Some e -> [Labelled "ae", e]
-         in
+       let app_cs f cs =
          let args = match cs with
-           | None -> args
-           | Some e -> (Labelled "cs", e)::args
+           | None -> []
+           | Some e -> [Labelled "cs", e]
          in
          if args = [] then grmod f
          else Exp.apply (grmod f) args
@@ -242,14 +240,14 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
          | true , false, None -> grmod "seq_lpos"
          | false, true , None -> grmod "seq_rpos"
          | true , true , None -> grmod "seq_pos"
-         | false, false, Some(_,ae,cs) -> app_aecs "dseq"      ae cs
-         | true , false, Some(_,ae,cs) -> app_aecs "dseq_lpos" ae cs
-         | false, true , Some(_,ae,cs) -> app_aecs "dseq_rpos" ae cs
-         | true , true , Some(_,ae,cs) -> app_aecs "dseq_pos"  ae cs
+         | false, false, Some(_,cs) -> app_cs "dseq"      cs
+         | true , false, Some(_,cs) -> app_cs "dseq_lpos" cs
+         | false, true , Some(_,cs) -> app_cs "dseq_rpos" cs
+         | true , true , Some(_,cs) -> app_cs "dseq_pos"  cs
        in
        let exp = match dep with
          | None -> exp
-         | Some (pat,_,_) -> Exp.fun_ Nolabel None pat exp
+         | Some (pat,_) -> Exp.fun_ Nolabel None pat exp
        in
        app2 (merge_loc loc_e exp.pexp_loc) f item exp
      in
@@ -283,8 +281,9 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
        | x::(y::_ as l) ->
           let e =
             app2 loc (grmod "seq2")
-              (app loc (grmod "test") (app2 loc (Exp.ident (mknoloc (Lident "=")))
-                                         (Exp.ident param) x))
+              (app loc (grmod "test")
+                 (app2 loc (Exp.ident (mknoloc (Lident "=")))
+                    (Exp.ident param) x))
               (app loc (Exp.ident name) y)
           in gn (e::acc) l
        | [] | [_] -> acc

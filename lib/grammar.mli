@@ -46,7 +46,8 @@ val seq2 : 'a grammar -> 'b grammar -> 'b grammar
     may depend  upon the semantics  of [g1]. This is  not very efficient  as the
     grammar [g2] must be compiled at  parsing time.  [g2] is memoized by default
     to partially overcome this fact. *)
-val dseq : ('a * 'b) grammar -> ('a -> ('b -> 'c) grammar) -> 'c grammar
+val dseq : ('a * 'b) grammar -> ?cs:Charset.t -> ('a -> ('b -> 'c) grammar)
+           -> 'c grammar
 
 (** [lpos  g] is identical  to [g] but passes  the position just  before parsing
     with [g] to the semantical action of [g] *)

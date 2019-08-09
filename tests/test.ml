@@ -32,16 +32,20 @@ let test0 = alt [char_a; char_b]
 let test0b = seq char_a char_b (+)
 
 let test1 = fixpoint (fun r -> alt [empty 0; seq char_a r (+)])
-let test1pl = fixpoint (fun r -> alt [empty 0; lpos (seq char_a r (fun x y _ -> x + y))])
-let test1pr = fixpoint (fun r -> alt [empty 0; rpos (seq char_a r (fun x y _ -> x + y))])
+let test1pl = fixpoint (fun r ->
+                  alt [empty 0; lpos (seq char_a r (fun x y _ -> x + y))])
+let test1pr = fixpoint (fun r ->
+                  alt [empty 0; rpos (seq char_a r (fun x y _ -> x + y))])
 
 let test2 = fixpoint (fun r -> alt [empty 0
                                   ; seq char_a r (+)
                                   ; seq char_b r (+)])
 
 let test3 = fixpoint (fun r -> alt [empty 0; seq r char_a (+)])
-let test3pl = fixpoint (fun r -> alt [empty 0; lpos (seq r char_a (fun x y _ -> x + y))])
-let test3pr = fixpoint (fun r -> alt [empty 0; lpos (seq r char_a (fun x y _ -> x + y))])
+let test3pl = fixpoint (fun r ->
+                  alt [empty 0; lpos (seq r char_a (fun x y _ -> x + y))])
+let test3pr = fixpoint (fun r ->
+                  alt [empty 0; lpos (seq r char_a (fun x y _ -> x + y))])
 
 let test4 = fixpoint (fun r -> alt [empty 0; char_b; seq r char_a (+)])
 
@@ -150,10 +154,12 @@ let _ = assert (parse_string test5 "aaa" = 3)
 let _ = assert (parse_string test5 "" = 0)
 let _ = assert (parse_string test5 "ababa" = 5)
 let _ = assert (parse_string test6 "a" = [1])
-let _ = assert (parse_string test6 "a,aa,aaa,aa,a," = List.rev [1;2;3;2;1;0])
+let _ = assert (parse_string test6 "a,aa,aaa,aa,a," =
+                  List.rev [1;2;3;2;1;0])
 let _ = assert (parse_string test7 "b" = [(0,0,0)])
 let _ = assert (parse_string test7 "ab" = [(0,1,1)])
-let _ = assert (parse_string test7 "a,aa,aaab" = List.rev [(0,1,1);(2,2,4);(5,3,8)])
+let _ = assert (parse_string test7 "a,aa,aaab" =
+                  List.rev [(0,1,1);(2,2,4);(5,3,8)])
 let _ = assert (parse_string test8 "" = 0)
 let _ = assert (parse_string test8 "ab" = 1)
 let _ = assert (parse_string test8 "aaaabbbb" = 4)

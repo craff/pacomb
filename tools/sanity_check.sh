@@ -5,7 +5,7 @@
 
 ML_FILES=`find lib -name "*.ml" -or -name "*.mli"`
 TESTS_FILES=`find tests -name "*.ml" -or -name "*.mli" -or -name "*.mll" -or -name "*.mly"`
-FILES="$ML_FILES $TESTS_FILES"
+FILES="ppx/ppx_pacomb.ml $ML_FILES $TESTS_FILES"
 
 awk 'length>80 {print FILENAME ", line " FNR ": more than 80 characters..."}' $FILES
 awk '/.*\s$/   {print FILENAME ", line " FNR ": trailing spaces..."}        ' $FILES

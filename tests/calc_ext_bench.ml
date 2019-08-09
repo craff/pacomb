@@ -37,8 +37,8 @@ let%parser op pmin pmax =
     with Not_found -> give_up ()
 
 let%parser rec
- expr pmax = ((pe,e1)>:expr pmax [@ae false] [@cs Charset.from_string "-&~^+=*/\\$!:"])
-               ((pop,b)>:op pe pmax [@ae false] [@cs Charset.from_string "-+0-9(a-zA-Z"])
+ expr pmax = ((pe,e1)>:expr pmax [@cs Charset.from_string "-&~^+=*/\\$!:"])
+               ((pop,b)>:op pe pmax [@cs Charset.from_string "-+0-9(a-zA-Z"])
                ((__,e2)::expr pop)
                       =>  (pop, b e1 e2)
             ; (x::FLOAT)                          => (0.0,x)

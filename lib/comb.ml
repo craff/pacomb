@@ -48,8 +48,9 @@ type err = unit -> res
     parallel *)
  and res =
    | Lexm : env * 'a cont * err option * 'a -> res
-   | Skip : res (* used by the cache combinator to tell there is nothing to do,
-                   we are already parsing the same grammar at the same position. *)
+   | Skip : res
+   (* used by the cache combinator to tell there is nothing to do,
+      we are already parsing the same grammar at the same position. *)
 
 (** Type of a parsing continuation. *)
  and 'a cont =
@@ -164,41 +165,44 @@ let extract : res list -> res list * res list = function
        | l -> acc, l
      in fn [r] l
 
-let scheduler : ?all:bool -> env -> 'a t -> ('a * env) list = fun ?(all=false) env g ->
-  let res = ref [] in
-  let k env err x =
-    (try
-       res := (eval x,env)::!res;
-       if all then err () else raise Exit
-    with Lex.NoParse -> next env err);
-  in
-  try
-    let r = g env (ink k) (fun _ -> raise Not_found) in
-    let tbl0 = ref [r] in
-    let tbl1 = ref [] in
-    while true do
-      match !tbl0 with
-      | [] -> (match !tbl1 with
-               | [] -> raise Exit
-               | _  -> let t0,t1 = extract !tbl1 in tbl0 := t0; tbl1 := t1)
-      | Skip :: _ -> assert false
-      | (Lexm(env,k,Some err,x)) :: l ->
-                                 tbl0 := Lexm(env,k,None,x)::l;
-                                 (try
-                                   let r = err () in
-                                   if r <> Skip then tbl1 := insert r !tbl1
-                                 with Not_found -> ())
-      | (Lexm(env,k,None,x) as r0) :: l -> tbl0 := l;
-                                  (try
-                                     let r = callk k env (fun _ -> raise Not_found) (A(x,End)) in
-                                     if r <> Skip then
-                                       begin
-                                         if same r r0 then
-                                           tbl0 := r :: !tbl0
-                                         else
-                                           tbl1 := insert r !tbl1
-                                       end
-                                  with Not_found -> ())
+let scheduler : ?all:bool -> env -> 'a t -> ('a * env) list =
+  fun ?(all=false) env g ->
+    let res = ref [] in
+    let k env err x =
+      (try
+         res := (eval x,env)::!res;
+         if all then err () else raise Exit
+       with Lex.NoParse -> next env err);
+    in
+    try
+      let r = g env (ink k) (fun _ -> raise Not_found) in
+      let tbl0 = ref [r] in
+      let tbl1 = ref [] in
+      while true do
+        match !tbl0 with
+        | [] ->
+           (match !tbl1 with
+            | [] -> raise Exit
+            | _  -> let t0,t1 = extract !tbl1 in tbl0 := t0; tbl1 := t1)
+        | Skip :: _ -> assert false
+        | (Lexm(env,k,Some err,x)) :: l ->
+           tbl0 := Lexm(env,k,None,x)::l;
+           (try
+              let r = err () in
+              if r <> Skip then tbl1 := insert r !tbl1
+            with Not_found -> ())
+        | (Lexm(env,k,None,x) as r0) :: l ->
+           tbl0 := l;
+           (try
+              let r = callk k env (fun _ -> raise Not_found) (A(x,End)) in
+              if r <> Skip then
+                begin
+                  if same r r0 then
+                    tbl0 := r :: !tbl0
+                  else
+                    tbl1 := insert r !tbl1
+                end
+            with Not_found -> ())
     done;
     assert false
   with
@@ -260,8 +264,9 @@ let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
   fun g1 g2 env k err ->
     g1 env (ink(fun env err vs ->
         (try
-           let (v1,v2) = eval vs in (* This forces the evaluation of v2 ...
-                                       FIXME: understand the consequence and document *)
+           let (v1,v2) = eval vs in
+           (* This forces the evaluation of v2 ...
+              FIXME: test right recursion with dseq ? *)
            let g = g2 v1 in
            fun () -> g env (arg k v2) err
          with Lex.NoParse -> fun () -> next env err) ())) err
@@ -293,11 +298,11 @@ let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k err ->
 
 (** Read the position after parsing. *)
 let right_pos : type a.(Pos.t -> a) t -> a t = fun g env k err ->
-  let k = match k with
-    | C(k,args)    -> let rp = ref Pos.phantom in P(k,RPos(args,rp),rp)
-    | P(k,args,rp) -> P(k,RPos(args,rp),rp)
-  in
-  g env k err
+    let k = match k with
+      | C(k,args)    -> let rp = ref Pos.phantom in P(k,RPos(args,rp),rp)
+      | P(k,args,rp) -> P(k,RPos(args,rp),rp)
+    in
+    g env k err
 
 (** Read the position before parsing. *)
 let left_pos : (Pos.t -> 'a) t -> 'a t = fun g  env k err ->
@@ -305,7 +310,8 @@ let left_pos : (Pos.t -> 'a) t -> 'a t = fun g  env k err ->
     g env (arg k pos) err
 
 (** Read lpos from the lr table. *)
-let read_pos : Pos.t Assoc.key -> (Pos.t -> 'a) t -> 'a t = fun key g env k err ->
+let read_pos : Pos.t Assoc.key -> (Pos.t -> 'a) t -> 'a t =
+  fun key g env k err ->
     let pos = try Assoc.find key env.lr with Not_found -> assert false in
     g env (arg k pos) err
 
