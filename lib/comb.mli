@@ -24,6 +24,9 @@ val parse_all_buffer : 'a t -> Lex.blank -> Input.buffer -> int -> 'a list
 (** [fail] is a parser rejecting every input (it always fails). *)
 val fail : 'a t
 
+(** Fails and report an error *)
+val error : string -> 'a t
+
 val assert_false : 'a t
 
 (** [empty v] is  a parser that only accepts the empty input  and returns [v] as

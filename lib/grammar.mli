@@ -18,6 +18,9 @@ val print_grammar : ?def:bool -> out_channel -> 'a grammar -> unit
 (** [fail ()] is a grammar that parses nothing (always fails) *)
 val fail : unit -> 'a grammar
 
+(** fails reporting an error *)
+val error : string -> 'a grammar
+
 (** [empty a] accepts the empty input and returns [a] *)
 val empty : 'a -> 'a grammar
 

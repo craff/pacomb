@@ -36,6 +36,7 @@ type 'a grammar =
  (** Grammar constructors at definition *)
  and 'a grdf =
    | Fail : 'a grdf                        (** grammar that always fais *)
+   | Err : string -> 'a grdf               (** error reporting *)
    | Empty : 'a -> 'a grdf                 (** accept only the empty input *)
    | Term : 'a Lex.t -> 'a grdf            (** terminals *)
    | Alt  : 'a t list -> 'a grdf           (** alternatives *)
@@ -64,6 +65,7 @@ type 'a grammar =
     'a grammar record except for recursion.  *)
  and 'a grne =
    | EFail : 'a grne
+   | EErr  : string -> 'a grne
    | ETerm : 'a terminal -> 'a grne
    | EAlt  : 'a grne list -> 'a grne
    | EAppl : 'a grne * ('a -> 'b) -> 'b grne
@@ -112,6 +114,7 @@ let print_grammar ?(def=true) ch s =
     let pv x = print_negr x in
     match g with
     | EFail         -> pr "0"
+    | EErr m        -> pr "0(%s)" m
     | ETerm t       -> pr "%s" t.n
     | EAlt(gs)      -> pr "(%a)" (prl pg "|") gs
     | EAppl(g,_)    -> pr "App(%a)" pg g
@@ -132,6 +135,7 @@ let print_grammar ?(def=true) ch s =
     let pg x = print_dfgr x in
     match g with
     | Fail         -> pr "0"
+    | Err m        -> pr "0(%s)" m
     | Empty _      -> pr "1"
     | Term t       -> pr "%s" t.n
     | Alt(gs)      -> pr "(%a)" (prl pg "|") gs
@@ -240,6 +244,8 @@ let seq_lpos g1 g2 =
 let seq_pos g1 g2 =
   seq (lpos (rpos (appl g1 (fun x rpos lpos -> (lpos, x, rpos)))))
     g2
+
+let error m = mkg (Err m)
 
 let cache g = mkg (if g.d = Fail then Fail else Cache(g))
 
@@ -365,6 +371,7 @@ let factor_empty g =
 
   and kn : type a. a grdf -> a option = function
     | Fail -> None
+    | Err _ -> None
     | Empty x -> Some x
     | Term _     -> None
     | Alt(gs) -> List.iter fn gs;
@@ -413,6 +420,7 @@ let factor_empty g =
   and gn : type a. a grdf -> a grne = function
     | Fail -> EFail
     | Empty _ -> EFail
+    | Err m -> EErr m
     | Term(x) -> ETerm(x)
     | Alt(gs) -> List.iter hn gs; ne_alt (List.map get gs)
     | Appl(g,f) -> hn g; ne_appl (get g) f
@@ -460,7 +468,7 @@ let remove_cache : type a. a grammar -> unit =
         | ELayout(b,g1,cfg) -> ne_layout b (fn r g1) cfg
         | ERef g0 as g -> gn g0; g
         | ETmp -> assert false
-        | EFail | ETerm _ as g -> g
+        | EFail | ETerm _ | EErr _ as g -> g
     in
     let g = fn false g in
     (!cache, g)
@@ -492,8 +500,7 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
   let rec fn : type b. b grne -> b grne * b grammar =
     fun g ->
       match g with
-      | EFail -> (EFail, fail ())
-      | ETerm _ -> (g, fail ())
+      | EFail | ETerm _ | EErr _ -> (g, fail ())
       | ESeq(g1,g2) ->
          let (g1, s1) = fn g1 in
          (ne_seq g1 g2, seq s1 g2)
@@ -570,6 +577,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
   let rec fn : type a. a grne -> bool * Charset.t = fun g ->
     match g with
     | EFail -> (false, Charset.empty)
+    | EErr _ -> (false, Charset.full)
     | ETerm(c) -> (false, c.c)
     | EAlt(gs) ->
        List.fold_left (fun (shift,s) g ->
@@ -622,6 +630,7 @@ let rec compile_ne : type a. bool -> a grne -> a Comb.t = fun direct g ->
   let open Comb in
   match g with
   | EFail -> fail
+  | EErr m -> error m
   | ETerm(c) -> if direct then direct_lexeme c.f else lexeme c.f
   | EAlt(gs) -> compile_alt gs
   | ESeq(g1,g2) -> seq (compile_ne direct g1) (compile false true g2)

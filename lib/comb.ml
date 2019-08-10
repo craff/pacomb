@@ -34,7 +34,7 @@
 type env =
   { blank_fun         : Lex.blank
   (** Function used to ignore blanks. *)
-  ; max_pos           : (Lex.buf * int) ref
+  ; max_pos           : (Lex.buf * int * string list ref) ref
   (** Maximum position reached by the parser (for error reporting). *)
   ; current_buf       : Input.buffer
   (** Current input buffer (or input stream). *)
@@ -170,11 +170,21 @@ let eval_lrgs : type a. a cont -> a cont = fun k ->
 (** [next env  err] updates the current maximum position  [env.max_pos] and then
     calls the [err] function. *)
 let next : env -> err -> res  = fun env err ->
-  let (buf_max, col_max) = !(env.max_pos) in
+  let (buf_max, col_max, _) = !(env.max_pos) in
   let line_max = Input.line buf_max in
   let line = Input.line env.current_buf in
   if line > line_max || (line = line_max && env.current_col > col_max) then
-    env.max_pos := (env.current_buf, env.current_col);
+    env.max_pos := (env.current_buf, env.current_col, ref []);
+  err ()
+
+let next_msg : string -> env -> err -> res  = fun msg env err ->
+  let (buf_max, col_max, msgs) = !(env.max_pos) in
+  let line_max = Input.line buf_max in
+  let line = Input.line env.current_buf in
+  if line > line_max || (line = line_max && env.current_col > col_max) then
+    env.max_pos := (env.current_buf, env.current_col, ref [msg])
+  else if line = line_max && env.current_col = col_max then
+    msgs := msg :: !msgs;
   err ()
 
 (** the scheduler stores what remains to do in a list sorted by position
@@ -256,6 +266,9 @@ let scheduler : ?all:bool -> env -> 'a t -> ('a * env) list =
 
 (** Combinator that always fails. *)
 let fail : 'a t = fun env _ err -> next env err
+
+(** Fails and report an error *)
+let error : string -> 'a t = fun msg env _ err -> next_msg msg env err
 
 (** Combinator used as default fied before compilation *)
 let assert_false : 'a t = fun _ _ _ -> assert false
@@ -485,7 +498,7 @@ let gen_parse_buffer
     : type a. a t -> ?all:bool -> Lex.blank -> ?blank_after:bool
                   -> Lex.buf -> int -> (a * Lex.buf * int) list =
   fun g ?(all=false) blank_fun ?(blank_after=false) buf0 col0 ->
-    let max_pos = ref (buf0, col0) in
+    let max_pos = ref (buf0, col0, ref []) in
     let (buf, col) = blank_fun buf0 col0 in
     let env =
       { buf_before_blanks = buf0 ; col_before_blanks = col0
@@ -495,8 +508,9 @@ let gen_parse_buffer
     let r = scheduler ~all env g in
     match r with
     | [] ->
-       let (buf, col) = !max_pos in
-       raise (Pos.Parse_error(buf, col))
+       let (buf, col, msgs) = !max_pos in
+       let msgs = List.sort_uniq compare !msgs in
+       raise (Pos.Parse_error(buf, col, msgs))
     | _ -> List.map (fun (v,env) ->
                if blank_after then (v, env.current_buf, env.current_col)
                else (v, env.buf_before_blanks, env.col_before_blanks)) r

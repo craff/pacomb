@@ -149,11 +149,9 @@ let rec exp_to_rule e =
    - name_param is an optional arguments for an eventual parameter name
    - fn is a function to modify the action. It adds [Exp.fun _] conctructs *)
 let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
-  match e.pexp_desc with
+  match e with
   (* base case [items => action] *)
-  | Pexp_apply
-    ( { pexp_desc = Pexp_ident {txt = Lident "=>"; _}; _ }
-    , [(Nolabel,rule);(Nolabel,action)]) ->
+  | [%expr [%e? rule] => [%e? action]] ->
      let (rule,cond) = exp_to_rule rule in
      let loc_a = action.pexp_loc in
      let gn (acts_fn, rule) (name, dep, item, loc_e) = match name with
@@ -259,8 +257,7 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
      in
      [rule]
   (* inheritance case [prio1 < prio2 < ... < prion] *)
-  | Pexp_apply({ pexp_desc = Pexp_ident {txt = Lident "<"; _}; _ }
-               , [_;_]) when name_param <> None ->
+  | [%expr [%e? _] < [%e? _]] when name_param <> None ->
      let rec fn exp = match exp.pexp_desc with
        | Pexp_apply
          ( { pexp_desc = Pexp_ident {txt = Lident "<"; _}; _ }
@@ -288,8 +285,11 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
        | [] | [_] -> acc
      in
      gn [] prios
+  | [%expr ERROR([%e? s])] ->
+     let loc = e.pexp_loc in
+     [ [%expr [%e grmod "error"] [%e s]] ]
   (* alternatives represented as sequence *)
-  | Pexp_sequence(e1,e2) ->
+  | [%expr [%e? e1]; [%e? e2]] ->
      exp_to_rules ?name_param ~acts_fn e1
      @ exp_to_rules ?name_param ~acts_fn e2
   (* not a grammar at all (no warning)! *)
