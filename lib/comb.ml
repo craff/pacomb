@@ -467,22 +467,19 @@ let cache : type a. a t -> a t = fun g ->
     let {current_buf = buf0; current_col = col0; _} = env0 in
     try
       let ptr = Input.Tbl.find cache buf0 col0 in
-      begin
-        match !ptr with
-        | (_, false) -> assert false (* Too late ?*)
-        | (l, _    ) -> ptr := (k :: l, true)
-      end;
+      ptr := k :: !ptr;
       Skip
     with Not_found ->
-      let ptr = ref ([k], true) in
+      let ptr = ref [k] in
       Input.Tbl.add cache buf0 col0 ptr;
       let k0 env err v =
-        if snd !ptr then ptr := (fst !ptr, false);
         let rec fn = function
-          | [] -> next env err
+          | [] -> assert (!ptr = []); next env err
           | k :: l -> call k env (fun () -> fn l) v
         in
-        fn (fst !ptr)
+        let l = !ptr in
+        ptr:=[];
+        fn l
       in
       g env0 (ink k0) err
 
