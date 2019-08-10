@@ -33,7 +33,7 @@
   (modules calc)
   (preprocess (pps pacomb.ppx))
   (libraries unix pacomb)
-  (deps big_expr.exe)
+  (deps big_expr.exe calc.exe)
   (action
     (system "./big_expr.exe 4 4 4 | ./calc.exe")))
 
@@ -42,7 +42,7 @@
   (modules calc_prio)
   (preprocess (pps pacomb.ppx))
   (libraries unix pacomb)
-  (deps big_expr.exe)
+  (deps big_expr.exe calc_prio.exe)
   (action
     (system "./big_expr.exe 4 4 4 | ./calc_prio.exe")))
 
@@ -51,7 +51,7 @@
   (modules calc_factor)
   (preprocess (pps pacomb.ppx))
   (libraries unix pacomb)
-  (deps big_expr.exe)
+  (deps big_expr.exe calc_factor.exe)
   (action
     (system "./big_expr.exe 4 4 4 | ./calc_factor.exe")))
 
@@ -60,7 +60,7 @@
   (modules calc_ext_bench)
   (preprocess (pps pacomb.ppx))
   (libraries unix pacomb)
-  (deps big_expr.exe)
+  (deps big_expr.exe calc_ext_bench.exe)
   (action
     (system "./big_expr.exe 3 4 4 | ./calc_ext_bench.exe")))
 
@@ -69,7 +69,7 @@
   (modules calc_ext)
   (preprocess (pps pacomb.ppx))
   (libraries unix pacomb)
-  (deps big_expr.exe)
+  (deps big_expr.exe calc_ext.exe)
   (action
     (system "./big_expr.exe 3 4 4 | ./calc_ext.exe")))
 
@@ -78,7 +78,7 @@
   (modules sexp)
   (preprocess (pps pacomb.ppx))
   (libraries unix pacomb)
-  (deps big_sexp.exe)
+  (deps big_sexp.exe sexp.exe)
   (action
     (system "./big_sexp.exe 1000 | ./sexp.exe")))
 
@@ -87,6 +87,6 @@
   (modules sexp_rr)
   (preprocess (pps pacomb.ppx))
   (libraries unix pacomb)
-  (deps big_sexp.exe)
+  (deps big_sexp.exe sexp_rr.exe)
   (action
     (system "./big_sexp.exe 1000 | ./sexp_rr.exe")))

@@ -101,25 +101,18 @@ let exp_to_term exp =
 (* treat each iterm in a rule. Accept (pat::term) or term when
    - pat is an expression accepted by exp_to_pattern
    - term is an expression accepted by exp_to_term *)
-let exp_to_rule_item (e, loc_e) =  match e.pexp_desc with
-  | Pexp_construct
-    ( { txt = Lident "::"; _}
-    , Some({pexp_desc =
-              Pexp_tuple
-                [ epat ; exp ]; _})) ->
+let exp_to_rule_item (e, loc_e) =  match e with
+  | [%expr [%e? epat] :: [%e? exp]] ->
      let (name, pat) = exp_to_pattern epat in
      (Some (name, pat), None, exp_to_term exp, loc_e)
-  | Pexp_apply({pexp_desc = Pexp_ident { txt = Lident ">:"; _}; _},
-              [(Nolabel,{pexp_desc = Pexp_tuple([dpat;epat]); _})
-              ;(Nolabel, exp) ]) ->
+  | [%expr ([%e? dpat], [%e? epat]) >: [%e? exp]] ->
      let cs =
        try
          let (_,s) = List.find (fun (s,_) -> s.txt = "cs")
                        exp.pexp_attributes
          in
          match s with
-         | PStr [{pstr_desc = Pstr_eval (e,_); _}] ->
-           Printf.eprintf "cs\n%!"; Some e
+         | PStr [{pstr_desc = Pstr_eval (e,_); _}] -> Some e
          | _ -> raise Not_found
        with Not_found -> None
      in
@@ -336,6 +329,9 @@ let flatten_str items =
                   ; pincl_loc = Location.none
                   ; pincl_attributes = [] }
 
+let gen_id =
+  let c = ref 0 in
+  (fun s -> incr c; s ^(string_of_int !c))
 
 let vb_to_parser rec_ vb =
   let gn vb =
@@ -356,7 +352,7 @@ let vb_to_parser rec_ vb =
     let name_param = match param with
       | None -> None
       | Some p -> Some ( mkloc (Lident name.txt) name.loc
-                       , "blabla"  (* FIXME *)
+                       , gen_id "@p"
                        , p)
     in
     let (changed,rules) = exp_to_grammar ?name_param exp in

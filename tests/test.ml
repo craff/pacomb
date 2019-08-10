@@ -49,9 +49,9 @@ let testdpr = fixpoint (fun r -> alt [empty 0;
 
 let testc = fixpoint (fun r -> cache (alt [empty 0; seq char_a r (+)]))
 let testcpl = fixpoint (fun r ->
-                  cache (alt [empty 0; lpos (seq char_a r (fun x y _ -> x + y))]))
+                cache (alt [empty 0; lpos (seq char_a r (fun x y _ -> x + y))]))
 let testcpr = fixpoint (fun r ->
-                  cache (alt [empty 0; rpos (seq char_a r (fun x y _ -> x + y))]))
+                cache (alt [empty 0; rpos (seq char_a r (fun x y _ -> x + y))]))
 
 let test2 = fixpoint (fun r -> alt [empty 0
                                   ; seq char_a r (+)
