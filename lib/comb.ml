@@ -311,8 +311,8 @@ let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
     g1 env (ink(fun env err vs ->
         (try
            let (v1,v2) = eval vs in
-           (* This forces the evaluation of v2 ...
-              FIXME: test right recursion with dseq ? *)
+           (* This forces the evaluation of v2 ... no consequence
+              on right recursion *)
            let g = g2 v1 in
            fun () -> g env (arg k v2) err
          with Lex.NoParse -> fun () -> next env err) ())) err

@@ -37,6 +37,16 @@ let test1pl = fixpoint (fun r ->
 let test1pr = fixpoint (fun r ->
                   alt [empty 0; rpos (seq char_a r (fun x y _ -> x + y))])
 
+let testd = fixpoint (fun r -> alt [empty 0;
+                                    dseq (appl char_a (fun n -> ((),n)))
+                                      (fun _ -> appl r (+))])
+let testdpl = fixpoint (fun r -> alt [empty 0;
+                                    lpos (dseq (appl char_a (fun n -> ((),n)))
+                                      (fun _ -> appl r (fun x y _ -> x + y)))])
+let testdpr = fixpoint (fun r -> alt [empty 0;
+                                    rpos (dseq (appl char_a (fun n -> ((),n)))
+                                      (fun _ -> appl r (fun x y _ -> x + y)))])
+
 let test2 = fixpoint (fun r -> alt [empty 0
                                   ; seq char_a r (+)
                                   ; seq char_b r (+)])
@@ -298,7 +308,23 @@ let chrono_parse g s =
   Printf.printf "%f seconds\n%!" (t1 -. t0);
   r
 
-(*  too slow ... *)
+let _ =
+  Printf.printf "dependant sequence of 'a' right recursive\n%!";
+  for i = 10 downto 1 do
+    ignore (chrono_parse testd (na (!seq_max/i * 1000)))
+  done
+
+let _ =
+  Printf.printf "dependant sequence of 'a' right recursive with left pos\n%!";
+  for i = 10 downto 1 do
+    ignore (chrono_parse testdpl (na (!seq_max/i * 1000)))
+  done
+
+let _ =
+  Printf.printf "dependant sequence of 'a' right recursive with right pos\n%!";
+  for i = 10 downto 1 do
+    ignore (chrono_parse testdpr (na (!seq_max/i * 1000)))
+  done
 
 let _ =
   Printf.printf "sequence of 'a' right recursive\n%!";
