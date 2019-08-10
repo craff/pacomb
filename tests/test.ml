@@ -47,6 +47,12 @@ let testdpr = fixpoint (fun r -> alt [empty 0;
                                     rpos (dseq (appl char_a (fun n -> ((),n)))
                                       (fun _ -> appl r (fun x y _ -> x + y)))])
 
+let testc = fixpoint (fun r -> cache (alt [empty 0; seq char_a r (+)]))
+let testcpl = fixpoint (fun r ->
+                  cache (alt [empty 0; lpos (seq char_a r (fun x y _ -> x + y))]))
+let testcpr = fixpoint (fun r ->
+                  cache (alt [empty 0; rpos (seq char_a r (fun x y _ -> x + y))]))
+
 let test2 = fixpoint (fun r -> alt [empty 0
                                   ; seq char_a r (+)
                                   ; seq char_b r (+)])
@@ -307,6 +313,26 @@ let chrono_parse g s =
   let t1 = Unix.gettimeofday () in
   Printf.printf "%f seconds\n%!" (t1 -. t0);
   r
+
+(*
+let _ =
+  Printf.printf "sequence of 'a' cached right recursive\n%!";
+  for i = 10 downto 1 do
+    ignore (chrono_parse testc (na (!seq_max/i * 10)))
+  done
+
+let _ =
+  Printf.printf "sequence of 'a' cached right recursive, with left pos\n%!";
+  for i = 10 downto 1 do
+    ignore (chrono_parse testcpl (na (!seq_max/i * 10)))
+  done
+
+let _ =
+  Printf.printf "sequence of 'a' cached right recursive, with right pos\n%!";
+  for i = 10 downto 1 do
+    ignore (chrono_parse testcpr (na (!seq_max/i * 10)))
+  done
+ *)
 
 let _ =
   Printf.printf "dependant sequence of 'a' right recursive\n%!";

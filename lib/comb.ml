@@ -453,7 +453,8 @@ let change_layout : ?config:layout_config -> Lex.blank -> 'a t -> 'a t =
       in
       call k env err v)) err (* NOTE: here, ok to call call *)
 
-(** Combinator for caching a grammar, to avoid exponential behavior. *)
+(** Combinator for caching a grammar, to avoid exponential behavior.
+    very bad performance with a non ambiguous right recursive grammar. *)
 let cache : type a. a t -> a t = fun g ->
   let cache = Input.Tbl.create () in
   fun env0 k err ->
