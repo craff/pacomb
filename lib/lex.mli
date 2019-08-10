@@ -40,9 +40,12 @@ type 'a t = 'a terminal
  *)
 exception NoParse
 
+(** from action ony may give an error message when rejecting a rule *)
+exception Give_up of string
+
 (** [give_up ()] rejects parsing from a corresponding semantic action.
     Can be used both in the semantics of terminals and parsing rules. *)
-val give_up : unit -> 'a
+val give_up : ?msg:string -> unit -> 'a
 
 (** {2 Combinators to create terminals} *)
 

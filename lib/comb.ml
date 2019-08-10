@@ -34,7 +34,7 @@
 type env =
   { blank_fun         : Lex.blank
   (** Function used to ignore blanks. *)
-  ; max_pos           : (Lex.buf * int * string list ref) ref
+  ; max_pos           : (int * Input.buffer * int * string list ref) ref
   (** Maximum position reached by the parser (for error reporting). *)
   ; current_buf       : Input.buffer
   (** Current input buffer (or input stream). *)
@@ -170,21 +170,18 @@ let eval_lrgs : type a. a cont -> a cont = fun k ->
 (** [next env  err] updates the current maximum position  [env.max_pos] and then
     calls the [err] function. *)
 let next : env -> err -> res  = fun env err ->
-  let (buf_max, col_max, _) = !(env.max_pos) in
-  let line_max = Input.line_num buf_max in
-  let line = Input.line_num env.current_buf in
-  if line > line_max || (line = line_max && env.current_col > col_max) then
-    env.max_pos := (env.current_buf, env.current_col, ref []);
+  let (pos_max, _, _, _) = !(env.max_pos) in
+  let pos = Input.line_offset env.current_buf + env.current_col in
+  if pos > pos_max  then
+    env.max_pos := (pos, env.current_buf, env.current_col, ref []);
   err ()
 
 let next_msg : string -> env -> err -> res  = fun msg env err ->
-  let (buf_max, col_max, msgs) = !(env.max_pos) in
-  let line_max = Input.line_num buf_max in
-  let line = Input.line_num env.current_buf in
-  if line > line_max || (line = line_max && env.current_col > col_max) then
-    env.max_pos := (env.current_buf, env.current_col, ref [msg])
-  else if line = line_max && env.current_col = col_max then
-    msgs := msg :: !msgs;
+  let (pos_max, _, _, msgs) = !(env.max_pos) in
+  let pos = Input.line_offset env.current_buf + env.current_col in
+  if pos > pos_max then
+    env.max_pos := (pos, env.current_buf, env.current_col, ref [msg])
+  else if pos = pos_max then msgs := msg :: !msgs;
   err ()
 
 (** the scheduler stores what remains to do in a list sorted by position
@@ -238,7 +235,8 @@ let scheduler : ?all:bool -> env -> 'a t -> ('a * env) list =
       (try
          res := (eval x,env)::!res;
          if all then next env err else raise Exit
-       with Lex.NoParse -> next env err);
+       with Lex.NoParse   -> next env err
+          | Lex.Give_up m -> next_msg m env err);
     in
     try
       (* calls to the initial grammar and initialise the table *)
@@ -278,21 +276,21 @@ let empty : 'a -> 'a t = fun x env kf err -> call kf env err (A(Idt,x))
 
 (** Combinator accepting the given lexeme (or terminal). *)
 let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
-    (try
-       let (v, buf_before_blanks, col_before_blanks) =
-         lex env.current_buf env.current_col
-       in
+    try
+      let (v, buf_before_blanks, col_before_blanks) =
+        lex env.current_buf env.current_col
+      in
        let (current_buf, current_col) =
          env.blank_fun buf_before_blanks col_before_blanks
        in
-       fun () ->
-         let k = eval_lrgs k in
-         let env =
-           { env with buf_before_blanks ; col_before_blanks
+       let k = eval_lrgs k in
+       let env =
+         { env with buf_before_blanks ; col_before_blanks
                     ; current_buf ; current_col; lr = Assoc.empty }
-         in
-         Cont(env,k, err, v)
-     with Lex.NoParse -> fun () -> next env err) ()
+       in
+       Cont(env,k, err, v)
+    with Lex.NoParse -> next env err
+       | Lex.Give_up m -> next_msg m env err
 
 (** Same as above but does not return to the scheduler, to use if
     one knows the error has not changed, so the scheduler will do
@@ -305,14 +303,14 @@ let direct_lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
        let (current_buf, current_col) =
          env.blank_fun buf_before_blanks col_before_blanks
        in
-       fun () ->
-         let k = eval_lrgs k in
-         let env =
-           { env with buf_before_blanks ; col_before_blanks
+       let k = eval_lrgs k in
+       let env =
+         { env with buf_before_blanks ; col_before_blanks
                     ; current_buf ; current_col; lr = Assoc.empty }
-         in
-         call k env err (A(Idt,v))
-     with Lex.NoParse -> fun () -> next env err) ()
+       in
+       fun () -> call k env err (A(Idt,v))
+     with Lex.NoParse -> fun () -> next env err
+        | Lex.Give_up m -> fun () -> next_msg m env err) ()
 
 (** Sequence combinator. *)
 let seq : 'a t -> ('a -> 'b) t -> 'b t = fun g1 g2 env k err ->
@@ -328,7 +326,8 @@ let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
               on right recursion *)
            let g = g2 v1 in
            fun () -> g env (arg k v2) err
-         with Lex.NoParse -> fun () -> next env err) ())) err
+         with Lex.NoParse -> fun () -> next env err
+            | Lex.Give_up m -> fun () -> next_msg m env err) ())) err
 
 (** [test cs env] returns [true] if and only if the next character to parse in
     the environment [env] is in the character set [cs]. *)
@@ -385,14 +384,11 @@ type 'a key = 'a app Assoc.key
 let lr : 'a t -> 'a key -> 'a t -> 'a t = fun g key gf env k err ->
     let rec klr env err v =
       let err () =
-        (try
-            let lr = Assoc.add key v env.lr in
-            let env0 = { env with lr } in
-            fun () -> gf env0 (ink klr) err
-          with
-            Lex.NoParse -> err) ()
-        in
-        call k env err v
+        let lr = Assoc.add key v env.lr in
+        let env0 = { env with lr } in
+        gf env0 (ink klr) err
+      in
+      call k env err v
     in
     g env (ink klr) err
 
@@ -401,15 +397,12 @@ let lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t =
     let pos = Pos.get_pos env.current_buf env.current_col in
     let rec klr env err v =
       let err () =
-        (try
-            let lr = Assoc.add key v env.lr in
-            let lr = Assoc.add pkey pos lr in
-            let env0 = { env with lr } in
-            fun () -> gf env0 (ink klr) err
-          with
-            Lex.NoParse -> err) ()
-        in
-        call k env err v
+        let lr = Assoc.add key v env.lr in
+        let lr = Assoc.add pkey pos lr in
+        let env0 = { env with lr } in
+        gf env0 (ink klr) err
+      in
+      call k env err v
     in
     g env (ink klr) err
 
@@ -498,7 +491,8 @@ let gen_parse_buffer
     : type a. a t -> ?all:bool -> Lex.blank -> ?blank_after:bool
                   -> Lex.buf -> int -> (a * Lex.buf * int) list =
   fun g ?(all=false) blank_fun ?(blank_after=false) buf0 col0 ->
-    let max_pos = ref (buf0, col0, ref []) in
+    let p0 = Input.line_offset buf0 + col0 in
+    let max_pos = ref (p0, buf0, col0, ref []) in
     let (buf, col) = blank_fun buf0 col0 in
     let env =
       { buf_before_blanks = buf0 ; col_before_blanks = col0
@@ -508,7 +502,7 @@ let gen_parse_buffer
     let r = scheduler ~all env g in
     match r with
     | [] ->
-       let (buf, col, msgs) = !max_pos in
+       let (_, buf, col, msgs) = !max_pos in
        let msgs = List.sort_uniq compare !msgs in
        raise (Pos.Parse_error(buf, col, msgs))
     | _ -> List.map (fun (v,env) ->

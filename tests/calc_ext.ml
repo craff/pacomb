@@ -67,8 +67,10 @@ let rec eval env = function
 let%parser ident = (id::RE("[a-zA-Z][a-zA-Z0-9_]*")) => id
                  ; ERROR("ident")
 
-let%parser bin = (c::RE("[-&~^+=*/\\$!:]+\\(_[a-zA-Z0-9_]+\\)?")) => c
-               ; (ERROR "op bin")
+let%parser bin =
+  (c::RE("[-&~^+=*/\\$!:]+\\(_[a-zA-Z0-9_]+\\)?"))
+    => (if c = "=" then give_up ~msg:"= not valid as op bin" (); c)
+; (ERROR "op bin")
 
 let%parser op pmin pmax =
   (c::bin) =>
@@ -84,7 +86,7 @@ let%parser op pmin pmax =
           | _          -> p -. 1e-10
         in
         (p,c)
-    with Not_found -> give_up ()
+    with Not_found -> give_up ~msg:("unbound op bin "^c) ()
 
 let%parser closing = ')' => (); ERROR "closing parenthesis"
 

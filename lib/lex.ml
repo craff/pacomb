@@ -11,8 +11,12 @@ type blank = buf -> int -> buf * int
 (** Exception to be raised when the input is rejected *)
 exception NoParse
 
+exception Give_up of string
+
 (** [give_up ()] rejects parsing from a corresponding semantic action. *)
-let give_up : unit -> 'a = fun _ -> raise NoParse
+let give_up : ?msg:string -> unit -> 'a = fun ?msg () ->
+  match msg with None -> raise NoParse
+               | Some s -> Printf.eprintf "gu: %s\n%!" s; raise (Give_up s)
 
 (** Terminal: same as blank with a value returned *)
 type 'a lexeme = buf -> int -> 'a * buf * int

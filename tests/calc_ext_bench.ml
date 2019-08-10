@@ -34,7 +34,7 @@ let%parser op pmin pmax =
           | _          -> p -. 1e-10
         in
         (p,f)
-    with Not_found -> give_up ()
+    with Not_found -> give_up ~msg:("unbound op bin "^c) ()
 
 let%parser rec
  expr pmax = ((pe,e1)>:expr pmax [@cs Charset.from_string "-&~^+=*/\\$!:"])
