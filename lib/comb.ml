@@ -171,16 +171,16 @@ let eval_lrgs : type a. a cont -> a cont = fun k ->
     calls the [err] function. *)
 let next : env -> err -> res  = fun env err ->
   let (buf_max, col_max, _) = !(env.max_pos) in
-  let line_max = Input.line buf_max in
-  let line = Input.line env.current_buf in
+  let line_max = Input.line_num buf_max in
+  let line = Input.line_num env.current_buf in
   if line > line_max || (line = line_max && env.current_col > col_max) then
     env.max_pos := (env.current_buf, env.current_col, ref []);
   err ()
 
 let next_msg : string -> env -> err -> res  = fun msg env err ->
   let (buf_max, col_max, msgs) = !(env.max_pos) in
-  let line_max = Input.line buf_max in
-  let line = Input.line env.current_buf in
+  let line_max = Input.line_num buf_max in
+  let line = Input.line_num env.current_buf in
   if line > line_max || (line = line_max && env.current_col > col_max) then
     env.max_pos := (env.current_buf, env.current_col, ref [msg])
   else if line = line_max && env.current_col = col_max then
