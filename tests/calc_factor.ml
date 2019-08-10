@@ -1,5 +1,4 @@
 open Pacomb
-open Lex
 open Pos
 open Grammar
 

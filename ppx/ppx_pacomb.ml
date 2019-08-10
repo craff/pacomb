@@ -10,7 +10,7 @@ let grmod s = Exp.ident (mknoloc (Ldot(Lident "Grammar",s)))
 let lxmod s = Exp.ident (mknoloc (Ldot(Lident "Lex",s)))
 let rgmod s = Exp.ident (mknoloc (Ldot(Lident "Regexp",s)))
 
-let unit_ = Exp.construct (Location.mknoloc (Lident "()")) None
+let unit_ = let loc = none in [%expr ()]
 
 let app loc f x = Exp.apply ~loc f [(Nolabel, x)]
 let app2 loc f x y = Exp.apply ~loc f [(Nolabel, x);(Nolabel, y)]
@@ -52,52 +52,50 @@ let has_ident id e =
    - (pat = lid) is the synta for as pattern *)
 let rec exp_to_pattern e =
   let loc = e.pexp_loc in
-  match e.pexp_desc with
-  | Pexp_ident({txt = Lident name; loc = loc_s}) ->
+  match e with
+  | {pexp_desc = Pexp_ident({txt = Lident name; loc = loc_s}); _} ->
      let name = mkloc name loc_s in
      (Some name, Pat.var ~loc name)
-  | Pexp_apply({pexp_desc = Pexp_ident {txt = Lident "="; _}; _},
-               [ (Nolabel, e)
-               ; (Nolabel,
-                  {pexp_desc = Pexp_ident({txt = Lident name
-                                          ;loc = loc_s}); _})])
+  | [%expr [%e? e] = [%e? {pexp_desc = Pexp_ident({txt = Lident name
+                                                  ;loc = loc_s}); _}]]
      ->
      let name = mkloc name loc_s in
      let (_, pat) = exp_to_pattern e in
      (Some name, Pat.alias pat name)
-  | Pexp_constraint(e,t) ->
+  | [%expr ([%e? e] : [%t? t])] ->
      let (name, pat) = exp_to_pattern e in
-     (name, Pat.constraint_ ~loc pat t)
-  | Pexp_tuple(l) ->
+     (name, [%pat? ([%p pat] : [%t t])])
+  | {pexp_desc = Pexp_tuple(l); _} ->
      let (_,pats) = List.split (List.map exp_to_pattern l) in
      (None, Pat.tuple ~loc pats)
-  | Pexp_open(_,m,e) ->
+  | [%expr lazy [%e? e]] ->
+     let (name, pat) = exp_to_pattern e in
+     (name, [%pat? lazy [%p pat]])
+(* | [%expr let open [%m? m] in [%e? e]] ->*)
+  | { pexp_desc = Pexp_open(_,m,e); _ } ->
      let (name, pat) = exp_to_pattern e in
      (name, Pat.open_ ~loc m  pat)
-  | Pexp_lazy(e) ->
-     let (name, pat) = exp_to_pattern e in
-     (name, Pat.lazy_ ~loc pat)
   | _ -> warn loc "expression eft of \"::\" does not represent a pattern"
 
 (* transform an expression into a terminal *)
 let exp_to_term exp =
   let loc = exp.pexp_loc in
-  match exp.pexp_desc with
-  | Pexp_constant (Pconst_char _) ->
-     app loc (grmod "term") (app2 loc (lxmod "char") exp unit_)
-  | Pexp_construct({txt = Lident "CHAR"; _}, Some s) ->
-     app loc (grmod "term") (app2 loc (lxmod "char") s unit_)
-  | Pexp_constant (Pconst_string _) ->
-     app loc (grmod "term") (app2 loc (lxmod "string") exp unit_)
-  | Pexp_construct({txt = Lident "STR"; _}, Some s) ->
-     app loc (grmod "term") (app2 loc (lxmod "string") s unit_)
-  | Pexp_construct({txt = Lident "INT"; _}, None) ->
-     app loc (grmod "term") (app loc (lxmod "int") unit_)
-  | Pexp_construct({txt = Lident "FLOAT"; _}, None) ->
-     app loc (grmod "term") (app loc (lxmod "float") unit_)
-  | Pexp_construct({txt = Lident "RE"; _}, Some s) ->
-     app loc (grmod "term") (app loc (lxmod "regexp")
-                               (app loc (rgmod "from_string") s))
+  match exp with
+  | {pexp_desc = Pexp_constant (Pconst_char _); _} ->
+     [%expr [%e grmod "term"] ([%e lxmod "char"] [%e exp] ())]
+  | [%expr CHAR([%e? s])] ->
+     [%expr [%e grmod "term"] ([%e lxmod "char"] [%e s] ())]
+  | {pexp_desc = Pexp_constant (Pconst_string _); _} ->
+     [%expr [%e grmod "term"] ([%e lxmod "string"] [%e exp] ())]
+  | [%expr STR([%e? s])] ->
+     [%expr [%e grmod "term"] ([%e lxmod "string"] [%e s] ())]
+  | [%expr INT] ->
+     [%expr [%e grmod "term"] ([%e lxmod "int"] ())]
+  | [%expr FLOAT] ->
+     [%expr [%e grmod "term"] ([%e lxmod "float"] ())]
+  | [%expr RE([%e? s])] ->
+     [%expr [%e grmod "term"] ([%e lxmod "regexp"]
+                                 ([%e rgmod "from_string"] [%e s]))]
   | _ -> exp
 
 (* treat each iterm in a rule. Accept (pat::term) or term when
@@ -181,6 +179,7 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
           let id_pos = mkloc (id.txt ^ "_pos") id.loc in
           let id_lpos = mkloc (id.txt ^ "_lpos") id.loc in
           let id_rpos = mkloc (id.txt ^ "_rpos") id.loc in
+          let has_id = has_ident id.txt action in
           let has_id_pos = has_ident id_pos.txt action in
           let has_id_lpos = has_id_pos || has_ident id_lpos.txt action in
           let has_id_rpos = has_id_pos || has_ident id_rpos.txt action in
@@ -208,7 +207,14 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
             else acts_fn
           in
           let acts_fn exp =
-            Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp)
+            let loc = exp.pexp_loc in
+            if not has_id && (has_id_lpos || has_id_rpos) then
+              begin
+                let id = Exp.ident (mkloc (Lident id.txt) id.loc) in
+                [%expr fun [%p pat] -> ignore [%e id]; [%e acts_fn exp]]
+              end
+            else
+              [%expr fun [%p pat] -> [%e acts_fn exp]]
           in
           (acts_fn, (has_id_lpos,has_id_rpos,dep,item,loc_e) :: rule)
      in
@@ -454,35 +460,37 @@ let exp_to_parser e =
      | Warn att -> add_attribute e att
 
 
-(* the main mapper *)
-let pacomb_mapper _argv =
-  (* the recursive mapper that tries to transform all
-     expression to grammar and all let bindings to grammar definitions *)
-  let map_all =
-    { default_mapper with
-      expr = (fun mapper exp -> default_mapper.expr mapper
-                                  (exp_to_parser exp))
-    ; structure_item =  (fun mapper s -> str_to_parser
-                                  [default_mapper.structure_item mapper s])
-    }
-  in
-  (* the mapper that use the previous one inside [[%% parse]] *)
-  { default_mapper with
-    structure_item = (fun mapper item ->
-      match item.pstr_desc with
-      | Pstr_extension (({ txt = "parser"; _ }, PStr str), _) ->
-         map_all.structure_item map_all (str_to_parser str)
-      | _ -> default_mapper.structure_item mapper item)
-  ; expr = (fun mapper exp ->
-      match exp.pexp_desc with
-      | Pexp_extension ({ txt = "parser"; _ }, PStr str) ->
-         let exp = match str with
-             [{pstr_desc = Pstr_eval(e,_); _}] -> e
-           | _ -> assert false
-         in
-         map_all.expr map_all (exp_to_parser exp)
-      | _ -> default_mapper.expr mapper exp)
-  }
+open Ppxlib
+module Ast = Ast_builder.Default
 
-let () =
-  register "ppx_test" pacomb_mapper
+let expand_expression expr =
+  exp_to_parser expr
+
+let map_all = object
+    inherit Ast_traverse.map as super
+
+    method! expression e =
+      super#expression (exp_to_parser e)
+
+    method! structure_item =
+      (fun i -> super#structure_item (str_to_parser [i]))
+  end
+
+let rule_expr =
+  let ctx = Extension.Context.expression in
+  let pat = Ast_pattern.(single_expr_payload __) in
+  let ext = Extension.declare "parser" ctx pat
+              (fun ~loc:_ ~path:_ -> map_all#expression) in
+  Context_free.Rule.extension ext
+
+let rule_str_item =
+  let ctx = Extension.Context.structure_item in
+  let pat = Ast_pattern.(pstr __) in
+  let ext = Extension.declare "parser" ctx pat
+              (fun ~loc:_ ~path:_ l ->
+                (flatten_str (List.map map_all#structure_item l))) in
+  Context_free.Rule.extension ext
+
+let _ =
+  let rules = [rule_expr ; rule_str_item] in
+  Driver.register_transformation ~rules "ppx_pacomb"

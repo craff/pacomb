@@ -1,11 +1,12 @@
 (library
   (name pacomb_ppx)
   (public_name pacomb.ppx)
-  (modules )
-  (synopsis "A ppx extension to write parser using Pacomb"))
+  (preprocess (pps ppxlib.metaquot))
+  (modules ppx_pacomb)
+  (kind ppx_rewriter)
+  (libraries ppxlib))
 
 (executable
-  (name ppx_pacomb)
-  (public_name ppx_pacomb)
-  (modules Ppx_pacomb)
-  (libraries unix compiler-libs.common))
+  (name ppx)
+  (modules ppx)
+  (libraries pacomb_ppx))
