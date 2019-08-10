@@ -30,7 +30,7 @@ let _ =
         let n = parse_string top blank line in
         Printf.printf "%f\n%!" n
       in
-      handle_exception f ()
+      handle_exception ~error:(fun _ -> ()) f ()
     done
   with
     End_of_file -> ()

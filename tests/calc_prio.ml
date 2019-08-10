@@ -22,7 +22,7 @@ let _ =
         let line = input_line stdin in
         let n = parse_string (expr Sum) blank line in
         Printf.printf "%f\n%!" n
-      in handle_exception f ()
+      in handle_exception ~error:(fun _ -> ()) f ()
     done
   with
     End_of_file -> ()

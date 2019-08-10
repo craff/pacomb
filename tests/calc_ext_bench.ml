@@ -55,7 +55,7 @@ let _ =
         Printf.printf "=> %!";
         let line = input_line stdin in
         Printf.printf "%f\n%!" (parse_string expr_top blank line )
-      in handle_exception f ()
+      in handle_exception ~error:(fun _ -> ()) f ()
     done
   with
     End_of_file -> ()
