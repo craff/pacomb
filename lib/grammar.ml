@@ -430,9 +430,13 @@ let factor_empty g =
                                | Some x -> Some (x Pos.phantom))
     | Layout(_,g,_) -> fn g; g.e
     | Cache(_,g)    -> fn g; g.e
-    | Test(_,g)     -> fn g; (match g.e with
-                              | None -> None
-                              | Some _ -> failwith "illegal test on grammar accepting empty")
+    | Test(_,g)     -> begin
+                         fn g;
+                         match g.e with
+                         | None   -> None
+                         | Some _ ->
+                            failwith "illegal test on grammar accepting empty"
+                       end
     | Tmp           -> failwith "grammar compiled before full definition"
   in
   let rec hn : type a. a grammar -> unit = fun g ->
