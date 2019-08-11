@@ -480,7 +480,8 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
                  too_late := true;
                  List.fold_left (fun x v -> merge x (force v)) x !vptr
                in
-               lazy (match gn (force v) with None -> raise Lex.NoParse | Some x -> x)
+               lazy (match gn (force v) with None -> raise Lex.NoParse
+                                           | Some x -> x)
           in
           let l0 = !ptr in
           let rec fn l =

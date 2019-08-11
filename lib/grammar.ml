@@ -424,8 +424,10 @@ let factor_empty g =
                        (* FIXME #14: Loose position *)
     | Layout(_,g,_) -> fn g; g.e
     | Cache(_,g)    -> fn g; g.e
-    | Test(_,g)     -> fn g; if g.e <> [] then
-                               failwith "illegal test on grammar accepting empty"; []
+    | Test(_,g)     -> fn g;
+                       if g.e <> [] then
+                         failwith "illegal test on grammar accepting empty";
+                       []
     | Tmp           -> failwith "grammar compiled before full definition"
   in
   let rec hn : type a. a grammar -> unit = fun g ->
@@ -451,13 +453,14 @@ let factor_empty g =
                     ne_alt [ga; gb]
     | DSeq(g1,cs,g2) -> hn g1;
                         let ga = ne_dseq (get g1) cs g2 in
-                        let gb = ne_alt (List.fold_left (fun acc (x,x') ->
-                                             try
-                                               let g2 = g2 x in
-                                               fn g2; hn g2;
-                                               ne_appl (get g2) (fun y -> y x') :: acc
-                                           with NoParse -> acc) [] g1.e)
-                                        (* FIXME, fn called twice on g2 x *)
+                        let gb =
+                          ne_alt (List.fold_left (fun acc (x,x') ->
+                                   try
+                                     let g2 = g2 x in
+                                     fn g2; hn g2;
+                                     ne_appl (get g2) (fun y -> y x') :: acc
+                                   with NoParse -> acc) [] g1.e)
+                                (* FIXME, fn called twice on g2 x *)
                        in
                        ne_alt [ga; gb]
     | Lr(g1,k,pk,g2) -> hn g1; hn g2; ne_lr (get g1) k ?pk g2
