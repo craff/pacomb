@@ -7,8 +7,6 @@ open Location
 
 (*helper to build expressions *)
 let grmod s = Exp.ident (mknoloc (Ldot(Lident "Grammar",s)))
-let lxmod s = Exp.ident (mknoloc (Ldot(Lident "Lex",s)))
-let rgmod s = Exp.ident (mknoloc (Ldot(Lident "Regexp",s)))
 
 let cache_att =
   let open Ppxlib in
@@ -32,9 +30,6 @@ let cs_att =
                (fun x -> x))
 
 let unit_ = let loc = none in [%expr ()]
-
-let app loc f x = Exp.apply ~loc f [(Nolabel, x)]
-let app2 loc f x y = Exp.apply ~loc f [(Nolabel, x);(Nolabel, y)]
 
 (* make a location from two *)
 let merge_loc loc1 loc2 =
@@ -103,20 +98,19 @@ let exp_to_term exp =
   let loc = exp.pexp_loc in
   match exp with
   | {pexp_desc = Pexp_constant (Pconst_char _); _} ->
-     [%expr [%e grmod "term"] ([%e lxmod "char"] [%e exp] ())]
+     [%expr Grammar.term (Lex.char [%e exp] ())]
   | [%expr CHAR([%e? s])] ->
-     [%expr [%e grmod "term"] ([%e lxmod "char"] [%e s] ())]
+     [%expr Grammar.term (Lex.char [%e s] ())]
   | {pexp_desc = Pexp_constant (Pconst_string _); _} ->
-     [%expr [%e grmod "term"] ([%e lxmod "string"] [%e exp] ())]
+     [%expr Grammar.term (Lex.string [%e exp] ())]
   | [%expr STR([%e? s])] ->
-     [%expr [%e grmod "term"] ([%e lxmod "string"] [%e s] ())]
+     [%expr Grammar.term (Lex.string [%e s] ())]
   | [%expr INT] ->
-     [%expr [%e grmod "term"] ([%e lxmod "int"] ())]
+     [%expr Grammar.term (Lex.int ())]
   | [%expr FLOAT] ->
-     [%expr [%e grmod "term"] ([%e lxmod "float"] ())]
+     [%expr Grammar.term (Lex.float ())]
   | [%expr RE([%e? s])] ->
-     [%expr [%e grmod "term"] ([%e lxmod "regexp"]
-                                 ([%e rgmod "from_string"] [%e s]))]
+     [%expr Grammar.term (Lex.regexp (Regexp.from_string [%e s]))]
   | _ -> exp
 
 (* treat each iterm in a rule. Accept (pat::term) or term when
@@ -153,7 +147,7 @@ let rec exp_to_rule e =
      let l = (e1, e.pexp_loc) :: List.map kn args in
      (List.map exp_to_rule_item l, None)
   | Pexp_construct({txt = Lident "()"; loc}, None) ->
-     ([None, None, app loc (grmod "empty") unit_, loc_e], None)
+     ([None, None, [%expr Grammar.empty ()], loc_e], None)
   | _ ->
      ([exp_to_rule_item (e, e.pexp_loc)], None)
 
@@ -228,10 +222,10 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
        with
        | Exit ->
           let loc = action.pexp_loc in
-          app loc (grmod "empty") (acts_fn action)
+          [%expr Grammar.empty [%e acts_fn action]]
        | Warn att ->
           let loc = action.pexp_loc in
-          let exp = app loc (grmod "empty") (acts_fn action) in
+          let exp = [%expr Grammar.empty [%e acts_fn action]] in
           add_attribute exp att
 
      in
@@ -244,11 +238,12 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
          if args = [] then grmod f
          else Exp.apply (grmod f) args
        in
+       let loc = merge_loc loc_e exp.pexp_loc in
        let f = match (lpos,rpos,dep) with
-         | false, false, None -> grmod "seq"
-         | true , false, None -> grmod "seq_lpos"
-         | false, true , None -> grmod "seq_rpos"
-         | true , true , None -> grmod "seq_pos"
+         | false, false, None -> [%expr Grammar.seq]
+         | true , false, None -> [%expr Grammar.seq_lpos]
+         | false, true , None -> [%expr Grammar.seq_rpos]
+         | true , true , None -> [%expr Grammar.seq_pos]
          | false, false, Some(_,cs) -> app_cs "dseq"      cs
          | true , false, Some(_,cs) -> app_cs "dseq_lpos" cs
          | false, true , Some(_,cs) -> app_cs "dseq_rpos" cs
@@ -256,25 +251,23 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
        in
        let exp = match dep with
          | None -> exp
-         | Some (pat,_) -> Exp.fun_ Nolabel None pat exp
+         | Some (pat,_) -> [%expr fun [%p pat] -> [%e exp]]
        in
-       app2 (merge_loc loc_e exp.pexp_loc) f item exp
+       [%expr [%e f] [%e item] [%e exp]]
      in
      let rule = List.fold_right fn rule action in
      let rule =
        match cond with
        | None -> rule
-       | Some cond -> Exp.ifthenelse cond rule
-                        (Some (app none (grmod "fail") unit_))
+       | Some cond ->
+          let loc = rule.pexp_loc in
+          [%expr if [%e cond] then [%e rule] else Grammar.fail ()]
      in
      [rule]
   (* inheritance case [prio1 < prio2 < ... < prion] *)
   | [%expr [%e? _] < [%e? _]] when name_param <> None ->
-     let rec fn exp = match exp.pexp_desc with
-       | Pexp_apply
-         ( { pexp_desc = Pexp_ident {txt = Lident "<"; _}; _ }
-         , [(Nolabel, x);(Nolabel, y)]) ->
-          y :: fn x
+     let rec fn exp = match exp with
+       | [%expr [%e? x] < [%e? y]] -> y :: fn x
        | _ -> [exp]
      in
      let prios = fn e in
@@ -287,19 +280,16 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
      let rec gn acc l =
        match l with
        | x::(y::_ as l) ->
-          let e =
-            app2 loc (grmod "seq2")
-              (app loc (grmod "test")
-                 (app2 loc (Exp.ident (mknoloc (Lident "=")))
-                    (Exp.ident param) x))
-              (app loc (Exp.ident name) y)
+          let e = [%expr Grammar.seq2 (Grammar.test
+                                         ([%e Exp.ident param] = [%e x]))
+                      ([%e Exp.ident name] [%e y])]
           in gn (e::acc) l
        | [] | [_] -> acc
      in
      gn [] prios
   | [%expr ERROR([%e? s])] ->
      let loc = e.pexp_loc in
-     [ [%expr [%e grmod "error"] [%e s]] ]
+     [ [%expr Grammar.error [%e s]] ]
   (* alternatives represented as sequence *)
   | [%expr [%e? e1]; [%e? e2]] ->
      exp_to_rules ?name_param ~acts_fn e1
@@ -311,20 +301,20 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
    to the result of exp_to_rules *)
 and exp_to_grammar ?name_param ?(acts_fn=(fun exp -> exp)) exp =
   let rules = exp_to_rules ?name_param ~acts_fn exp in
+  let loc = exp.pexp_loc in
   match rules with (* three cases for better location ? *)
-  | [] -> app none (grmod "fail") unit_
+  | [] -> [%expr Grammar.fail ()]
   | [x] -> x
   | _ ->
      let rec fn = function
-       | [] -> Exp.construct (mknoloc (Lident "[]")) None
+       | [] -> [%expr []]
        | x::l ->
           let exp = fn l in
           let loc = merge_loc x.pexp_loc exp.pexp_loc in
-          Exp.construct ~loc (mknoloc (Lident "::"))
-            (Some(Exp.tuple [x;exp]))
+          [%expr [%e x] :: [%e exp]]
      in
      let exp = fn rules in
-     app exp.pexp_loc (grmod "alt") exp
+     [%expr Grammar.alt [%e exp]]
 
 (* remove acts_fn argument and handle exceptions *)
 let exp_to_grammar ?name_param exp =
@@ -397,12 +387,12 @@ let vb_to_parser rec_ vb =
         match param with
         | None ->
            Vb.mk ~loc pat
-             (app loc (grmod "declare_grammar")
-                (Exp.constant ~loc:name.loc (Const.string name.txt)))
+             [%expr Grammar.declare_grammar
+                [%e Exp.constant ~loc:name.loc (Const.string name.txt)]]
         | Some _ ->
            Vb.mk ~loc (Pat.tuple [pat; Pat.var (mkloc (set name) name.loc)])
-             (app loc (grmod "grammar_family")
-                (Exp.constant ~loc:name.loc (Const.string name.txt)))
+             [%expr Grammar.grammar_family
+                [%e Exp.constant ~loc:name.loc (Const.string name.txt)]]
       in
       [vd]
     in
@@ -420,13 +410,14 @@ let vb_to_parser rec_ vb =
       let exp =
         match param with
         | None ->
-           app2 loc (grmod "set_grammar")
-             (Exp.ident (Location.mkloc (Lident name.txt) name.loc))
-             rules
+           [%expr Grammar.set_grammar
+             [%e Exp.ident (Location.mkloc (Lident name.txt) name.loc)]
+             [%e rules]]
         | Some (_,pn,pat) ->
-           app loc
-             (Exp.ident (Location.mkloc (Lident (set name)) name.loc))
-             (Exp.fun_ ~loc Nolabel None (Pat.alias pat (mknoloc pn)) rules)
+           let pat = Pat.alias pat (mknoloc pn) in
+           [%expr
+             [%e Exp.ident (Location.mkloc (Lident (set name)) name.loc)]
+             (fun [%p pat] -> [%e rules])]
       in
       [Vb.mk ~loc (Pat.any ()) exp]
     in
