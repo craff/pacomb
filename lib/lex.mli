@@ -132,6 +132,10 @@ val char_lit : ?name:string -> unit -> char t
     [name] defaults to ["STRINGLIT"] *)
 val string_lit : ?name:string -> unit -> string t
 
+(** Parses a unicode UTF8 char
+    [name] defauls to ["UTF8"] *)
+val utf8 : ?name:string -> unit -> Uchar.t t
+
 (** [keyword ~name k cs x = seq ~name (string  k ()) (test f ()) (fun _ _ -> x)]
      usefull to  accept a  keyword only  when not  followed by  an alpha-numeric
      char *)

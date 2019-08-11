@@ -67,6 +67,55 @@ let charset_from_test f =
   done;
   !l
 
+let utf8 : ?name:string -> unit -> Uchar.t t = fun ?name () ->
+  { n = default "UTF8" name
+  ; c = Charset.full
+  ; f = fun s n ->
+        let (c1,s,n) = Input.read s n in
+        let n1 = Char.code c1 in
+        let (n0,s,n) =
+          if n1 land 0b1000_0000 = 0 then (n1 lor 0b0111_1111, s, n)
+          else if n1 land 0b1110_0000 = 0b1100_0000 then
+            begin
+              let (c2,s,n) = Input.read s n in
+              let n2 = Char.code c2 in
+              if n2 land 0b1100_0000 <> 0b1000_0000 then raise NoParse;
+              (((n1 land 0b0001_1111) lsl 6) lor
+                (n2 land 0b0011_1111), s , n)
+            end
+          else if n1 land 0b1111_0000 = 0b1110_0000 then
+            begin
+              let (c2,s,n) = Input.read s n in
+              let n2 = Char.code c2 in
+              if n2 land 0b1100_0000 <> 0b1000_0000 then raise NoParse;
+              let (c3,s,n) = Input.read s n in
+              let n3 = Char.code c3 in
+              if n3 land 0b1100_0000 <> 0b1000_0000 then raise NoParse;
+              (((n1 land 0b0000_1111) lsl 12) lor
+                ((n2 land 0b0011_1111) lsl 6) lor
+                  (n3 land 0b0011_1111), s, n)
+            end
+          else if n1 land 0b1111_1000 = 0b1111_0000 then
+            begin
+              let (c2,s,n) = Input.read s n in
+              let n2 = Char.code c2 in
+              if n2 land 0b1100_0000 <> 0b1000_0000 then raise NoParse;
+              let (c3,s,n) = Input.read s n in
+              let n3 = Char.code c3 in
+              if n3 land 0b1100_0000 <> 0b1000_0000 then raise NoParse;
+              let (c4,s,n) = Input.read s n in
+              let n4 = Char.code c4 in
+              if n4 land 0b1100_0000 <> 0b1000_0000 then raise NoParse;
+              (((n1 land 0b0000_0111) lsl 18) lor
+                ((n2 land 0b0011_1111) lsl 12) lor
+                  ((n3 land 0b0011_1111) lsl 6) lor
+                    (n4 land 0b0011_1111), s, n)
+            end
+          else raise NoParse
+        in
+        (Uchar.of_int n0,s,n)
+  }
+
 (** Accept a character for which the test returns [true] *)
 let test : ?name:string -> (char -> bool) -> char t = fun ?name f ->
   let cs = charset_from_test f in

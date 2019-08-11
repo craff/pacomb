@@ -78,6 +78,7 @@ item ::= '...'                                  Grammar.term(Lex.char ())
        | STRING(s)                             Grammar.term(Lex.string s)
        | INT                                     Grammar.term(Lex.int ())
        | FLOAT                                 Grammar.term(Lex.float ())
+       | UTF8                                   Grammar.term(Lex.utf8 ())
        | RE(expr)      Grammar.term(Lex.regexp (Regexp.from_string expr))
        | expr                                                      itself
 epat ::= lid

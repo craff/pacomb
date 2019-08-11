@@ -109,6 +109,8 @@ let exp_to_term exp =
      [%expr Grammar.term (Lex.int ())]
   | [%expr FLOAT] ->
      [%expr Grammar.term (Lex.float ())]
+  | [%expr UTF8] ->
+     [%expr Grammar.term (Lex.utf8 ())]
   | [%expr RE([%e? s])] ->
      [%expr Grammar.term (Lex.regexp (Regexp.from_string [%e s]))]
   | _ -> exp
