@@ -10,6 +10,27 @@ let grmod s = Exp.ident (mknoloc (Ldot(Lident "Grammar",s)))
 let lxmod s = Exp.ident (mknoloc (Ldot(Lident "Lex",s)))
 let rgmod s = Exp.ident (mknoloc (Ldot(Lident "Regexp",s)))
 
+let cache_att =
+  let open Ppxlib in
+  Attribute.(declare "cache"
+               Context.Value_binding
+               Ast_pattern.(pstr nil)
+               ())
+
+let merge_att =
+  let open Ppxlib in
+  Attribute.(declare "merge"
+               Context.Value_binding
+               Ast_pattern.(single_expr_payload __)
+               (fun x -> x))
+
+let cs_att =
+  let open Ppxlib in
+  Attribute.(declare "cs"
+               Context.Expression
+               Ast_pattern.(single_expr_payload __)
+               (fun x -> x))
+
 let unit_ = let loc = none in [%expr ()]
 
 let app loc f x = Exp.apply ~loc f [(Nolabel, x)]
@@ -106,16 +127,7 @@ let exp_to_rule_item (e, loc_e) =  match e with
      let (name, pat) = exp_to_pattern epat in
      (Some (name, pat), None, exp_to_term exp, loc_e)
   | [%expr ([%e? dpat], [%e? epat]) >: [%e? exp]] ->
-     let cs =
-       try
-         let (_,s) = List.find (fun (s,_) -> s.txt = "cs")
-                       exp.pexp_attributes
-         in
-         match s with
-         | PStr [{pstr_desc = Pstr_eval (e,_); _}] -> Some e
-         | _ -> raise Not_found
-       with Not_found -> None
-     in
+     let cs = Ppxlib.Attribute.get cs_att exp in
      let (name, pat) = exp_to_pattern epat in
      let (_, dpat) = exp_to_pattern dpat in
      (Some (name, pat), Some (dpat,cs), exp_to_term exp, loc_e)
@@ -360,22 +372,15 @@ let vb_to_parser rec_ vb =
       warn vb.pvb_pat.ppat_loc
         "Pattern not allowed here for grammar parameter";
     let rules =
-      try
-        let (_,s) = List.find (fun (s,_) -> s.txt = "merge")
-                      vb.pvb_attributes
-        in
-        let e =
-          match s with
-          | PStr [{pstr_desc = Pstr_eval (e,_); _}] -> e
-          | _ -> raise Not_found
-        in
+      match Ppxlib.Attribute.get merge_att vb with
+      | Some e ->
         [%expr Grammar.cache ~merge:[%e e] [%e rules]]
-      with Not_found -> rules
+      | None   -> rules
     in
     let rules =
-      if List.exists (fun (s,_) -> s.txt = "cache") vb.pvb_attributes then
-        [%expr Grammar.cache [%e rules]]
-      else rules
+      match Ppxlib.Attribute.get cache_att vb with
+      | Some _ -> [%expr Grammar.cache [%e rules]]
+      | None   -> rules
     in
     (loc,changed,name,vb.pvb_pat,name_param,rules)
   in

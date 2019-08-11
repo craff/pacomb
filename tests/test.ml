@@ -162,8 +162,10 @@ let size t =
   in fn t
 
 let merge x y = Alt(x,y)
-let test13c = fixpoint (fun r -> cache ~merge (alt [empty Nil; seq r (seq char_a r (fun _ x -> x))
-                                                    (fun x y -> Bin(x,y))]))
+let test13c =
+  fixpoint (fun r -> cache ~merge
+                       (alt [empty Nil; seq r (seq char_a r (fun _ x -> x))
+                                          (fun x y -> Bin(x,y))]))
 
 let test14 = term (Lex.int ())
 let test15 = term (Lex.float ())
@@ -444,11 +446,13 @@ let _ =
   done
 
 let _ =
-  Printf.printf "checking the number of parsetrees on an ambiguous example, using merge and cache\n%!";
+  Printf.printf "checking the number of parsetrees on an ambiguous example,\
+                 using merge and cache\n%!";
   for i = 0 to !catalan_max + 2 do
     let s = String.make i 'a' in
     let t = parse_string test13c s in
     let j = nb_tree t and s = size t and k = catalan i in
-    Printf.printf "catalan: %d => %d=%d (size %d %f)\n%!" i j k s (float s/.float j);
+    Printf.printf "catalan: %d => %d=%d (size %d %f)\n%!"
+      i j k s (float s/.float j);
     assert (j = k)
   done
