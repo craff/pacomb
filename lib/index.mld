@@ -43,7 +43,7 @@ it is written to a file [calc.ml]).
      ; (p=Prod) (x::expr Prod) '/' (y::expr Atom) => x /. y
      ; (p=Sum ) (x::expr Sum ) '+' (y::expr Prod) => x +. y
      ; (p=Sum ) (x::expr Sum ) '-' (y::expr Prod) => x -. y
-]]}
+]}
 
 This works using the extensions [[%%parser ...]] for structures and [[%parser
 ...]] for expression. They are also accessible by suffxing keywords with
