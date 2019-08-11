@@ -60,6 +60,8 @@ type 'a grammar =
                                            (** changes the blank function *)
    | Cache : ('a -> 'a -> 'a) option * 'a t -> 'a grdf
                                            (** caches the grammar *)
+   | Test : (Input.buffer -> int -> Input.buffer -> int -> bool) *
+              'a t -> 'a grdf
    | Tmp  : 'a grdf                        (** used as initial value for
                                                recursive grammar. *)
 
@@ -82,6 +84,8 @@ type 'a grammar =
    | ERPos : (Pos.t -> 'a) grne -> 'a grne
    | ELayout : blank * 'a grne * layout_config -> 'a grne
    | ECache : ('a -> 'a -> 'a) option * 'a grne -> 'a grne
+   | ETest : (Input.buffer -> int -> Input.buffer -> int -> bool) *
+              'a grne -> 'a grne
    | ETmp  : 'a grne
 
 (** grammar renaming *)
@@ -92,7 +96,7 @@ let mkg : ?name:string -> ?recursive:bool -> 'a grdf -> 'a grammar =
   fun ?(name="...") ?(recursive=false) d ->
     let k = Assoc.new_key () in
     { e = None; d; n = name; k; recursive; compiled = ref Comb.assert_false
-    ; charset = None; phase = Defined; ne = ETmp; cache = None; }
+    ; charset = None; phase = Defined; ne = ETmp; cache = None }
 
 (** A type to store list of grammar keys *)
 type ety = E : 'a Assoc.ty -> ety [@@unboxed]
@@ -129,6 +133,7 @@ let print_grammar ?(def=true) ch s =
     | ERPos(g)      -> pr "%a" pg g
     | ELPos(_,g)    -> pr "%a" pg g
     | ECache(_,g)   -> pr "%a" pg g
+    | ETest(_,g)    -> pr "%a" pg g
     | ELayout(_,g,_) -> pr "%a" pg g
     | ETmp          -> pr "TMP"
 
@@ -150,6 +155,7 @@ let print_grammar ?(def=true) ch s =
     | RPos(g)      -> pr "%a" pg g
     | LPos(_,g)    -> pr "%a" pg g
     | Cache(_,g)   -> pr "%a" pg g
+    | Test(_,g)    -> pr "%a" pg g
     | Layout(_,g,_)-> pr "%a" pg g
     | Tmp          -> pr "TMP"
 
@@ -252,6 +258,12 @@ let error m = mkg (Err m)
 
 let cache ?merge g = mkg (if g.d = Fail then Fail else Cache(merge,g))
 
+let test_blank f g = mkg (if g.d = Fail then Fail else Test(f,g))
+
+let no_blank_before g =
+  let fn b1 c1 b2 c2 = Input.buffer_equal b1 b2 && c1 = c2 in
+  test_blank fn g
+
 let layout ?(config=Comb.default_layout_config) b g =
   mkg (if g.d = Fail then Fail else Layout(b,g,config))
 
@@ -346,6 +358,10 @@ let ne_cache merge g1 = match g1 with
   | EFail -> EFail
   | _     -> ECache(merge,g1)
 
+let ne_test f g1 = match g1 with
+  | EFail -> EFail
+  | _     -> ETest(f,g1)
+
 let ne_layout b g cfg =
   match g with
   | EFail -> EFail
@@ -414,6 +430,9 @@ let factor_empty g =
                                | Some x -> Some (x Pos.phantom))
     | Layout(_,g,_) -> fn g; g.e
     | Cache(_,g)    -> fn g; g.e
+    | Test(_,g)     -> fn g; (match g.e with
+                              | None -> None
+                              | Some _ -> failwith "illegal test on grammar accepting empty")
     | Tmp           -> failwith "grammar compiled before full definition"
   in
   let rec hn : type a. a grammar -> unit = fun g ->
@@ -452,6 +471,7 @@ let factor_empty g =
     | LPos(pk,g1) -> hn g1; ne_lpos ?pk (get g1)
     | RPos(g1) -> hn g1; ne_rpos (get g1)
     | Cache(m,g1) -> hn g1; ne_cache m (get g1)
+    | Test(f,g1) -> hn g1; ne_test f (get g1)
     | Layout(b,g,cfg) -> hn g; ne_layout b (get g) cfg
     | Tmp           -> failwith "grammar compiled before full definition"
 
@@ -529,6 +549,9 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
          let pk = get_pk () in
          let (g1, s1) = fn g1 in
          (ne_lpos ?pk:None g1, lpos ?pk s1)
+      | ETest(f, g1) ->
+         let (g1, s1) = fn g1 in
+         (ne_test f g1, s1)
       | ELayout(_,g1,_) ->
          let (_, s1) = fn g1 in
          if s1.d <> Fail then
@@ -598,6 +621,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
     | ERPos g -> fn g
     | ELPos (_,g) -> fn g
     | ECache (_,g) -> fn g
+    | ETest (_,g) -> fn g
     | ELayout(_,g,cfg) -> if cfg.old_blanks_before
                              && not cfg.old_blanks_after
                           then fn g else (false, Charset.full)
@@ -642,6 +666,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   | ELPos(None,g) -> left_pos (compile_ne g)
   | ELPos(Some pk,g) -> read_pos pk (compile_ne g)
   | ECache(merge,g) -> cache ?merge (compile_ne g)
+  | ETest(f,g) -> Comb.test_blank f (compile_ne g)
   | ELayout(b,g,cfg) -> change_layout ~config:cfg b (compile_ne g)
   | ETmp -> assert false
 

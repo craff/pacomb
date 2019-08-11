@@ -71,6 +71,12 @@ val seq_rpos : 'a grammar -> ('a * Pos.t -> 'b) grammar -> 'b grammar
     input) *)
 val cache : ?merge:('a -> 'a -> 'a) -> 'a grammar -> 'a grammar
 
+(** allows to perform a test, the test function receive the position before
+    and after the blanks *)
+val test_blank : (Input.buffer -> int -> Input.buffer -> int -> bool)
+                 -> 'a grammar -> 'a grammar
+
+val no_blank_before : 'a grammar -> 'a grammar
 
 type layout_config = Comb.layout_config
 

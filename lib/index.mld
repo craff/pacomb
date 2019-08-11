@@ -61,6 +61,7 @@ grammar ::= rule                                                   itself
        | grammar ; rule                                       Grammar.alt
 rule ::= qitems => expr                            A rule with its action
        | expr < ... < expr                       priority order see below
+       | ERROR(m)                   report an error if parsing fails here
 qitems ::= ()                                               Grammar.empty
        | non_empty_qitems                                          itself
 non_empty_qitems ::= qitem                                         itself

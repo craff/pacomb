@@ -322,6 +322,14 @@ let alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t = fun cs1 g1 cs2 g2 ->
 let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k err ->
     g env (app k fn) err
 
+let test_blank : (Input.buffer -> int -> Input.buffer -> int -> bool)
+                 -> 'a t -> 'a t =
+  fun test g env k err ->
+    match test env.buf_before_blanks env.col_before_blanks
+            env.current_buf env.current_col
+    with false -> next env err
+       | true -> g env k err
+
 (** Read the position after parsing. *)
 let right_pos : type a.(Pos.t -> a) t -> a t = fun g env k err ->
     let k = match k with
