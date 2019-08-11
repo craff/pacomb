@@ -74,7 +74,7 @@ let utf8 : ?name:string -> unit -> Uchar.t t = fun ?name () ->
         let (c1,s,n) = Input.read s n in
         let n1 = Char.code c1 in
         let (n0,s,n) =
-          if n1 land 0b1000_0000 = 0 then (n1 lor 0b0111_1111, s, n)
+          if n1 land 0b1000_0000 = 0 then (n1 land 0b0111_1111, s, n)
           else if n1 land 0b1110_0000 = 0b1100_0000 then
             begin
               let (c2,s,n) = Input.read s n in
