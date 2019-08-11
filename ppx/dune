@@ -2,11 +2,6 @@
   (name pacomb_ppx)
   (public_name pacomb.ppx)
   (preprocess (pps ppxlib.metaquot))
-  (modules ppx_pacomb)
+  (modules :standard)
   (kind ppx_rewriter)
   (libraries ppxlib))
-
-(executable
-  (name ppx)
-  (modules ppx)
-  (libraries pacomb_ppx))
