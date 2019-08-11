@@ -64,9 +64,12 @@ rule ::= qitems => expr                            A rule with its action
        | ERROR(m)                   report an error if parsing fails here
 qitems ::= ()                                               Grammar.empty
        | non_empty_qitems                                          itself
+       | cond non_empty_qitems                           conditional rule
+cond ::= expr bool_op expr
+       | not expr
 non_empty_qitems ::= qitem                                         itself
        | non_empty_qitems qitems                              Grammar.seq
-qitem ::= item
+qitem ::= item                                                     itself
        | (epat :: item)                 give a name if used in the action
        | ((epat,epat) >: item)                     as above, but for dseq
 item ::= '...'                                  Grammar.term(Lex.char ())
@@ -84,7 +87,8 @@ epat ::= lid
        | M.epat
 ]}
 [epat] correspond to an encoding of patterns in expressions. Beware that [_] is
-invalid, use [__] instead.
+invalid, use [__] instead. [cond] is an expression using any test
+operator: "="|"<"|">"|"<="|">="|"<>"|"=="|"!="|"not"|"&&"|"||".
 
 In action code (expression right of [=>]), a [lid_lpos] or [lid_rpos] will
 denote respectively the left and right position of the item named [lid].  a
@@ -92,8 +96,11 @@ denote respectively the left and right position of the item named [lid].  a
 [Pos.interval]. If the item is matched by a tuple and you want to use its positon
 you must use [pat = lid] syntax to give a name to the whole item.
 
+Action code needs parenthesis or [begin ... end] if the use [if .. then] or
+pattern matching (except the action of the last rule).
+
 Beware that inside the scope of the extension, you can use the syntax for
-grammars every where. This allows for some nesting as in:
+grammars everywhere. This allows for some nesting as in:
 {[
 type p = Atom | Prod | Sum
 let%parser rec
