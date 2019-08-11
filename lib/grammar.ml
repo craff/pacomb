@@ -11,9 +11,8 @@ type 'a grammar =
                               using declare/set_grammar *)
   ; mutable phase : phase (** which transformation phase reached for that
                               grammar *)
-  ; mutable e: 'a option  (** not None  if the grammar accepts Empty.  keep only
-                              one semantics for emptyness, incomplete if action
-                              uses [give_up].  valid from phase Empty Removed *)
+  ; mutable e: 'a list    (** not []   if the grammar accepts Empty.
+                              valid from phase Empty Removed *)
   ; mutable ne : 'a grne  (** the part of the grammar that does not accept empty
                               valid from phase Empty Removed, but transformed
                               at CacheFactored and LeftRecEliminated *)
@@ -95,7 +94,7 @@ let give_name n g = { g with n }
 let mkg : ?name:string -> ?recursive:bool -> 'a grdf -> 'a grammar =
   fun ?(name="...") ?(recursive=false) d ->
     let k = Assoc.new_key () in
-    { e = None; d; n = name; k; recursive; compiled = ref Comb.assert_false
+    { e = []; d; n = name; k; recursive; compiled = ref Comb.assert_false
     ; charset = None; phase = Defined; ne = ETmp; cache = None }
 
 (** A type to store list of grammar keys *)
@@ -168,14 +167,14 @@ let print_grammar ?(def=true) ch s =
         adone := E g.k.k :: !adone;
         let pg x = print_grne x in
         match g.e with
-        | None -> pr "%s=(%a)" g.n pg g.ne
+        | _::_ -> pr "%s=(%a)" g.n pg g.ne
         | _    -> pr "%s=(1|%a)" g.n pg g.ne
       end
     else
       begin
         let pg x = print_grne x in
         match g.e with
-        | None -> pr "%a" pg g.ne
+        | _::_ -> pr "%a" pg g.ne
         | _    -> pr "(1|%a)" pg g.ne
       end
 
@@ -331,10 +330,10 @@ let ne_appl g f =
   | _               -> EAppl(g,f)
 
 let ne_seq g1 g2 = match(g1,g2) with
-  | EFail, _                 -> EFail
-  | _, {e=None;ne=EFail;_}   -> EFail
-  | _, {e=Some y;ne=EFail;_} -> ne_appl g1 y
-  | _, _                     -> ESeq(g1,g2)
+  | EFail, _              -> EFail
+  | _, {e=[];ne=EFail;_}  -> EFail
+  | _, {e=[y];ne=EFail;_} -> ne_appl g1 y
+  | _, _                  -> ESeq(g1,g2)
 
 let ne_dseq g1 cs g2 = match g1 with
   | EFail -> EFail
@@ -392,51 +391,41 @@ let factor_empty g =
         g.e  <- kn g.d;
       end
 
-  and kn : type a. a grdf -> a option = function
-    | Fail -> None
-    | Err _ -> None
-    | Empty x -> Some x
-    | Term _     -> None
+  and kn : type a. a grdf -> a list = function
+    | Fail -> []
+    | Err _ -> []
+    | Empty x -> [x]
+    | Term _     -> []
     | Alt(gs) -> List.iter fn gs;
-                   let gn acc g = match acc with Some _ -> acc | None -> g.e in
-                   List.fold_left gn None gs
-    | Appl(g,f) -> fn g; (match g.e with
-                    | None -> None
-                    | Some x -> try Some (f x) with NoParse -> None)
+                   let gn acc g = g.e @ acc in
+                   List.fold_left gn [] gs
+    | Appl(g,f) -> fn g; List.map f g.e
     | Seq(g1,g2) -> fn g1; fn g2;
-                      (match g1.e with
-                       | None -> None
-                       | Some x ->
-                          match g2.e with
-                          | None -> None
-                          | Some y -> try Some(y x) with NoParse -> None)
-    | DSeq(g1,_,g2) -> fn g1; (match g1.e with
-                       | None -> None
-                       | Some (x,x') ->
-                          try
-                            let g2 = g2 x in
-                            fn g2;
-                            match g2.e with
-                            | None -> None
-                            | Some y -> Some(y x')
-                          with NoParse -> None)
+                    List.fold_left (fun acc x ->
+                        List.fold_left (fun acc y ->
+                            try y x :: acc
+                            with NoParse -> acc) acc g2.e)
+                      [] g1.e
+    | DSeq(g1,_,g2) -> fn g1;
+                       List.fold_left (fun acc (x,x') ->
+                           try
+                             let g2 = g2 x in
+                             fn g2;
+                             List.fold_left (fun acc y ->
+                                 try y x' :: acc
+                                 with NoParse -> acc) acc g2.e
+                         with NoParse -> acc)
+                         [] g1.e
     | Lr(g1,_,_,g2) -> fn g1; fn g2; g1.e
-    | Rkey _        -> None
-    | LPos(_,g1)    -> fn g1; (match g1.e with
-                               | None -> None (* FIXME #14: Loose position *)
-                               | Some x -> Some (x Pos.phantom))
-    | RPos(g1)      -> fn g1; (match g1.e with
-                               | None -> None (* FIXME #14: Loose position *)
-                               | Some x -> Some (x Pos.phantom))
+    | Rkey _        -> []
+    | LPos(_,g1)    -> fn g1; List.map (fun x -> x Pos.phantom) g1.e
+                       (* FIXME #14: Loose position *)
+    | RPos(g1)      -> fn g1; List.map (fun x -> x Pos.phantom) g1.e
+                       (* FIXME #14: Loose position *)
     | Layout(_,g,_) -> fn g; g.e
     | Cache(_,g)    -> fn g; g.e
-    | Test(_,g)     -> begin
-                         fn g;
-                         match g.e with
-                         | None   -> None
-                         | Some _ ->
-                            failwith "illegal test on grammar accepting empty"
-                       end
+    | Test(_,g)     -> fn g; if g.e <> [] then
+                               failwith "illegal test on grammar accepting empty"; []
     | Tmp           -> failwith "grammar compiled before full definition"
   in
   let rec hn : type a. a grammar -> unit = fun g ->
@@ -456,18 +445,19 @@ let factor_empty g =
     | Appl(g,f) -> hn g; ne_appl (get g) f
     | Seq(g1,g2) -> hn g1; hn g2;
                     let ga = ne_seq (get g1) g2 in
-                    let gb = match g1.e with
-                      | None   -> EFail
-                      | Some x -> ne_appl (get g2) (fun y -> y x)
+                    let gb = ne_alt (List.map (fun x ->
+                                         ne_appl (get g2) (fun y -> y x)) g1.e)
                     in
                     ne_alt [ga; gb]
-    | DSeq(g1,cs,g2) -> hn g1; let ga = ne_dseq (get g1) cs g2 in
-                       let gb = match g1.e with
-                         | None   -> EFail
-                         | Some (x,x') ->
-                            let g2 = g2 x in fn g2; hn g2;
-                                             ne_appl (get g2) (fun y -> y x')
-                            (* FIXME, fn called twice on g2 x *)
+    | DSeq(g1,cs,g2) -> hn g1;
+                        let ga = ne_dseq (get g1) cs g2 in
+                        let gb = ne_alt (List.fold_left (fun acc (x,x') ->
+                                             try
+                                               let g2 = g2 x in
+                                               fn g2; hn g2;
+                                               ne_appl (get g2) (fun y -> y x') :: acc
+                                           with NoParse -> acc) [] g1.e)
+                                        (* FIXME, fn called twice on g2 x *)
                        in
                        ne_alt [ga; gb]
     | Lr(g1,k,pk,g2) -> hn g1; hn g2; ne_lr (get g1) k ?pk g2
@@ -578,7 +568,7 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
               elim_left_rec (E u :: above) g;
               let (g',s) = fn g.ne in
               factor_empty s;
-              assert(s.e = None);
+              assert(s.e = []);
               s.phase <- LeftRecEliminated;
               if s.ne = EFail then (ERef g, fail()) else (g', s)
             end
@@ -589,7 +579,7 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
        g.phase <- LeftRecEliminated;
        let (g1,s) = fn g.ne in
        factor_empty s;
-       s.e <- None;
+       s.e <- [];
        s.phase <- LeftRecEliminated;
        let pk = !pk in
        if s.ne <> EFail then g.ne <- ne_lr g1 g.k ?pk s;
@@ -675,14 +665,18 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   | ETmp -> assert false
 
  and compile_alt : type a. a grne list -> a Comb.t = fun gs ->
-   let rec fn = function
+  let l = List.map (fun g -> (first_charset g, compile_ne g)) gs in
+  alts l
+
+ and alts : type a. (Charset.t * a Comb.t) list -> a Comb.t = fun l ->
+  let rec fn = function
      | [] -> (Charset.empty, Comb.fail)
-     | [g] -> (first_charset g, compile_ne g)
+     | [(cs,g)] -> (cs, g)
      | l -> let (l1,l2) = split_list l in
             let (cs1,c1) = fn l1 in
             let (cs2,c2) = fn l2 in
             (Charset.union cs1 cs2, Comb.alt cs1 c1 cs2 c2)
-   in snd (fn gs)
+   in snd (fn l)
 
  and compile : type a. bool -> a grammar -> a Comb.t =
   fun ne g ->
@@ -711,13 +705,16 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
          g.phase <- Compiled;
          get g
     in
-    let e = if ne then None else g.e in
+    let e = if ne then [] else g.e in
     match e with
-    | Some x ->
+    | [] ->
+       if g.ne = EFail then Comb.fail else cg
+    | [x] ->
        if g.ne = EFail then Comb.empty x
        else Comb.option x (first_charset g.ne) cg
-    | None ->
-       if g.ne = EFail then Comb.fail else cg
+    | l ->
+       let ce = alts (List.map (fun x -> Charset.full, Comb.empty x) l) in
+       Comb.alt Charset.full ce (first_charset g.ne) cg
 
 let compile g = compile false g
 
