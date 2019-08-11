@@ -466,11 +466,21 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
                let vptr = ref [] in
                let too_late = ref false in
                Input.Tbl.add merge_tbl buf col (vptr,too_late);
+               let merge x y =
+                 match (x,y) with
+                 | None, None -> None
+                 | Some x, None -> Some x
+                 | None, Some x -> Some x
+                 | Some x, Some y -> Some (merge x y)
+               in
+               let force x = try Some (Lazy.force x)
+                             with Lex.NoParse | Lex.Give_up _ -> None
+               in
                let gn x =
                  too_late := true;
-                 List.fold_left (fun x v -> merge x (Lazy.force v)) x !vptr
+                 List.fold_left (fun x v -> merge x (force v)) x !vptr
                in
-               lazy (gn (Lazy.force v))
+               lazy (match gn (force v) with None -> raise Lex.NoParse | Some x -> x)
           in
           let l0 = !ptr in
           let rec fn l =
