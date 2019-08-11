@@ -36,7 +36,6 @@ val empty : 'a -> 'a t
 (** [lexeme l] is  a parser accepting the lexeme (or  terminal) [l], and returns
     the corresponding semantic value. *)
 val lexeme : 'a Lex.lexeme -> 'a t
-val direct_lexeme : 'a Lex.lexeme -> 'a t
 
 (**  [seq g1  g2] sequences  the parsers  [g1] and  [g2].  The  resulting parser
     starts by parsing  using [g1], and then  parses the rest of  the input using
@@ -81,8 +80,7 @@ val right_pos : (Pos.t -> 'a) t -> 'a t
 val read_pos : Pos.t Assoc.key -> (Pos.t -> 'a) t -> 'a t
 
 (** key used by lr below *)
-type 'a app
-type 'a key = 'a app Assoc.key
+type 'a key = 'a Lazy.t Assoc.key
 
 (** [lr c1 v c2] is an optimized version  of [let rec r = seq c1 (seq r c2)]
     which is  illegal as it  is left recursive  and loops. The  optional charset
@@ -127,4 +125,4 @@ val change_layout : ?config:layout_config -> Lex.blank -> 'a t -> 'a t
 (** Combinator  that caches  a grammar to  avoid exponential  behavior.  parsing
     with the grammar  from each position is memoized to  avoid parsing twice the
     same sequence with the same grammar. *)
-val cache : 'a t -> 'a t
+val cache : ?merge:('a -> 'a -> 'a) -> 'a t -> 'a t

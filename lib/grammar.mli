@@ -69,7 +69,8 @@ val seq_rpos : 'a grammar -> ('a * Pos.t -> 'b) grammar -> 'b grammar
     result of  the first parsing. Using  [cache] allows to recover  a polynomial
     time complexity (cubic at  worst) and a quadratic space (in  the size of the
     input) *)
-val cache : 'a grammar -> 'a grammar
+val cache : ?merge:('a -> 'a -> 'a) -> 'a grammar -> 'a grammar
+
 
 type layout_config = Comb.layout_config
 

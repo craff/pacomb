@@ -46,6 +46,7 @@ type env =
   (** Column number in [buf_before_blanks] before reading the blanks. *)
   ; lr                : Assoc.t
   (** Association table for the lr combinator *)
+  ; merge_depth       : int
   }
 
 (** Type of a function called in case of error. *)
@@ -54,59 +55,47 @@ type err = unit -> res
 (**  type  of result  used  by  the scheduler  to  progress  in the  parsing  in
     parallel *)
  and res =
-   | Cont : env * 'a cont * err * 'a -> res
+   | Cont : env * 'a cont * err * 'a Lazy.t -> res
    (** returned by lexeme instead of calling the continuation, contains all
        information to continue parsing. *)
-   | Skip : res
-   (** used by the cache combinator to tell there is nothing to do,
-       we are already parsing the same grammar at the same position. *)
 
  (** Type  of a  parsing continuation. A  value of type  ['a cont]  represents a
     function waiting for a parsing environment, an error function and a value of
     type ['a] to continue parsing. To avoid quadratic behavior with mainly right
     recursion, this is splitted in two:
 
-    - a transformer  of type [('a,'b,  [`Ct]) trans] reprseting a  function from
-      ['a] to ['b]
+    - a transformer  of type [('a,'b) trans]  represents a function from ['a] to
+      ['b]
 
-    - the real continuation  waiting a value of type ['b  app], which represents
-      a value of type ['b] obtained by an application of a transformer. *)
+    - continuation expect a lzay value, evaluation is retarded to the parsing of
+      the next lexeme.
+*)
  and 'a cont =
-   | C : (env -> err -> 'b app -> res) * ('a,'b,[`Ct]) trans
-         -> 'a cont [@unboxed]
-   | P : (env -> err -> 'b app -> res) * ('a,'b,[`Ct]) trans * Pos.t ref
-         -> 'a cont [@unboxed]
+   | C : (env -> err -> 'b Lazy.t -> res) * ('a,'b) trans -> 'a cont
+   | P : (env -> err -> 'b Lazy.t -> res) * ('a,'b) trans * Pos.t ref -> 'a cont
  (** [P] is used when the position when calling the continuation (right position
        of some grammar) is needed. *)
 
- and 'a app = A : ('b,'a,[`At]) trans * 'b -> 'a app
- (** A(b,tr)  represent the value  of type ['a]  obtained by application  of the
-     transformer [tr] to [b] *)
-
- (** [('a,'b,'t) args] is the type of a transformer from a value of type ['a] to
-    a value of type ['b]. The third  parameter is a phantom type, either [[`Ct]]
-    of [[`At]] to  control that the [Cns]  constructor is only used  in value of
-    type ['a app] and not value of type ['a cont]. *)
- and (_,_,_) trans =
-   | Idt : ('a,'a,'t) trans
+ (** [('a,'b) args]  is the type of a transformer from a value of type ['a] to a
+    value of type ['b]. *)
+ and (_,_) trans =
+   | Idt : ('a,'a) trans
    (** Identity transformer *)
-   | Arg : ('b, 'c,'t) trans * 'a -> ('a -> 'b,'c,'t) trans
+   | Arg : ('b,'c) trans * 'a -> ('a -> 'b,'c) trans
    (** [Arg(tr,x)] tranform a value of type ['a -> 'b] into a value of
        type ['c] by applying it to [x] and then applying the transformer [tr] *)
-   | Lrg : ('b, 'c,'t) trans * 'a app -> ('a -> 'b,'c,'t) trans
+   | Lrg : ('b,'c) trans * 'a Lazy.t -> ('a -> 'b,'c) trans
    (** Same as above but [x] will results of the application of a transformer.
        [Lrg] means lazy arg *)
-   | Pos : ('b, 'c,'t) trans * Pos.t ref -> (Pos.t -> 'b,'c,'t) trans
+   | Pos : ('b,'c) trans * Pos.t ref -> (Pos.t -> 'b,'c) trans
    (** Same  as arg, but [x]  is a position that  will be stored in  a reference
        when calling the continuation *)
-   | App : ('b, 'c, 't) trans * ('a -> 'b) -> ('a,'c,'t) trans
+   | App : ('b,'c) trans * ('a -> 'b) -> ('a,'c) trans
    (** [App(tr,f) transform  a value of type  ['a] into a value of  type ['c] by
         passing it to a [f] and then using [tr] *)
-   | Cns : ('b,'c,[`Ct]) trans * ('a, 'b,[`At]) trans -> ('a,'c,[`At]) trans
-   (** composition of two transformers *)
 
  (** Type of a parser combinator with a semantic action of type ['a]. the return
-    type [res] will be used by the scheuler function below to drive the
+    type [res] will be used by the scheduler function below to drive the
     parsing. *)
 and 'a t = env -> 'a cont -> err -> res
 
@@ -115,15 +104,28 @@ and 'a t = env -> 'a cont -> err -> res
 (** construction of a continuation with an identity transformer *)
 let ink f = C(f,Idt)
 
+(** evaluation function for the [app] type *)
+let rec eval : type a b. a -> (a,b) trans -> b = fun x tr ->
+    match tr with
+    | Idt        -> x
+    | Arg(tr,y)  -> eval (x y) tr
+    | Lrg(tr,y)  -> eval (x (Lazy.force y)) tr
+    | Pos(tr,p)  -> eval (x !p) tr
+    | App(tr,f)  -> eval (f x) tr
+
 (** function calling a  continuation. It does not evaluate any  action. It is of
     crucial importane that this function be in O(1). *)
-let call : type a.a cont -> env -> err -> a app -> res =
+let call : type a.a cont -> env -> err -> a Lazy.t -> res =
   fun k env err x ->
-    match (k,x) with
-    | C(k,tr2)   , A(tr1,x) -> k env err (A(Cns(tr2, tr1),x))
-    | P(k,tr2,rp), A(tr1,x) ->
+    match k with
+    | C(k,Idt)    -> k env err x
+    | C(k,tr)     -> k env err (lazy (eval (Lazy.force x) tr))
+    | P(k,Idt,rp) ->
        rp := Pos.get_pos env.buf_before_blanks env.col_before_blanks;
-       k env err (A(Cns(tr2, tr1),x))
+       k env err x
+    | P(k,tr,rp)  ->
+       rp := Pos.get_pos env.buf_before_blanks env.col_before_blanks;
+       k env err (lazy (eval (Lazy.force x) tr))
 
 (** access to transformer constructor inside the continuation constructor *)
 let arg : type a b. b cont -> a -> (a -> b) cont = fun k x ->
@@ -131,7 +133,7 @@ let arg : type a b. b cont -> a -> (a -> b) cont = fun k x ->
     | C(k,tr)    -> C(k,Arg(tr,x))
     | P(k,tr,rp) -> P(k,Arg(tr,x),rp)
 
-let larg : type a b. b cont -> a app -> (a -> b) cont = fun k x ->
+let larg : type a b. b cont -> a Lazy.t -> (a -> b) cont = fun k x ->
     match k with
     | C(k,tr)    -> C(k,Lrg(tr,x))
     | P(k,tr,rp) -> P(k,Lrg(tr,x),rp)
@@ -141,25 +143,12 @@ let app : type a b. b cont -> (a -> b) -> a cont = fun k f ->
     | C(k,tr)    -> C(k,App(tr,f))
     | P(k,tr,rp) -> P(k,App(tr,f),rp)
 
-(** evaluation function for the [app] type *)
-let rec eval : type a. a app -> a = fun (A(tr,x)) ->
-  let rec fn : type a b x. a -> (a,b,x) trans -> b = fun x tr ->
-    match tr with
-    | Idt        -> x
-    | Arg(tr,y)  -> fn (x y) tr
-    | Lrg(tr,y)  -> fn (x (eval y)) tr
-    | Pos(tr,p)  -> fn (x !p) tr
-    | App(tr,f)  -> fn (f x) tr
-    | Cns(t1,t2) -> fn (fn x t2) t1
-  in
-  fn x tr
-
 (** transforsms [Lrg] into [Arg] inside a continuation *)
 let eval_lrgs : type a. a cont -> a cont = fun k ->
-  let rec fn : type a b. (a,b,[`Ct]) trans -> (a,b,[`Ct]) trans = function
+  let rec fn : type a b. (a,b) trans -> (a,b) trans = function
     | Idt       -> Idt
     | Arg(tr,x) -> Arg(fn tr, x)
-    | Lrg(tr,x) -> Arg(fn tr, eval x)
+    | Lrg(tr,x) -> Arg(fn tr, Lazy.force x)
     | Pos(tr,p) -> Pos(fn tr,p)
     | App(tr,x) -> App(fn tr,x)
   in
@@ -191,16 +180,14 @@ let before r1 r2 =
   | (Cont(env1,_,_,_), Cont(env2,_,_,_)) ->
      let p1 = Input.line_offset env1.current_buf + env1.current_col in
      let p2 = Input.line_offset env2.current_buf + env2.current_col in
-     p1 <= p2
-  | _ -> assert false
+     (p1 < p2) || (p1 = p2 && env1.merge_depth >= env2.merge_depth)
 
 let same r1 r2 =
   match (r1,r2) with
   | (Cont(env1,_,_,_), Cont(env2,_,_,_)) ->
     let p1 = Input.line_offset env1.current_buf + env1.current_col in
     let p2 = Input.line_offset env2.current_buf + env2.current_col in
-    p1 = p2
-  | _ -> assert false
+    p1 = p2 && env1.merge_depth = env2.merge_depth
 
 (** insert in a list at the correct position *)
 let insert : res -> res list -> res list = fun r l ->
@@ -221,6 +208,8 @@ let extract : res list -> res list * res list = function
        | l -> acc, l
      in fn [r] l
 
+exception ReallyExit
+
 (** [scheduler  env g] drives  the parsing, it calls  the combinator [g]  in the
     given environment and when lexeme returns to the scheduler, it continues the
     parsing,  but  trying the error case too,  this way all  parsing progress in
@@ -233,10 +222,10 @@ let scheduler : ?all:bool -> env -> 'a t -> ('a * env) list =
        continue parsing if [all] is [true] *)
     let k env err x =
       (try
-         res := (eval x,env)::!res;
-         if all then next env err else raise Exit
-       with Lex.NoParse   -> next env err
-          | Lex.Give_up m -> next_msg m env err);
+         res := (Lazy.force x,env)::!res;
+         (fun () -> if all then err () else raise ReallyExit)
+       with Lex.NoParse   -> fun () -> next env err
+          | Lex.Give_up m -> fun () -> next_msg m env err) ();
     in
     try
       (* calls to the initial grammar and initialise the table *)
@@ -246,21 +235,20 @@ let scheduler : ?all:bool -> env -> 'a t -> ('a * env) list =
         let t0,t1 = extract !tbl in
         tbl := t1;
         List.iter (function
-            | Skip -> assert false
             | Cont(env,k,err,x) ->
                (* calling the error and the continuation, storing the result in
               tbl1. *)
                (try
-                  let r = next env err in
-                  if r <> Skip then tbl := insert r !tbl
+                  let r = err () in
+                  tbl := insert r !tbl
                 with Exit -> ());
                (try
-                  let r = call k env (fun _ -> raise Exit) (A(Idt,x)) in
-                  if r <> Skip then tbl := insert r !tbl
+                  let r = call k env (fun _ -> raise Exit) x in
+                  tbl := insert r !tbl
                 with Exit -> ())) t0
       done;
       assert false
-    with Exit -> !res
+    with Exit | ReallyExit -> !res
 
 (** Combinator that always fails. *)
 let fail : 'a t = fun env _ err -> next env err
@@ -272,7 +260,7 @@ let error : string -> 'a t = fun msg env _ err -> next_msg msg env err
 let assert_false : 'a t = fun _ _ _ -> assert false
 
 (** Combinator accepting the empty input only. *)
-let empty : 'a -> 'a t = fun x env kf err -> call kf env err (A(Idt,x))
+let empty : 'a -> 'a t = fun x env kf err -> call kf env err (lazy x)
 
 (** Combinator accepting the given lexeme (or terminal). *)
 let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
@@ -288,29 +276,9 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
          { env with buf_before_blanks ; col_before_blanks
                     ; current_buf ; current_col; lr = Assoc.empty }
        in
-       Cont(env,k, err, v)
+       Cont(env,k, err, lazy v)
     with Lex.NoParse -> next env err
        | Lex.Give_up m -> next_msg m env err
-
-(** Same as above but does not return to the scheduler, to use if
-    one knows the error has not changed, so the scheduler will do
-    nothing. *)
-let direct_lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
-    (try
-       let (v, buf_before_blanks, col_before_blanks) =
-         lex env.current_buf env.current_col
-       in
-       let (current_buf, current_col) =
-         env.blank_fun buf_before_blanks col_before_blanks
-       in
-       let k = eval_lrgs k in
-       let env =
-         { env with buf_before_blanks ; col_before_blanks
-                    ; current_buf ; current_col; lr = Assoc.empty }
-       in
-       fun () -> call k env err (A(Idt,v))
-     with Lex.NoParse -> fun () -> next env err
-        | Lex.Give_up m -> fun () -> next_msg m env err) ()
 
 (** Sequence combinator. *)
 let seq : 'a t -> ('a -> 'b) t -> 'b t = fun g1 g2 env k err ->
@@ -321,7 +289,7 @@ let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
   fun g1 g2 env k err ->
     g1 env (ink(fun env err vs ->
         (try
-           let (v1,v2) = eval vs in
+           let (v1,v2) = Lazy.force vs in
            (* This forces the evaluation of v2 ... no consequence
               on right recursion *)
            let g = g2 v1 in
@@ -338,8 +306,8 @@ let test cs e = Charset.mem cs (Input.get e.current_buf e.current_col)
     empty in [alt] and use [option] instead.*)
 let option: 'a -> Charset.t -> 'a t -> 'a t = fun x cs1 g1 ->
   fun env k err ->
-    if test cs1 env then g1 env k (fun () -> call k env err (A(Idt,x)))
-    else call k env err (A(Idt,x))
+    if test cs1 env then g1 env k (fun () -> call k env err (lazy x))
+    else call k env err (lazy x)
 
 (** Alternatives combinator. *)
 let alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t = fun cs1 g1 cs2 g2 ->
@@ -374,7 +342,7 @@ let read_pos : Pos.t Assoc.key -> (Pos.t -> 'a) t -> 'a t =
     g env (arg k pos) err
 
 (** key used by lr below *)
-type 'a key = 'a app Assoc.key
+type 'a key = 'a Lazy.t Assoc.key
 
 (** [lr g  gf] is the combinator used to  eliminate left recursion. Intuitively,
     it parses using  the "grammar" [g gf*].  An equivalent  combinator CANNOT be
@@ -461,27 +429,53 @@ let change_layout : ?config:layout_config -> Lex.blank -> 'a t -> 'a t =
 
 (** Combinator for caching a grammar, to avoid exponential behavior.
     very bad performance with a non ambiguous right recursive grammar. *)
-let cache : type a. a t -> a t = fun g ->
+
+let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
   let cache = Input.Tbl.create () in
   fun env0 k err ->
     let {current_buf = buf0; current_col = col0; _} = env0 in
     try
-      let ptr = Input.Tbl.find cache buf0 col0 in
-      ptr := k :: !ptr;
-      Skip
+      let (ptr,d) = Input.Tbl.find cache buf0 col0 in
+      ptr := (k,env0.merge_depth - d) :: !ptr;
+      err ()
     with Not_found ->
-      let ptr = ref [k] in
-      Input.Tbl.add cache buf0 col0 ptr;
+      let ptr = ref [(k,0)] in
+      Input.Tbl.add cache buf0 col0 (ptr,env0.merge_depth);
+      let merge_tbl = Input.Tbl.create () in
       let k0 env err v =
-        let rec fn = function
-          | [] -> assert (!ptr = []); next env err
-          | k :: l -> call k env (fun () -> fn l) v
-        in
-        let l = !ptr in
-        ptr:=[];
-        fn l
+        assert (env.merge_depth = env0.merge_depth + 1);
+        let {current_buf = buf; current_col = col; _} = env in
+        try
+          if merge = None then raise Not_found;
+          let (vptr,too_late) = Input.Tbl.find merge_tbl buf col in
+          assert (not !too_late);
+          vptr := v :: !vptr;
+          err ()
+        with Not_found ->
+          let v = match merge with
+            | None -> v
+            | Some merge ->
+               let vptr = ref [] in
+               let too_late = ref false in
+               Input.Tbl.add merge_tbl buf col (vptr,too_late);
+               let gn x =
+                 too_late := true;
+                 List.fold_left (fun x v -> merge x (Lazy.force v)) x !vptr
+               in
+               lazy (gn (Lazy.force v))
+          in
+          let l0 = !ptr in
+          let rec fn l =
+            match l with
+            | [] -> assert (!ptr == l0); err ()
+            | (k,d) :: l ->
+               let env = {env with merge_depth = env.merge_depth + d - 1 } in
+               Cont(env, k, (fun () -> fn l), v)
+          in
+          fn l0
       in
-      g env0 (ink k0) err
+      let env = { env0 with merge_depth = env0.merge_depth + 1 } in
+      g env (ink k0) err
 
 (** function doing the parsing *)
 let gen_parse_buffer
@@ -494,7 +488,7 @@ let gen_parse_buffer
     let env =
       { buf_before_blanks = buf0 ; col_before_blanks = col0
         ; current_buf = buf ; current_col = col; lr = Assoc.empty
-        ; max_pos ; blank_fun ; }
+        ; max_pos ; blank_fun ; merge_depth = 0}
     in
     let r = scheduler ~all env g in
     match r with

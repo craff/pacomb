@@ -28,9 +28,9 @@ let char_a = term(Lex.char 'a' 1)
 let char_b = term(Lex.char 'b' 1)
 let char_c = term(Lex.char 'c' 1)
 
-let%parser [@cached] rec g =   () => ()
-                      ; 'a' g 'b' => ()
-                      ; 'a' g 'c' => ()
+let%parser [@cache] rec g =   () => ()
+                       ; 'a' g 'b' => ()
+                       ; 'a' g 'c' => ()
 
 let n = int_of_string Sys.argv.(1)
 

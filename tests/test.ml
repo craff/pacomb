@@ -142,6 +142,29 @@ let test12 =
 
 let test13 = fixpoint (fun r -> alt [empty 0; seq r (seq char_a r (+)) (+)])
 
+type tree = Nil | Bin of tree * tree | Alt of tree * tree
+let rec nb_tree = function
+  | Nil -> 1
+  | Bin(t1,t2) -> nb_tree t1 * nb_tree t2
+  | Alt(t1,t2) -> nb_tree t1 + nb_tree t2
+
+let size t =
+  let adone = ref [] in
+  let rec fn t =
+    if List.memq t !adone then 0 else
+      begin
+        adone := t :: !adone;
+        match t with
+        | Nil -> 0
+        | Bin(t1,t2) -> fn t1 + fn t2 + 1
+        | Alt(t1,t2) -> fn t1 + fn t2 + 1
+      end
+  in fn t
+
+let merge x y = Alt(x,y)
+let test13c = fixpoint (fun r -> cache ~merge (alt [empty Nil; seq r (seq char_a r (fun _ x -> x))
+                                                    (fun x y -> Bin(x,y))]))
+
 let test14 = term (Lex.int ())
 let test15 = term (Lex.float ())
 let test16 = term (Lex.char_lit ())
@@ -416,6 +439,16 @@ let _ =
     let s = String.make i 'a' in
     let j = List.length (parse_all_string test13 s)
     and k = catalan i in
-    Printf.printf "catalan: %d=%d=%d\n%!" i j k ;
+    Printf.printf "catalan: %d => %d=%d\n%!" i j k ;
+    assert (j = k)
+  done
+
+let _ =
+  Printf.printf "checking the number of parsetrees on an ambiguous example, using merge and cache\n%!";
+  for i = 0 to !catalan_max + 2 do
+    let s = String.make i 'a' in
+    let t = parse_string test13c s in
+    let j = nb_tree t and s = size t and k = catalan i in
+    Printf.printf "catalan: %d => %d=%d (size %d %f)\n%!" i j k s (float s/.float j);
     assert (j = k)
   done

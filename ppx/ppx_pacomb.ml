@@ -360,8 +360,21 @@ let vb_to_parser rec_ vb =
       warn vb.pvb_pat.ppat_loc
         "Pattern not allowed here for grammar parameter";
     let rules =
-      if List.exists (fun (s,_) -> s.txt = "cached") vb.pvb_attributes then
-        app loc (grmod "cache") rules
+      try
+        let (_,s) = List.find (fun (s,_) -> s.txt = "merge")
+                      vb.pvb_attributes
+        in
+        let e =
+          match s with
+          | PStr [{pstr_desc = Pstr_eval (e,_); _}] -> e
+          | _ -> raise Not_found
+        in
+        [%expr Grammar.cache ~merge:[%e e] [%e rules]]
+      with Not_found -> rules
+    in
+    let rules =
+      if List.exists (fun (s,_) -> s.txt = "cache") vb.pvb_attributes then
+        [%expr Grammar.cache [%e rules]]
       else rules
     in
     (loc,changed,name,vb.pvb_pat,name_param,rules)
