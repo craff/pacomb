@@ -211,7 +211,7 @@ let term ?name (x) =
 
 let alt ?name l =
   let l = List.filter (fun g -> g.d <> Fail) l in
-  let l = List.map (function { d = Alt(ls); _ } -> ls | x -> [x]) l in
+  let l = List.map (function { d = Alt(ls) } -> ls | x -> [x]) l in
   let l = List.flatten l in
   match l with
   | [] -> fail ()
@@ -330,10 +330,10 @@ let ne_appl g f =
   | _               -> EAppl(g,f)
 
 let ne_seq g1 g2 = match(g1,g2) with
-  | EFail, _              -> EFail
-  | _, {e=[];ne=EFail;_}  -> EFail
-  | _, {e=[y];ne=EFail;_} -> ne_appl g1 y
-  | _, _                  -> ESeq(g1,g2)
+  | EFail, _            -> EFail
+  | _, {e=[];ne=EFail}  -> EFail
+  | _, {e=[y];ne=EFail} -> ne_appl g1 y
+  | _, _                -> ESeq(g1,g2)
 
 let ne_dseq g1 cs g2 = match g1 with
   | EFail -> EFail
@@ -341,9 +341,9 @@ let ne_dseq g1 cs g2 = match g1 with
 
 let ne_lr g k ?pk s =
   match (g, s) with
-  | EFail, _ -> EFail
-  | _, {ne=EFail;_} -> g
-  | _        -> ELr(g,k,pk,s)
+  | EFail, _      -> EFail
+  | _, {ne=EFail} -> g
+  | _             -> ELr(g,k,pk,s)
 
 let ne_lpos ?pk g1 = match g1 with
   | EFail -> EFail

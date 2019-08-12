@@ -441,7 +441,7 @@ let change_layout : ?config:layout_config -> Lex.blank -> 'a t -> 'a t =
 let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
   let cache = Input.Tbl.create () in
   fun env0 k err ->
-    let {current_buf = buf0; current_col = col0; _} = env0 in
+    let {current_buf = buf0; current_col = col0} = env0 in
     try
       let (ptr,d) = Input.Tbl.find cache buf0 col0 in
       ptr := (k,env0.merge_depth - d) :: !ptr;
@@ -452,7 +452,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
       let merge_tbl = Input.Tbl.create () in
       let k0 env err v =
         assert (env.merge_depth = env0.merge_depth + 1);
-        let {current_buf = buf; current_col = col; _} = env in
+        let {current_buf = buf; current_col = col} = env in
         try
           if merge = None then raise Not_found;
           let (vptr,too_late) = Input.Tbl.find merge_tbl buf col in

@@ -56,7 +56,7 @@ let has_ident id e =
     { default_mapper with
       expr = (fun mapper exp ->
         match exp.pexp_desc with
-        | Pexp_ident { txt = (Lident id'); _} when id' = id ->
+        | Pexp_ident { txt = (Lident id')} when id' = id ->
            found := true; exp
         | _ -> default_mapper.expr mapper exp)
     }
@@ -142,7 +142,7 @@ let rec exp_to_rule e =
       Pexp_apply({ pexp_desc =
         Pexp_ident
           { txt = Lident("="|"<"|">"|"<="|">="|"<>"|"=="|"!="|
-                         "not"|"&&"|"||"); _ }; _}, _); _} as cond,
+                         "not"|"&&"|"||")}}, _)} as cond,
       (Nolabel,a3)::rest) ->
      let (rule,_) = exp_to_rule (Exp.apply a3 rest) in
      (rule, Some cond)
