@@ -70,11 +70,11 @@ let has_ident id e =
 let rec exp_to_pattern e =
   let loc = e.pexp_loc in
   match e with
-  | {pexp_desc = Pexp_ident({txt = Lident name; loc = loc_s}); _} ->
+  | {pexp_desc = Pexp_ident({txt = Lident name; loc = loc_s})} ->
      let name = mkloc name loc_s in
      (Some name, Pat.var ~loc name)
   | [%expr [%e? e] = [%e? {pexp_desc = Pexp_ident({txt = Lident name
-                                                  ;loc = loc_s}); _}]]
+                                                  ;loc = loc_s})}]]
      ->
      let name = mkloc name loc_s in
      let (_, pat) = exp_to_pattern e in
@@ -82,14 +82,14 @@ let rec exp_to_pattern e =
   | [%expr ([%e? e] : [%t? t])] ->
      let (name, pat) = exp_to_pattern e in
      (name, [%pat? ([%p pat] : [%t t])])
-  | {pexp_desc = Pexp_tuple(l); _} ->
+  | {pexp_desc = Pexp_tuple(l)} ->
      let (_,pats) = List.split (List.map exp_to_pattern l) in
      (None, Pat.tuple ~loc pats)
   | [%expr lazy [%e? e]] ->
      let (name, pat) = exp_to_pattern e in
      (name, [%pat? lazy [%p pat]])
 (* | [%expr let open [%m? m] in [%e? e]] ->*)
-  | { pexp_desc = Pexp_open(_,m,e); _ } ->
+  | { pexp_desc = Pexp_open(_,m,e)} ->
      let (name, pat) = exp_to_pattern e in
      (name, Pat.open_ ~loc m  pat)
   | _ -> warn loc "expression eft of \"::\" does not represent a pattern"
@@ -98,11 +98,11 @@ let rec exp_to_pattern e =
 let exp_to_term exp =
   let loc = exp.pexp_loc in
   match exp with
-  | {pexp_desc = Pexp_constant (Pconst_char _); _} ->
+  | {pexp_desc = Pexp_constant (Pconst_char _)} ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.char [%e exp] ())]
   | [%expr CHAR([%e? s])] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.char [%e s] ())]
-  | {pexp_desc = Pexp_constant (Pconst_string _); _} ->
+  | {pexp_desc = Pexp_constant (Pconst_string _)} ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.string [%e exp] ())]
   | [%expr STR([%e? s])] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.string [%e s] ())]
