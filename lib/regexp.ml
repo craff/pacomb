@@ -101,10 +101,12 @@ let from_string : string -> regexp = fun s ->
     | '\\'::[]            -> invalid_arg "Regexp: nothing to escape."
     | '[' ::'^':: ']'::cs -> let (rng, cs) = read_range cs in
                              let rng = Charset.add rng ']' in
+                             let rng = Charset.add rng '\255' in
                              `Set(Charset.complement rng) :: tokens cs
     | '[' ::']':: cs      -> let (rng, cs) = read_range cs in
                              `Set(Charset.add rng ']') :: tokens cs
     | '[' ::'^'::cs       -> let (rng, cs) = read_range cs in
+                             let rng = Charset.add rng '\255' in
                              `Set(Charset.complement rng) :: tokens cs
     | '[' ::cs            -> let (rng, cs) = read_range cs in
                              `Set(rng) :: tokens cs
