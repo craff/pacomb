@@ -293,6 +293,19 @@ let memo g =
 
 let dseq g1 ?cs g2 = dseq g1 ?cs (memo g2)
 
+let option : 'a grammar -> 'a option grammar = fun g ->
+  alt [appl g (fun x -> Some x); empty None]
+
+let star : 'a grammar -> 'a list grammar = fun g ->
+  appl (fixpoint (fun r ->
+            alt [empty [];
+                 seq r (appl g (fun x l -> x::l))])) List.rev
+
+let plus : 'a grammar -> 'a list grammar = fun g ->
+  appl (fixpoint (fun r ->
+            alt [appl g (fun x -> [x]);
+                 seq r (appl g (fun x l -> x::l))])) List.rev
+
 (** a function to defined indexed grammars *)
 let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
   let tbl = Hashtbl_eq.create 8 in

@@ -511,3 +511,5 @@ let blank_terminal : 'a t -> blank =
       let (_,s,n) = t.f s n in
       (s,n)
     with NoParse -> (s,n)
+
+let blank_regexp s = blank_terminal (regexp (Regexp.from_string s))

@@ -102,6 +102,11 @@ val set_grammar : 'a grammar -> 'a grammar -> unit
     [g0 = g g0] *)
 val fixpoint : ?name:string -> ('a grammar -> 'a grammar) -> 'a grammar
 
+(** usual option combinator *)
+val option : 'a grammar -> 'a option grammar
+val star : 'a grammar -> 'a list grammar
+val plus : 'a grammar -> 'a list grammar
+
 (** [grammar_family to_str name] returns a  pair [(gs, set_gs)], where [gs] is a
     finite  family of  grammars parametrized  by a  value of  type ['a].  A name
     [name] is to  be provided for the family, and  an optional function [to_str]
