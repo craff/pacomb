@@ -7,6 +7,9 @@ let mask, shift, size =
   | 64 -> 31, 5, 256 / 32
   | _  -> assert false (* Cannot happen... *)
 
+let compare = Pervasives.compare
+let equal = (=)
+
 let empty = Array.make size 0
 let full  = Array.make size (-1)
 
@@ -107,8 +110,8 @@ let show cs =
     add_all (Char.code 'z' + 1) 255;
     !res
 
-let print oc cs =
-  output_string oc (show cs)
+let pp ff cs =
+  Format.pp_print_string ff (show cs)
 
 let show_full cs =
   let res = ref "" in
@@ -117,5 +120,5 @@ let show_full cs =
       res := !res ^ (Char.escaped (Char.chr i))
   done; !res
 
-let print_full oc cs =
-  output_string oc (show_full cs)
+let pp_full ff cs =
+  Format.pp_print_string ff (show_full cs)
