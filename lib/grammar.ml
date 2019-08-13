@@ -755,11 +755,11 @@ let parse_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a =
     let g = add_eof g in
     let (v,_,_) = partial_parse_buffer g blank_fun buf col in v
 
-let parse_string : type a. a t -> Lex.blank -> string -> a =
-  fun g b s -> parse_buffer g b (Input.from_string s) 0
+let parse_string : type a. ?filename:string -> a t -> Lex.blank -> string -> a =
+  fun ?filename g b s -> parse_buffer g b (Input.from_string ?filename s) 0
 
-let parse_channel : type a. a t -> Lex.blank -> in_channel -> a =
-  fun g b ic -> parse_buffer g b (Input.from_channel ic) 0
+let parse_channel : type a. ?filename:string -> a t -> Lex.blank -> in_channel -> a =
+  fun ?filename g b ic -> parse_buffer g b (Input.from_channel ?filename ic) 0
 
 let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
   fun g blank_fun buf0 col0 ->

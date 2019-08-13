@@ -148,10 +148,12 @@ val give_name : string -> 'a grammar -> 'a grammar
 val parse_buffer : 'a grammar -> Lex.blank -> Input.buffer -> int -> 'a
 
 (** Parse a whole string *)
-val parse_string : 'a grammar -> Lex.blank -> string -> 'a
+val parse_string
+    : ?filename:string -> 'a grammar -> Lex.blank -> string -> 'a
 
 (** Parse a whole input channel *)
-val parse_channel : 'a grammar -> Lex.blank -> in_channel -> 'a
+val parse_channel
+    : ?filename:string -> 'a grammar -> Lex.blank -> in_channel -> 'a
 
 (** Partial parsing.  Beware, the returned position is not  the maximum position
     that can be reached by the grammar. The charset is the character accepted at
