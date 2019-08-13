@@ -214,8 +214,11 @@ let star : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
   ; f = fun s n ->
         let rec fn a s n =
           (try
-            let (x,s,n) = t.f s n in
-            fun () -> fn (f a x) s n
+            let (x,s',n') = t.f s n in
+            if Input.buffer_equal s s' && n = n' then
+              fun () -> (a,s,n)
+            else
+              fun () -> fn (f a x) s' n'
           with NoParse ->
             fun () -> (a,s,n)) ()
         in
@@ -229,8 +232,11 @@ let plus : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
   ; f = fun s n ->
         let rec fn a s n =
           (try
-            let (x,s,n) = t.f s n in
-            fun () -> fn (f a x) s n
+            let (x,s',n') = t.f s n in
+            if Input.buffer_equal s s' && n = n' then
+              fun () -> (a,s,n)
+            else
+              fun () -> fn (f a x) s' n'
            with NoParse ->
              fun () -> (a,s,n)) ()
         in
