@@ -296,6 +296,9 @@ let dseq g1 ?cs g2 = dseq g1 ?cs (memo g2)
 let option : 'a grammar -> 'a option grammar = fun g ->
   alt [appl g (fun x -> Some x); empty None]
 
+let default_option : 'a -> 'a grammar -> 'a grammar = fun d g ->
+  alt [g; empty d]
+
 let star : 'a grammar -> 'a list grammar = fun g ->
   appl (fixpoint (fun r ->
             alt [empty [];

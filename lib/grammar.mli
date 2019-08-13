@@ -104,6 +104,7 @@ val fixpoint : ?name:string -> ('a grammar -> 'a grammar) -> 'a grammar
 
 (** usual option combinator *)
 val option : 'a grammar -> 'a option grammar
+val default_option : 'a -> 'a grammar -> 'a grammar
 val star : 'a grammar -> 'a list grammar
 val plus : 'a grammar -> 'a list grammar
 
