@@ -203,7 +203,7 @@ module type Preprocessor =
     type state
     val initial_state : state
     val update : state -> string -> int -> string
-                 -> state * string * int * bool
+                 -> state * string * (int * string) option
     val check_final : state -> string -> unit
   end
 
@@ -216,14 +216,15 @@ module Make(PP : Preprocessor) =
           (* Tail rec exception trick to avoid stack overflow. *)
           try
             let data = get_line file in
-            let (st, data, lnum, take) = PP.update st name lnum data in
-            if take then
+            let (st, name, res) = PP.update st name lnum data in
+            match res with
+            | Some(lnum,data) ->
               let llen = String.length data in
               fun () ->
                 { is_eof = false ; lnum ; loff ; llen ; data ; name
                 ; next = lazy (fn name lnum (loff + llen) st cont)
                 ; uid = new_uid () ; ctnr = Container.create (); }
-            else
+            | None ->
               fun () -> fn name lnum loff st cont
           with End_of_file ->
             finalise file;
