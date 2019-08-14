@@ -67,7 +67,7 @@ module type Preprocessor =
         implement  line  number  directives.   The  function  may   aise
         [Preprocessor_error] in case of error. *)
     val update : state -> string -> int -> string
-                   -> state * string * (int * string) option
+                   -> state * string * int * string option
 
     (** [check_final st name] check that [st] indeed is a correct  state
         of the preprocessor for the end of input of file [name].  If  it
