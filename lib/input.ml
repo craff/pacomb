@@ -216,7 +216,7 @@ module Make(PP : Preprocessor) =
           (* Tail rec exception trick to avoid stack overflow. *)
           try
             let data = get_line file in
-            let (st, name, lnum, take) = PP.update st name lnum data in
+            let (st, data, lnum, take) = PP.update st name lnum data in
             if take then
               let llen = String.length data in
               fun () ->
