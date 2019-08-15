@@ -59,8 +59,8 @@ type 'a grammar =
                                            (** changes the blank function *)
    | Cache : ('a -> 'a -> 'a) option * 'a t -> 'a grdf
                                            (** caches the grammar *)
-   | Test : (Input.buffer -> int -> Input.buffer -> int -> bool) *
-              'a t -> 'a grdf
+   | Test : (Input.buffer -> int -> Input.buffer -> int -> bool) * bool *
+              'a t -> 'a grdf              (** test, before (true)  or after *)
    | Tmp  : 'a grdf                        (** used as initial value for
                                                recursive grammar. *)
 
@@ -83,7 +83,7 @@ type 'a grammar =
    | ERPos : (Pos.t -> 'a) grne -> 'a grne
    | ELayout : blank * 'a grne * layout_config -> 'a grne
    | ECache : ('a -> 'a -> 'a) option * 'a grne -> 'a grne
-   | ETest : (Input.buffer -> int -> Input.buffer -> int -> bool) *
+   | ETest : (Input.buffer -> int -> Input.buffer -> int -> bool) * bool *
               'a grne -> 'a grne
    | ETmp  : 'a grne
 
@@ -132,7 +132,7 @@ let print_grammar ?(def=true) ch s =
     | ERPos(g)      -> pr "%a" pg g
     | ELPos(_,g)    -> pr "%a" pg g
     | ECache(_,g)   -> pr "%a" pg g
-    | ETest(_,g)    -> pr "%a" pg g
+    | ETest(_,_,g)  -> pr "%a" pg g
     | ELayout(_,g,_) -> pr "%a" pg g
     | ETmp          -> pr "TMP"
 
@@ -154,7 +154,7 @@ let print_grammar ?(def=true) ch s =
     | RPos(g)      -> pr "%a" pg g
     | LPos(_,g)    -> pr "%a" pg g
     | Cache(_,g)   -> pr "%a" pg g
-    | Test(_,g)    -> pr "%a" pg g
+    | Test(_,_,g)  -> pr "%a" pg g
     | Layout(_,g,_)-> pr "%a" pg g
     | Tmp          -> pr "TMP"
 
@@ -202,7 +202,7 @@ let fail () = mkg Fail
 
 let empty x = mkg (Empty x)
 
-let test b = if b then empty () else fail ()
+let cond b = if b then empty () else fail ()
 
 let term ?name (x) =
   if accept_empty x then invalid_arg "term: empty terminals";
@@ -257,7 +257,11 @@ let error m = mkg (Err m)
 
 let cache ?merge g = mkg (if g.d = Fail then Fail else Cache(merge,g))
 
-let test_before f g = mkg (if g.d = Fail then Fail else Test(f,g))
+let test f b g = mkg (if g.d = Fail then Fail else Test(f,b,g))
+
+let test_before f g = test f true g
+
+let test_after f g = test f false g
 
 let no_blank_before g =
   let fn b1 c1 b2 c2 = Input.buffer_equal b1 b2 && c1 = c2 in
@@ -373,9 +377,9 @@ let ne_cache merge g1 = match g1 with
   | EFail -> EFail
   | _     -> ECache(merge,g1)
 
-let ne_test f g1 = match g1 with
+let ne_test f b g1 = match g1 with
   | EFail -> EFail
-  | _     -> ETest(f,g1)
+  | _     -> ETest(f,b,g1)
 
 let ne_layout b g cfg =
   match g with
@@ -440,7 +444,7 @@ let factor_empty g =
                        (* FIXME #14: Loose position *)
     | Layout(_,g,_) -> fn g; g.e
     | Cache(_,g)    -> fn g; g.e
-    | Test(_,g)     -> fn g;
+    | Test(_,_,g)   -> fn g;
                        if g.e <> [] then
                          failwith "illegal test on grammar accepting empty";
                        []
@@ -484,7 +488,7 @@ let factor_empty g =
     | LPos(pk,g1) -> hn g1; ne_lpos ?pk (get g1)
     | RPos(g1) -> hn g1; ne_rpos (get g1)
     | Cache(m,g1) -> hn g1; ne_cache m (get g1)
-    | Test(f,g1) -> hn g1; ne_test f (get g1)
+    | Test(f,b,g1) -> hn g1; ne_test f b (get g1)
     | Layout(b,g,cfg) -> hn g; ne_layout b (get g) cfg
     | Tmp           -> failwith "grammar compiled before full definition"
 
@@ -562,9 +566,9 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
          let pk = get_pk () in
          let (g1, s1) = fn g1 in
          (ne_lpos ?pk:None g1, lpos ?pk s1)
-      | ETest(f, g1) ->
+      | ETest(f, b, g1) ->
          let (g1, s1) = fn g1 in
-         (ne_test f g1, s1)
+         (ne_test f b g1, if b then s1 else test f b s1)
       | ELayout(_,g1,_) ->
          let (_, s1) = fn g1 in
          if s1.d <> Fail then
@@ -634,7 +638,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
     | ERPos g -> fn g
     | ELPos (_,g) -> fn g
     | ECache (_,g) -> fn g
-    | ETest (_,g) -> fn g
+    | ETest (_,_,g) -> fn g
     | ELayout(_,g,cfg) -> if cfg.old_blanks_before
                              && not cfg.old_blanks_after
                           then fn g else (false, Charset.full)
@@ -679,7 +683,8 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   | ELPos(None,g) -> left_pos (compile_ne g)
   | ELPos(Some pk,g) -> read_pos pk (compile_ne g)
   | ECache(merge,g) -> cache ?merge (compile_ne g)
-  | ETest(f,g) -> Comb.test_blank f (compile_ne g)
+  | ETest(f,true,g) -> Comb.test_before f (compile_ne g)
+  | ETest(f,false,g) -> Comb.test_after f (compile_ne g)
   | ELayout(b,g,cfg) -> change_layout ~config:cfg b (compile_ne g)
   | ETmp -> assert false
 
@@ -750,18 +755,22 @@ let partial_parse_buffer
     let g = compile g in
     Comb.partial_parse_buffer g blank_fun ~blank_after buf0 col0
 
-let parse_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a =
+let parse_buffer
+    : type a. a t -> Lex.blank -> Lex.buf -> int -> a =
   fun g blank_fun buf col ->
     let g = add_eof g in
     let (v,_,_) = partial_parse_buffer g blank_fun buf col in v
 
-let parse_string : type a. ?filename:string -> a t -> Lex.blank -> string -> a =
+let parse_string
+    : type a. ?filename:string -> a t -> Lex.blank -> string -> a =
   fun ?filename g b s -> parse_buffer g b (Input.from_string ?filename s) 0
 
-let parse_channel : type a. ?filename:string -> a t -> Lex.blank -> in_channel -> a =
+let parse_channel
+    : type a. ?filename:string -> a t -> Lex.blank -> in_channel -> a =
   fun ?filename g b ic -> parse_buffer g b (Input.from_channel ?filename ic) 0
 
-let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
+let parse_all_buffer
+    : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
   fun g blank_fun buf0 col0 ->
     let g = compile (add_eof g) in
     Comb.parse_all_buffer g blank_fun buf0 col0

@@ -26,7 +26,7 @@ val empty : 'a -> 'a grammar
 
 (** [test  b] is  [if b then  empty ()  else fail ()].  Very usefull  in grammar
     family at the beginning of a rule *)
-val test : bool -> unit grammar
+val cond : bool -> unit grammar
 
 (** [term  t] accepts the  terminal [t] and  returns its semantics.   See module
     [Lex] *)
@@ -74,6 +74,9 @@ val cache : ?merge:('a -> 'a -> 'a) -> 'a grammar -> 'a grammar
 (** allows to perform a test, the test function receive the position before
     and after the blanks *)
 val test_before : (Input.buffer -> int -> Input.buffer -> int -> bool)
+                 -> 'a grammar -> 'a grammar
+
+val test_after : (Input.buffer -> int -> Input.buffer -> int -> bool)
                  -> 'a grammar -> 'a grammar
 
 val no_blank_before : 'a grammar -> 'a grammar

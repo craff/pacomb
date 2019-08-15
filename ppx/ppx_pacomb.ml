@@ -284,7 +284,7 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
      let rec gn acc l =
        match l with
        | x::(y::_ as l) ->
-          let e = [%expr Pacomb.Grammar.seq2 (Pacomb.Grammar.test
+          let e = [%expr Pacomb.Grammar.seq2 (Pacomb.Grammar.cond
                                          ([%e Exp.ident param] = [%e x]))
                       ([%e Exp.ident name] [%e y])]
           in gn (e::acc) l

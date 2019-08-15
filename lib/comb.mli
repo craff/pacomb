@@ -99,8 +99,12 @@ val lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t
     is also much simpler *)
 val read_tbl : 'a key -> 'a t
 
-(** Allow to test the blank characteres before a grammar *)
-val test_blank : (Input.buffer -> int -> Input.buffer -> int -> bool)
+(** Allow to test the blank characteres before a grammar and more *)
+val test_before : (Input.buffer -> int -> Input.buffer -> int -> bool)
+                 -> 'a t -> 'a t
+
+(** Allow to test the blank characteres after a grammar and more *)
+val test_after : (Input.buffer -> int -> Input.buffer -> int -> bool)
                  -> 'a t -> 'a t
 
 (** Access to a reference to a combinator, used by Grammar.compile for recursive

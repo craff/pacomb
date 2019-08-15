@@ -28,13 +28,13 @@ val accepted_first_chars : regexp -> Charset.t
     and position correspond to the first character that cannot be matched. *)
 exception Regexp_error of Input.buffer * int
 
-(** [read re buf pos] attempts to match the regular expression [re] in  buffer
-    [buf], at position [pos]. The returned value [(matched, buf', pos')] gives
-    the new buffer [buf'] and position [pos'] after the longest possible match
-    using [re]. It also contains a list of matched strings, all corresponding
-    to a {!constructor:Sav} constructor. If the regexp [re] cannot be matched
-    then exception {!exception:Regexp_error} is raised. *)
+(** [read re  buf pos] attempts to  match the regular expression  [re] in buffer
+    [buf], at position  [pos]. The returned value [(matched,  buf', pos')] gives
+    the new buffer  [buf'] and position [pos'] after the  longest possible match
+    using [re]. It also contains a list of matched strings, all corresponding to
+    a {!constructor:Sav} constructor. If the  regexp [re] cannot be matched then
+    exception {!exception:Regexp_error} is raised. *)
 val read : regexp -> Input.buffer -> int -> string list * Input.buffer * int
 
-(** [from_string s] ... TODO *)
+(** [from_string s] convert a string into a regexp following [Str] syntax. *)
 val from_string : string -> regexp
