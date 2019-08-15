@@ -34,6 +34,16 @@ let accept_empty : type a. a t -> bool = fun t ->
       with NoParse -> true
   with NoParse -> false
 
+let test_from_lex : bool t -> buf -> int -> buf -> int -> bool =
+  fun t _ _ buf pos ->
+      try let (r,_,_) = t.f buf pos in r
+      with NoParse | Give_up _ -> false
+
+let blank_test_from_lex : bool t -> buf -> int -> buf -> int -> bool =
+  fun t buf pos _ _ ->
+      try let (r,_,_) = t.f buf pos in r
+      with NoParse | Give_up _ -> false
+
 
 (** Combinators to create terminals *)
 

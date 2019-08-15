@@ -257,11 +257,11 @@ let error m = mkg (Err m)
 
 let cache ?merge g = mkg (if g.d = Fail then Fail else Cache(merge,g))
 
-let test_blank f g = mkg (if g.d = Fail then Fail else Test(f,g))
+let test_before f g = mkg (if g.d = Fail then Fail else Test(f,g))
 
 let no_blank_before g =
   let fn b1 c1 b2 c2 = Input.buffer_equal b1 b2 && c1 = c2 in
-  test_blank fn g
+  test_before fn g
 
 let layout ?(config=Comb.default_layout_config) b g =
   mkg (if g.d = Fail then Fail else Layout(b,g,config))

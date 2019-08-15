@@ -164,3 +164,7 @@ val blank_regexp : string -> blank
 (** Test wether a terminal accept the  empty string. Such a terminal are illegal
    in a grammar, but may be used in combinator below to create terminals *)
 val accept_empty : 'a t -> bool
+
+(** Test constructor for the test constructor in [Grammar] *)
+val test_from_lex : bool t -> buf -> int -> buf -> int -> bool
+val blank_test_from_lex : bool t -> buf -> int -> buf -> int -> bool
