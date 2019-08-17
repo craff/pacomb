@@ -35,13 +35,13 @@ let get_pos : Input.buffer -> int -> pos = fun b n ->
 
 type style = OCaml | Short
 
-let print_pos ?(style=OCaml) () ch pos =
+let print_pos ?(utf8_col=false) ?(style=OCaml) () ch pos =
   let open Printf in
   let format : (_,_,_) format = match style with
     | OCaml -> "File %S, line %d, character %d"
     | Short -> "%S:%d:%d"
   in
-  fprintf ch format pos.name pos.line pos.col
+  fprintf ch format pos.name pos.line (if utf8_col then pos.utf8_col else pos.col)
 
 let print_interval ?(style=OCaml) () ch { start; end_ } =
   let open Printf in
@@ -58,8 +58,9 @@ let print_interval ?(style=OCaml) () ch { start; end_ } =
     in
     fprintf ch format start.name start.line start.col end_.line end_.col
 
-let print_buf_pos ?(style=OCaml) () ch (buf,col) =
-  print_pos ~style () ch (get_pos buf col)
+let print_buf_pos ?(utf8_col=false) ?(style=OCaml) () ch (buf,col) =
+  compute_utf8_col := true;
+  print_pos ~utf8_col ~style () ch (get_pos buf col)
 
 (** exception returned by the parser *)
 exception Parse_error of Input.buffer * int * string list
@@ -67,11 +68,11 @@ exception Parse_error of Input.buffer * int * string list
 let fail_no_parse (_:exn) = exit 1
 
 (** A helper to handle exceptions *)
-let handle_exception ?(error=fail_no_parse) ?(style=OCaml) f a =
+let handle_exception ?(utf8_col=false) ?(error=fail_no_parse) ?(style=OCaml) f a =
   try f a with Parse_error(buf, pos, msgs) as e ->
     let red fmt = "\027[31m" ^^ fmt ^^ "\027[0m%!" in
     Printf.eprintf (red "Parse error: %a.\n%!")
-      (print_buf_pos ~style ()) (buf, pos);
+      (print_buf_pos ~utf8_col ~style ()) (buf, pos);
     if msgs <> [] then
       begin
         Printf.eprintf "expecting:\n%!";
