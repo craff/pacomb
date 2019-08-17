@@ -16,7 +16,7 @@ exception Give_up of string
 (** [give_up ()] rejects parsing from a corresponding semantic action. *)
 let give_up : ?msg:string -> unit -> 'a = fun ?msg () ->
   match msg with None -> raise NoParse
-               | Some s -> Printf.eprintf "gu: %s\n%!" s; raise (Give_up s)
+               | Some s -> raise (Give_up s)
 
 (** Terminal: same as blank with a value returned *)
 type 'a lexeme = buf -> int -> 'a * buf * int

@@ -165,6 +165,10 @@ let next : env -> err -> res  = fun env err ->
     env.max_pos := (pos, env.current_buf, env.current_col, ref []);
   err ()
 
+let register_msg : string -> env -> unit = fun msg env ->
+  let (_, _, _, msgs) = !(env.max_pos) in
+  msgs := msg :: !msgs
+
 let next_msg : string -> env -> err -> res  = fun msg env err ->
   let (pos_max, _, _, msgs) = !(env.max_pos) in
   let pos = Input.line_offset env.current_buf + env.current_col in
@@ -485,7 +489,8 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
                  | Some x, Some y -> Some (merge x y)
                in
                let force x = try Some (Lazy.force x)
-                             with Lex.NoParse | Lex.Give_up _ -> None
+                             with Lex.NoParse -> None
+                                | Lex.Give_up m -> register_msg m env; None
                in
                let gn x =
                  too_late := true;
