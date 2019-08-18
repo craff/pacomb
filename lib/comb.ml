@@ -485,8 +485,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
                  | Some x, Some y -> Some (merge x y)
                in
                let force x = try Some (Lazy.force x)
-                             with Lex.NoParse -> None
-                                | Lex.Give_up m -> register_msg m env; None
+                             with Lex.NoParse | Lex.Give_up _ -> None
                in
                let gn x =
                  too_late := true;
