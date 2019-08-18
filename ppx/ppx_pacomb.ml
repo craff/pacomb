@@ -112,6 +112,8 @@ let rec exp_to_term exp =
      [%expr Pacomb.Grammar.term (Pacomb.Lex.float ())]
   | [%expr UTF8] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.utf8 ())]
+  | [%expr EOF] ->
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.eof ())]
   | [%expr RE([%e? s])] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.regexp
                                   (Pacomb.Regexp.from_string [%e s]))]
