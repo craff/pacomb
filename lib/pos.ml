@@ -37,12 +37,19 @@ type style = OCaml | Short
 
 let print_pos ?(utf8_col=false) ?(style=OCaml) () ch pos =
   let open Printf in
-  let format : (_,_,_) format = match style with
-    | OCaml -> "File %S, line %d, character %d"
-    | Short -> "%S:%d:%d"
-  in
   let col = if utf8_col then pos.utf8_col else pos.col in
-  fprintf ch format pos.name pos.line col
+  if pos.name = "" then
+    let format : (_,_,_) format = match style with
+      | OCaml -> "Line %d, character %d"
+      | Short -> "%d:%d"
+    in
+    fprintf ch format pos.line col
+  else
+    let format : (_,_,_) format = match style with
+      | OCaml -> "File %S, line %d, character %d"
+      | Short -> "%S:%d:%d"
+    in
+    fprintf ch format pos.name pos.line col
 
 let print_interval ?(style=OCaml) () ch { start; end_ } =
   let open Printf in
