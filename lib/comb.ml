@@ -165,10 +165,6 @@ let next : env -> err -> res  = fun env err ->
     env.max_pos := (pos, env.current_buf, env.current_col, ref []);
   err ()
 
-let register_msg : string -> env -> unit = fun msg env ->
-  let (_, _, _, msgs) = !(env.max_pos) in
-  msgs := msg :: !msgs
-
 let next_msg : string -> env -> err -> res  = fun msg env err ->
   let (pos_max, _, _, msgs) = !(env.max_pos) in
   let pos = Input.line_offset env.current_buf + env.current_col in

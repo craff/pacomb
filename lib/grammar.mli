@@ -110,8 +110,8 @@ val option : 'a grammar -> 'a option grammar
 val default_option : 'a -> 'a grammar -> 'a grammar
 val star : 'a grammar -> 'a list grammar
 val plus : 'a grammar -> 'a list grammar
-val star_sep : string -> 'a grammar -> 'a list grammar
-val plus_sep : string -> 'a grammar -> 'a list grammar
+val star_sep : 'b grammar -> 'a grammar -> 'a list grammar
+val plus_sep : 'b grammar -> 'a grammar -> 'a list grammar
 
 (** [grammar_family to_str name] returns a  pair [(gs, set_gs)], where [gs] is a
     finite  family of  grammars parametrized  by a  value of  type ['a].  A name
