@@ -484,15 +484,20 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
                  | None, Some x -> Some x
                  | Some x, Some y -> Some (merge x y)
                in
-               let force x = try Some (Lazy.force x)
-                             with Lex.NoParse | Lex.Give_up _ -> None
-               in
-               let gn x =
-                 too_late := true;
-                 List.fold_left (fun x v -> merge x (force v)) x !vptr
-               in
-               lazy (match gn (force v) with None -> raise Lex.NoParse
-                                           | Some x -> x)
+               lazy (
+                 let r = ref [] in
+                 let force x = try Some (Lazy.force x)
+                                 with Lex.NoParse -> None
+                                    | Lex.Give_up m -> r := m :: !r; None
+                 in
+                 let gn x =
+                   too_late := true;
+                   List.fold_left (fun x v -> merge x (force v)) x !vptr
+                 in
+                 match gn (force v) with
+                 | None -> (match !r with [] -> raise Lex.NoParse
+                                        | m::_ -> Lex.give_up ~msg:m ())
+                 | Some x -> x)
           in
           let l0 = !ptr in
           let rec fn l =

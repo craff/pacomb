@@ -171,7 +171,6 @@ let%parser eq = '=' => () ; ERROR("=")
 let%parser priority_kwd = "priority" => (); ERROR("priority keyword")
 let%parser assoc_kwd = "associative" => (); ERROR("associative keyword")
 
-
 (* list of parameters for definition of functions *)
 let%parser params =
     ()                                     => [||]
