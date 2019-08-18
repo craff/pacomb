@@ -98,8 +98,8 @@ denote respectively the left and right position of the item named [lid].  a
 [Pos.interval]. If the item is matched by a tuple and you want to use its positon
 you must use [pat = lid] syntax to give a name to the whole item.
 
-Action code needs parenthesis or [begin ... end] if the use [if .. then] or
-pattern matching (except the action of the last rule).
+Action code needs parenthesis or [begin ... end] if it uses [if .. then] or
+pattern matching or sequence.
 
 Beware that inside the scope of the extension, you can use the syntax for
 grammars everywhere. This allows for some nesting as in:

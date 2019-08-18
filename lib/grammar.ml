@@ -313,6 +313,14 @@ let plus : 'a grammar -> 'a list grammar = fun g ->
             alt [appl g (fun x -> [x]);
                  seq r (appl g (fun x l -> x::l))])) List.rev
 
+let plus_sep : string -> 'a grammar -> 'a list grammar = fun sep g ->
+  appl (fixpoint (fun r ->
+            alt [appl g (fun x -> [x]);
+                 seq r (seq (term (Lex.string sep ())) (appl g (fun x _ l -> x::l)))])) List.rev
+
+let star_sep : string -> 'a grammar -> 'a list grammar = fun sep g ->
+  alt [empty []; plus_sep sep g]
+
 (** a function to defined indexed grammars *)
 let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
   let tbl = Hashtbl_eq.create 8 in
