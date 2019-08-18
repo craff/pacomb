@@ -41,7 +41,8 @@ let print_pos ?(utf8_col=false) ?(style=OCaml) () ch pos =
     | OCaml -> "File %S, line %d, character %d"
     | Short -> "%S:%d:%d"
   in
-  fprintf ch format pos.name pos.line (if utf8_col then pos.utf8_col else pos.col)
+  let col = if utf8_col then pos.utf8_col else pos.col in
+  fprintf ch format pos.name pos.line col
 
 let print_interval ?(style=OCaml) () ch { start; end_ } =
   let open Printf in
@@ -68,7 +69,8 @@ exception Parse_error of Input.buffer * int * string list
 let fail_no_parse (_:exn) = exit 1
 
 (** A helper to handle exceptions *)
-let handle_exception ?(utf8_col=false) ?(error=fail_no_parse) ?(style=OCaml) f a =
+let handle_exception
+      ?(utf8_col=false) ?(error=fail_no_parse) ?(style=OCaml) f a =
   try f a with Parse_error(buf, pos, msgs) as e ->
     let red fmt = "\027[31m" ^^ fmt ^^ "\027[0m%!" in
     Printf.eprintf (red "Parse error: %a.\n%!")
