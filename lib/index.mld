@@ -82,6 +82,12 @@ item ::= '...'                                  Grammar.term(Lex.char ())
        | UTF8                                   Grammar.term(Lex.utf8 ())
        | RE(expr)      Grammar.term(Lex.regexp (Regexp.from_string expr))
        | expr                                                      itself
+       | ~? expr                                      Grammar.option expr
+       | ~? [expr] expr                  Grammar.option_default expr expr
+       | ~* expr                                        Grammar.star expr
+       | ~* [expr] expr                        Grammar.star_sep expr expr
+       | ~+ expr                                        Grammar.plus expr
+       | ~+ [expr] expr                        Grammar.plus_sep expr expr
 epat ::= lid
        | (epat : coretype)
        | epat = lid                              encoding of [pat as lid]

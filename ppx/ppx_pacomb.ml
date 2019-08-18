@@ -121,6 +121,38 @@ let exp_to_term exp =
    - pat is an expression accepted by exp_to_pattern
    - term is an expression accepted by exp_to_term *)
 let exp_to_rule_item (e, loc_e) =  match e with
+  | [%expr [%e? epat] :: ~? [ [%e? default] ] [%e? exp] ] ->
+     let (name, pat) = exp_to_pattern epat in
+     let loc = exp.pexp_loc in
+     let exp = [%expr Pacomb.Grammar.default_option
+                   [%e default] [%e exp_to_term exp]]
+     in
+     (Some (name, pat), None, exp, loc_e)
+  | [%expr [%e? epat] :: ~? [%e? exp]] ->
+     let (name, pat) = exp_to_pattern epat in
+     let loc = exp.pexp_loc in
+     let exp = [%expr Pacomb.Grammar.option [%e exp_to_term exp]] in
+     (Some (name, pat), None, exp, loc_e)
+  | [%expr [%e? epat] :: ~* [ [%e? sep] ] [%e? exp]] ->
+     let (name, pat) = exp_to_pattern epat in
+     let loc = exp.pexp_loc in
+     let exp = [%expr Pacomb.Grammar.star_sep [%e sep] [%e exp_to_term exp]] in
+     (Some (name, pat), None, exp, loc_e)
+  | [%expr [%e? epat] :: ~* [%e? exp]] ->
+     let (name, pat) = exp_to_pattern epat in
+     let loc = exp.pexp_loc in
+     let exp = [%expr Pacomb.Grammar.star [%e exp_to_term exp]] in
+     (Some (name, pat), None, exp, loc_e)
+  | [%expr [%e? epat] :: ~+ [ [%e? sep] ] [%e? exp]] ->
+     let (name, pat) = exp_to_pattern epat in
+     let loc = exp.pexp_loc in
+     let exp = [%expr Pacomb.Grammar.plus_sep [%e sep] [%e exp_to_term exp]] in
+     (Some (name, pat), None, exp, loc_e)
+  | [%expr [%e? epat] :: ~+ [%e? exp]] ->
+     let (name, pat) = exp_to_pattern epat in
+     let loc = exp.pexp_loc in
+     let exp = [%expr Pacomb.Grammar.plus [%e exp_to_term exp]] in
+     (Some (name, pat), None, exp, loc_e)
   | [%expr [%e? epat] :: [%e? exp]] ->
      let (name, pat) = exp_to_pattern epat in
      (Some (name, pat), None, exp_to_term exp, loc_e)

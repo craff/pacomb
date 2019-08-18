@@ -90,17 +90,6 @@ let%parser op pmin pmax =
 
 let%parser closing = ')' => (); ERROR "closing parenthesis"
 
-let%parser lists name sep f =
-  let sep = CHAR(sep) => ()
-          ; ERROR(Printf.sprintf "%c" sep)
-  in
-  let rec ne_slist = (x::f)                   => [x]
-                   ; (l::ne_slist) sep (x::f) => x::l
-                   ; ERROR("list of "^name)
-  in
-    () => [||]
-  ; '(' (l::ne_slist) closing => Array.of_list (List.rev l)
-
 let%parser rec
  expr pmax = ((pe,e1)>:expr pmax)
                ((pop,b)>:op pe pmax)
@@ -108,8 +97,10 @@ let%parser rec
                       =>  (pop, Idt(b,[|e1;e2|]))
             ; (x::FLOAT)                          => (0.0,Cst x)
             ; '(' (e::expr_top) closing           => (0.0,e)
-            ; (id::ident) (l::lists "expressions" ',' expr_top)
-                                                  => (0.0, Idt(id,l))
+            ; (id::ident) '(' (l:: ~+ [","] expr_top) closing
+                                                  => (0.0, Idt(id,Array.of_list l))
+            ; (id::ident)
+                                                  => (0.0, Idt(id,[||]))
             ; (ERROR "expression")
 and expr_top = ((__,e)::expr 1000.0) => e
 
@@ -128,8 +119,12 @@ let %parser assoc_kwd = "assoc" => (); ERROR("assoc keyword")
 let%parser cmd =
     (e::expr_top)
       => (fun () -> Printf.printf "%f\n%!" (eval !env e))
-  ; (id::ident) (params::lists "idents" ',' ident) eq (e::expr_top)
+  ; (id::ident) eq (e::expr_top)
       => (fun () ->
+          env := ((id,0),Def(e,[||])) :: !env)
+  ; (id::ident) '(' (l:: ~+ [","] ident) closing eq (e::expr_top)
+      => (fun () ->
+          let params = Array.of_list l in
           env := ((id,Array.length params),Def(e,params)) :: !env)
   ; (a1::ident) (id::bin) (a2::ident)
        priority_kwd (p::priority)
