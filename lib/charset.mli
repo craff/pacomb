@@ -54,14 +54,14 @@ val mem : charset -> char -> bool
 
 (** {2 Printing and string representation} *)
 
-(** [print oc cs] prints the charset [cs] to the output channel [oc].  A
-    compact format is used for printing: common ranges are used and full
-    and empty charsets are abreviated. *)
-val print : out_channel -> charset -> unit
+(** [pp ff cs] prints the charset [cs] to output formatter [ff]. Compact
+    format is used for printing: ranges, full and empty charsets are not
+    given in full, but abbreviated. *)
+val pp : Format.formatter -> charset -> unit
 
-(** [print_full oc cs] is the same as [print oc cs] but it does not  use
-    abreviations (i.e. all characters are displayed). *)
-val print_full : out_channel -> charset -> unit
+(** [pp_full ff cs] is similar to [pp ff cs], but it does not abbreviate
+    ranges, full and empty charsets. *)
+val pp_full : Format.formatter -> charset -> unit
 
 (** [show oc cs] builds a string representing the charset [cs] using the
     same compact format as [print]. *)
@@ -86,3 +86,12 @@ val addq : charset -> char -> unit
 (** [delq cs c] deletes the character [c] from the charset [cs]. Similar
     recomendatiosn as for [addq] apply. *)
 val delq : charset -> char -> unit
+
+(** {2 Comparison and equality test} *)
+
+(** [compare cs1 cs2] compares the charsets [cs1] and [cs2] according to
+    some (unspecified) total order. *)
+val compare : charset -> charset -> int
+
+(** [equal cs1 cs2] tests the equality of charsets [cs1] and [cs2]. *)
+val equal : charset -> charset -> bool

@@ -70,7 +70,7 @@ let line (lazy b) = b.data
 let line_length (lazy b) = b.llen
 
 (* Get the utf8 column number corresponding to the given position. *)
-let utf8_col_num (lazy {data; _}) i =
+let utf8_col_num (lazy {data}) i =
   let rec find num pos =
     if pos < i then
       let cc = Char.code data.[pos] in
@@ -203,7 +203,7 @@ module type Preprocessor =
     type state
     val initial_state : state
     val update : state -> string -> int -> string
-                 -> state * string * int * bool
+                 -> state * string * int * string option
     val check_final : state -> string -> unit
   end
 
@@ -216,14 +216,15 @@ module Make(PP : Preprocessor) =
           (* Tail rec exception trick to avoid stack overflow. *)
           try
             let data = get_line file in
-            let (st, name, lnum, take) = PP.update st name lnum data in
-            if take then
+            let (st, name, lnum, res) = PP.update st name lnum data in
+            match res with
+            | Some data ->
               let llen = String.length data in
               fun () ->
                 { is_eof = false ; lnum ; loff ; llen ; data ; name
                 ; next = lazy (fn name lnum (loff + llen) st cont)
                 ; uid = new_uid () ; ctnr = Container.create (); }
-            else
+            | None ->
               fun () -> fn name lnum loff st cont
           with End_of_file ->
             finalise file;
@@ -242,7 +243,7 @@ module Make(PP : Preprocessor) =
 
 module WithPP(PP : Preprocessor) = GenericInput(Make(PP))
 
-let leq_buf {uid=ident1; _} i1 {uid=ident2; _} i2 =
+let leq_buf {uid=ident1} i1 {uid=ident2} i2 =
   (ident1 = ident2 && i1 <= i2) || ident1 < ident2
 
 let buffer_before b1 i1 b2 i2 = leq_buf (Lazy.force b1) i1 (Lazy.force b2) i2

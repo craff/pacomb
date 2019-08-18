@@ -7,17 +7,15 @@
 (test
   (name hard)
   (modules hard)
-  (flags -ppx "./ppx/ppx_pacomb.exe")
+  (preprocess (pps pacomb.ppx))
   (libraries unix pacomb)
-  (deps ../ppx/ppx_pacomb.exe hard.exe)
   (action (run ./hard.exe 1000)))
 
 (test
   (name ppx_test)
   (modules ppx_test)
-  (flags -ppx "./ppx/ppx_pacomb.exe")
+  (preprocess (pps pacomb.ppx))
   (libraries unix pacomb)
-  (deps ../ppx/ppx_pacomb.exe hard.exe)
   (action (run ./ppx_test.exe)))
 
 (executable
@@ -31,64 +29,37 @@
   (libraries))
 
 (test
-  (name calc)
-  (modules calc)
-  (flags -ppx "./ppx/ppx_pacomb.exe")
-  (libraries unix pacomb)
-  (deps ../ppx/ppx_pacomb.exe big_expr.exe calc.exe)
-  (action
-    (system "./big_expr.exe 4 4 4 | ./calc.exe")))
-
-(test
-  (name calc_prio)
-  (modules calc_prio)
-  (flags -ppx "./ppx/ppx_pacomb.exe")
-  (libraries unix pacomb)
-  (deps ../ppx/ppx_pacomb.exe big_expr.exe calc_prio.exe)
-  (action
-    (system "./big_expr.exe 4 4 4 | ./calc_prio.exe")))
-
-(test
   (name calc_factor)
   (modules calc_factor)
-  (flags -ppx "./ppx/ppx_pacomb.exe")
+  (preprocess (pps pacomb.ppx))
   (libraries unix pacomb)
-  (deps ../ppx/ppx_pacomb.exe big_expr.exe calc_factor.exe)
+  (deps big_expr.exe calc_factor.exe)
   (action
     (system "./big_expr.exe 4 4 4 | ./calc_factor.exe")))
 
 (test
   (name calc_ext_bench)
   (modules calc_ext_bench)
-  (flags -ppx "./ppx/ppx_pacomb.exe")
+  (preprocess (pps pacomb.ppx))
   (libraries unix pacomb)
-  (deps ../ppx/ppx_pacomb.exe big_expr.exe calc_ext_bench.exe)
+  (deps big_expr.exe calc_ext_bench.exe)
   (action
     (system "./big_expr.exe 3 4 4 | ./calc_ext_bench.exe")))
 
 (test
-  (name calc_ext)
-  (modules calc_ext)
-  (flags -ppx "./ppx/ppx_pacomb.exe")
-  (libraries unix pacomb)
-  (deps ../ppx/ppx_pacomb.exe big_expr.exe calc_ext.exe)
-  (action
-    (system "./big_expr.exe 3 4 4 | ./calc_ext.exe")))
-
-(test
   (name sexp)
   (modules sexp)
-  (flags -ppx "./ppx/ppx_pacomb.exe")
+  (preprocess (pps pacomb.ppx))
   (libraries unix pacomb)
-  (deps ../ppx/ppx_pacomb.exe big_sexp.exe sexp.exe)
+  (deps big_sexp.exe sexp.exe)
   (action
     (system "./big_sexp.exe 1000 | ./sexp.exe")))
 
 (test
   (name sexp_rr)
   (modules sexp_rr)
-  (flags -ppx "./ppx/ppx_pacomb.exe")
+  (preprocess (pps pacomb.ppx))
   (libraries unix pacomb)
-  (deps ../ppx/ppx_pacomb.exe big_sexp.exe sexp_rr.exe)
+  (deps big_sexp.exe sexp_rr.exe)
   (action
     (system "./big_sexp.exe 1000 | ./sexp_rr.exe")))

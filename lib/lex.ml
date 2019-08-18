@@ -11,8 +11,12 @@ type blank = buf -> int -> buf * int
 (** Exception to be raised when the input is rejected *)
 exception NoParse
 
+exception Give_up of string
+
 (** [give_up ()] rejects parsing from a corresponding semantic action. *)
-let give_up : unit -> 'a = fun _ -> raise NoParse
+let give_up : ?msg:string -> unit -> 'a = fun ?msg () ->
+  match msg with None -> raise NoParse
+               | Some s -> raise (Give_up s)
 
 (** Terminal: same as blank with a value returned *)
 type 'a lexeme = buf -> int -> 'a * buf * int
@@ -29,6 +33,16 @@ let accept_empty : type a. a t -> bool = fun t ->
       try let (_,_,col) = t.f s1 0 in col <> 1
       with NoParse -> true
   with NoParse -> false
+
+let test_from_lex : bool t -> buf -> int -> buf -> int -> bool =
+  fun t _ _ buf pos ->
+      try let (r,_,_) = t.f buf pos in r
+      with NoParse | Give_up _ -> false
+
+let blank_test_from_lex : bool t -> buf -> int -> buf -> int -> bool =
+  fun t buf pos _ _ ->
+      try let (r,_,_) = t.f buf pos in r
+      with NoParse | Give_up _ -> false
 
 
 (** Combinators to create terminals *)
@@ -62,6 +76,55 @@ let charset_from_test f =
     if f c then l := Charset.add !l c
   done;
   !l
+
+let utf8 : ?name:string -> unit -> Uchar.t t = fun ?name () ->
+  { n = default "UTF8" name
+  ; c = Charset.full
+  ; f = fun s n ->
+        let (c1,s,n) = Input.read s n in
+        let n1 = Char.code c1 in
+        let (n0,s,n) =
+          if n1 land 0b1000_0000 = 0 then (n1 land 0b0111_1111, s, n)
+          else if n1 land 0b1110_0000 = 0b1100_0000 then
+            begin
+              let (c2,s,n) = Input.read s n in
+              let n2 = Char.code c2 in
+              if n2 land 0b1100_0000 <> 0b1000_0000 then raise NoParse;
+              (((n1 land 0b0001_1111) lsl 6) lor
+                (n2 land 0b0011_1111), s , n)
+            end
+          else if n1 land 0b1111_0000 = 0b1110_0000 then
+            begin
+              let (c2,s,n) = Input.read s n in
+              let n2 = Char.code c2 in
+              if n2 land 0b1100_0000 <> 0b1000_0000 then raise NoParse;
+              let (c3,s,n) = Input.read s n in
+              let n3 = Char.code c3 in
+              if n3 land 0b1100_0000 <> 0b1000_0000 then raise NoParse;
+              (((n1 land 0b0000_1111) lsl 12) lor
+                ((n2 land 0b0011_1111) lsl 6) lor
+                  (n3 land 0b0011_1111), s, n)
+            end
+          else if n1 land 0b1111_1000 = 0b1111_0000 then
+            begin
+              let (c2,s,n) = Input.read s n in
+              let n2 = Char.code c2 in
+              if n2 land 0b1100_0000 <> 0b1000_0000 then raise NoParse;
+              let (c3,s,n) = Input.read s n in
+              let n3 = Char.code c3 in
+              if n3 land 0b1100_0000 <> 0b1000_0000 then raise NoParse;
+              let (c4,s,n) = Input.read s n in
+              let n4 = Char.code c4 in
+              if n4 land 0b1100_0000 <> 0b1000_0000 then raise NoParse;
+              (((n1 land 0b0000_0111) lsl 18) lor
+                ((n2 land 0b0011_1111) lsl 12) lor
+                  ((n3 land 0b0011_1111) lsl 6) lor
+                    (n4 land 0b0011_1111), s, n)
+            end
+          else raise NoParse
+        in
+        (Uchar.of_int n0,s,n)
+  }
 
 (** Accept a character for which the test returns [true] *)
 let test : ?name:string -> (char -> bool) -> char t = fun ?name f ->
@@ -161,8 +224,11 @@ let star : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
   ; f = fun s n ->
         let rec fn a s n =
           (try
-            let (x,s,n) = t.f s n in
-            fun () -> fn (f a x) s n
+            let (x,s',n') = t.f s n in
+            if Input.buffer_equal s s' && n = n' then
+              fun () -> (a,s,n)
+            else
+              fun () -> fn (f a x) s' n'
           with NoParse ->
             fun () -> (a,s,n)) ()
         in
@@ -176,8 +242,11 @@ let plus : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
   ; f = fun s n ->
         let rec fn a s n =
           (try
-            let (x,s,n) = t.f s n in
-            fun () -> fn (f a x) s n
+            let (x,s',n') = t.f s n in
+            if Input.buffer_equal s s' && n = n' then
+              fun () -> (a,s,n)
+            else
+              fun () -> fn (f a x) s' n'
            with NoParse ->
              fun () -> (a,s,n)) ()
         in
@@ -458,3 +527,5 @@ let blank_terminal : 'a t -> blank =
       let (_,s,n) = t.f s n in
       (s,n)
     with NoParse -> (s,n)
+
+let blank_regexp s = blank_terminal (regexp (Regexp.from_string s))

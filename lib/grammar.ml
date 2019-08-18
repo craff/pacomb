@@ -11,14 +11,14 @@ type 'a grammar =
                               using declare/set_grammar *)
   ; mutable phase : phase (** which transformation phase reached for that
                               grammar *)
-  ; mutable e: 'a option  (** not None  if the grammar accepts Empty.  keep only
-                              one semantics for emptyness, incomplete if action
-                              uses [give_up].  valid from phase Empty Removed *)
+  ; mutable e: 'a list    (** not []   if the grammar accepts Empty.
+                              valid from phase Empty Removed *)
   ; mutable ne : 'a grne  (** the part of the grammar that does not accept empty
                               valid from phase Empty Removed, but transformed
                               at CacheFactored and LeftRecEliminated *)
-  ; mutable cache : bool  (** Does this grammar needs a cache valid from phase
-                              CacheFactored *)
+  ; mutable cache : ('a -> 'a -> 'a) option option
+                          (** Does this grammar needs a cache ? a merge ?
+                              valid from phase CacheFactored *)
   ; mutable compiled : 'a Comb.t ref
   (** the combinator for the grammar. One needs a ref for recursion.  valid from
                               phase Compiled *)
@@ -36,26 +36,31 @@ type 'a grammar =
  (** Grammar constructors at definition *)
  and 'a grdf =
    | Fail : 'a grdf                        (** grammar that always fais *)
+   | Err : string -> 'a grdf               (** error reporting *)
    | Empty : 'a -> 'a grdf                 (** accept only the empty input *)
    | Term : 'a Lex.t -> 'a grdf            (** terminals *)
    | Alt  : 'a t list -> 'a grdf           (** alternatives *)
    | Appl : 'a t * ('a -> 'b) -> 'b grdf   (** application *)
    | Seq  : 'a t * ('a -> 'b) t -> 'b grdf
-   (** sequence *)
+                                           (** sequence *)
    | DSeq : ('a * 'b) t * Charset.t * ('a -> ('b -> 'c) t) -> 'c grdf
-   (** dependant sequence *)
+                                           (** dependant sequence *)
    | Lr   : 'a t * 'a Comb.key * Pos.t Assoc.key option * 'a t -> 'a grdf
-   (** Lr(g1,g2) represents g1 g2* and is used to eliminate left recursion.  It
-                                               can not be exposed as left
-                                               recursion under Lr is not
+                                           (** Lr(g1,g2) represents g1 g2* and
+                                               is used to eliminate left
+                                               recursion.  It can not be exposed
+                                               as left recursion under Lr is not
                                                supported *)
    | Rkey : 'a Comb.key -> 'a grdf
    | LPos : Pos.t Assoc.key option * (Pos.t -> 'a) t -> 'a grdf
-   (** read the postion before parsing*)
+                                           (** read the postion before parsing*)
    | RPos : (Pos.t -> 'a) t -> 'a grdf     (** read the postion after parsing *)
    | Layout : blank * 'a t * layout_config -> 'a grdf
-   (** changes the blank function *)
-   | Cache : 'a t -> 'a grdf               (** caches the grammar *)
+                                           (** changes the blank function *)
+   | Cache : ('a -> 'a -> 'a) option * 'a t -> 'a grdf
+                                           (** caches the grammar *)
+   | Test : (Input.buffer -> int -> Input.buffer -> int -> bool) * bool *
+              'a t -> 'a grdf              (** test, before (true)  or after *)
    | Tmp  : 'a grdf                        (** used as initial value for
                                                recursive grammar. *)
 
@@ -64,6 +69,7 @@ type 'a grammar =
     'a grammar record except for recursion.  *)
  and 'a grne =
    | EFail : 'a grne
+   | EErr  : string -> 'a grne
    | ETerm : 'a terminal -> 'a grne
    | EAlt  : 'a grne list -> 'a grne
    | EAppl : 'a grne * ('a -> 'b) -> 'b grne
@@ -76,7 +82,9 @@ type 'a grammar =
    | ELPos : Pos.t Assoc.key option * (Pos.t -> 'a) grne -> 'a grne
    | ERPos : (Pos.t -> 'a) grne -> 'a grne
    | ELayout : blank * 'a grne * layout_config -> 'a grne
-   | ECache : 'a grne -> 'a grne
+   | ECache : ('a -> 'a -> 'a) option * 'a grne -> 'a grne
+   | ETest : (Input.buffer -> int -> Input.buffer -> int -> bool) * bool *
+              'a grne -> 'a grne
    | ETmp  : 'a grne
 
 (** grammar renaming *)
@@ -86,8 +94,8 @@ let give_name n g = { g with n }
 let mkg : ?name:string -> ?recursive:bool -> 'a grdf -> 'a grammar =
   fun ?(name="...") ?(recursive=false) d ->
     let k = Assoc.new_key () in
-    { e = None; d; n = name; k; recursive; compiled = ref Comb.assert_false
-    ; charset = None; phase = Defined; ne = ETmp; cache = false }
+    { e = []; d; n = name; k; recursive; compiled = ref Comb.assert_false
+    ; charset = None; phase = Defined; ne = ETmp; cache = None }
 
 (** A type to store list of grammar keys *)
 type ety = E : 'a Assoc.ty -> ety [@@unboxed]
@@ -112,6 +120,7 @@ let print_grammar ?(def=true) ch s =
     let pv x = print_negr x in
     match g with
     | EFail         -> pr "0"
+    | EErr m        -> pr "0(%s)" m
     | ETerm t       -> pr "%s" t.n
     | EAlt(gs)      -> pr "(%a)" (prl pg "|") gs
     | EAppl(g,_)    -> pr "App(%a)" pg g
@@ -122,7 +131,8 @@ let print_grammar ?(def=true) ch s =
     | ERef(g)       -> pr "%a" pv g
     | ERPos(g)      -> pr "%a" pg g
     | ELPos(_,g)    -> pr "%a" pg g
-    | ECache(g)     -> pr "%a" pg g
+    | ECache(_,g)   -> pr "%a" pg g
+    | ETest(_,_,g)  -> pr "%a" pg g
     | ELayout(_,g,_) -> pr "%a" pg g
     | ETmp          -> pr "TMP"
 
@@ -132,6 +142,7 @@ let print_grammar ?(def=true) ch s =
     let pg x = print_dfgr x in
     match g with
     | Fail         -> pr "0"
+    | Err m        -> pr "0(%s)" m
     | Empty _      -> pr "1"
     | Term t       -> pr "%s" t.n
     | Alt(gs)      -> pr "(%a)" (prl pg "|") gs
@@ -142,7 +153,8 @@ let print_grammar ?(def=true) ch s =
     | Rkey _       -> ()
     | RPos(g)      -> pr "%a" pg g
     | LPos(_,g)    -> pr "%a" pg g
-    | Cache(g)     -> pr "%a" pg g
+    | Cache(_,g)   -> pr "%a" pg g
+    | Test(_,_,g)  -> pr "%a" pg g
     | Layout(_,g,_)-> pr "%a" pg g
     | Tmp          -> pr "TMP"
 
@@ -155,14 +167,14 @@ let print_grammar ?(def=true) ch s =
         adone := E g.k.k :: !adone;
         let pg x = print_grne x in
         match g.e with
-        | None -> pr "%s=(%a)" g.n pg g.ne
+        | _::_ -> pr "%s=(%a)" g.n pg g.ne
         | _    -> pr "%s=(1|%a)" g.n pg g.ne
       end
     else
       begin
         let pg x = print_grne x in
         match g.e with
-        | None -> pr "%a" pg g.ne
+        | _::_ -> pr "%a" pg g.ne
         | _    -> pr "(1|%a)" pg g.ne
       end
 
@@ -190,7 +202,7 @@ let fail () = mkg Fail
 
 let empty x = mkg (Empty x)
 
-let test b = if b then empty () else fail ()
+let cond b = if b then empty () else fail ()
 
 let term ?name (x) =
   if accept_empty x then invalid_arg "term: empty terminals";
@@ -199,7 +211,7 @@ let term ?name (x) =
 
 let alt ?name l =
   let l = List.filter (fun g -> g.d <> Fail) l in
-  let l = List.map (function { d = Alt(ls); _ } -> ls | x -> [x]) l in
+  let l = List.map (function { d = Alt(ls) } -> ls | x -> [x]) l in
   let l = List.flatten l in
   match l with
   | [] -> fail ()
@@ -241,7 +253,19 @@ let seq_pos g1 g2 =
   seq (lpos (rpos (appl g1 (fun x rpos lpos -> (lpos, x, rpos)))))
     g2
 
-let cache g = mkg (if g.d = Fail then Fail else Cache(g))
+let error m = mkg (Err m)
+
+let cache ?merge g = mkg (if g.d = Fail then Fail else Cache(merge,g))
+
+let test f b g = mkg (if g.d = Fail then Fail else Test(f,b,g))
+
+let test_before f g = test f true g
+
+let test_after f g = test f false g
+
+let no_blank_before g =
+  let fn b1 c1 b2 c2 = Input.buffer_equal b1 b2 && c1 = c2 in
+  test_before fn g
 
 let layout ?(config=Comb.default_layout_config) b g =
   mkg (if g.d = Fail then Fail else Layout(b,g,config))
@@ -272,6 +296,30 @@ let memo g =
       let r = g x in Hashtbl_eq.add tbl x r; r)
 
 let dseq g1 ?cs g2 = dseq g1 ?cs (memo g2)
+
+let option : 'a grammar -> 'a option grammar = fun g ->
+  alt [appl g (fun x -> Some x); empty None]
+
+let default_option : 'a -> 'a grammar -> 'a grammar = fun d g ->
+  alt [g; empty d]
+
+let star : 'a grammar -> 'a list grammar = fun g ->
+  appl (fixpoint (fun r ->
+            alt [empty [];
+                 seq r (appl g (fun x l -> x::l))])) List.rev
+
+let plus : 'a grammar -> 'a list grammar = fun g ->
+  appl (fixpoint (fun r ->
+            alt [appl g (fun x -> [x]);
+                 seq r (appl g (fun x l -> x::l))])) List.rev
+
+let plus_sep : 'b grammar -> 'a grammar -> 'a list grammar = fun sep g ->
+  appl (fixpoint (fun r ->
+            alt [appl g (fun x -> [x]);
+                 seq r (seq sep (appl g (fun x _ l -> x::l)))])) List.rev
+
+let star_sep : 'b grammar -> 'a grammar -> 'a list grammar = fun sep g ->
+  alt [empty []; plus_sep sep g]
 
 (** a function to defined indexed grammars *)
 let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
@@ -310,10 +358,10 @@ let ne_appl g f =
   | _               -> EAppl(g,f)
 
 let ne_seq g1 g2 = match(g1,g2) with
-  | EFail, _                 -> EFail
-  | _, {e=None;ne=EFail;_}   -> EFail
-  | _, {e=Some y;ne=EFail;_} -> ne_appl g1 y
-  | _, _                     -> ESeq(g1,g2)
+  | EFail, _            -> EFail
+  | _, {e=[];ne=EFail}  -> EFail
+  | _, {e=[y];ne=EFail} -> ne_appl g1 y
+  | _, _                -> ESeq(g1,g2)
 
 let ne_dseq g1 cs g2 = match g1 with
   | EFail -> EFail
@@ -321,9 +369,9 @@ let ne_dseq g1 cs g2 = match g1 with
 
 let ne_lr g k ?pk s =
   match (g, s) with
-  | EFail, _ -> EFail
-  | _, {ne=EFail;_} -> g
-  | _        -> ELr(g,k,pk,s)
+  | EFail, _      -> EFail
+  | _, {ne=EFail} -> g
+  | _             -> ELr(g,k,pk,s)
 
 let ne_lpos ?pk g1 = match g1 with
   | EFail -> EFail
@@ -333,9 +381,13 @@ let ne_rpos g1 = match g1 with
   | EFail -> EFail
   | _     -> ERPos(g1)
 
-let ne_cache g1 = match g1 with
+let ne_cache merge g1 = match g1 with
   | EFail -> EFail
-  | _     -> ECache(g1)
+  | _     -> ECache(merge,g1)
+
+let ne_test f b g1 = match g1 with
+  | EFail -> EFail
+  | _     -> ETest(f,b,g1)
 
 let ne_layout b g cfg =
   match g with
@@ -351,7 +403,11 @@ let factor_empty g =
     if g.recursive then ERef g else
       begin
         assert (g.ne <> ETmp);
-        let ge = if g.cache then ECache g.ne else g.ne in
+        let ge = g.ne in
+        let ge = match g.cache with
+        | None -> ge
+        | Some f -> ECache(f,ge)
+        in
         ge
       end
   in
@@ -363,43 +419,43 @@ let factor_empty g =
         g.e  <- kn g.d;
       end
 
-  and kn : type a. a grdf -> a option = function
-    | Fail -> None
-    | Empty x -> Some x
-    | Term _     -> None
+  and kn : type a. a grdf -> a list = function
+    | Fail -> []
+    | Err _ -> []
+    | Empty x -> [x]
+    | Term _     -> []
     | Alt(gs) -> List.iter fn gs;
-                   let gn acc g = match acc with Some _ -> acc | None -> g.e in
-                   List.fold_left gn None gs
-    | Appl(g,f) -> fn g; (match g.e with
-                    | None -> None
-                    | Some x -> try Some (f x) with NoParse -> None)
+                   let gn acc g = g.e @ acc in
+                   List.fold_left gn [] gs
+    | Appl(g,f) -> fn g; List.map f g.e
     | Seq(g1,g2) -> fn g1; fn g2;
-                      (match g1.e with
-                       | None -> None
-                       | Some x ->
-                          match g2.e with
-                          | None -> None
-                          | Some y -> try Some(y x) with NoParse -> None)
-    | DSeq(g1,_,g2) -> fn g1; (match g1.e with
-                       | None -> None
-                       | Some (x,x') ->
-                          try
-                            let g2 = g2 x in
-                            fn g2;
-                            match g2.e with
-                            | None -> None
-                            | Some y -> Some(y x')
-                          with NoParse -> None)
+                    List.fold_left (fun acc x ->
+                        List.fold_left (fun acc y ->
+                            try y x :: acc
+                            with NoParse -> acc) acc g2.e)
+                      [] g1.e
+    | DSeq(g1,_,g2) -> fn g1;
+                       List.fold_left (fun acc (x,x') ->
+                           try
+                             let g2 = g2 x in
+                             fn g2;
+                             List.fold_left (fun acc y ->
+                                 try y x' :: acc
+                                 with NoParse -> acc) acc g2.e
+                         with NoParse -> acc)
+                         [] g1.e
     | Lr(g1,_,_,g2) -> fn g1; fn g2; g1.e
-    | Rkey _        -> None
-    | LPos(_,g1)    -> fn g1; (match g1.e with
-                               | None -> None (* FIXME #14: Loose position *)
-                               | Some x -> Some (x Pos.phantom))
-    | RPos(g1)      -> fn g1; (match g1.e with
-                               | None -> None (* FIXME #14: Loose position *)
-                               | Some x -> Some (x Pos.phantom))
+    | Rkey _        -> []
+    | LPos(_,g1)    -> fn g1; List.map (fun x -> x Pos.phantom) g1.e
+                       (* FIXME #14: Loose position *)
+    | RPos(g1)      -> fn g1; List.map (fun x -> x Pos.phantom) g1.e
+                       (* FIXME #14: Loose position *)
     | Layout(_,g,_) -> fn g; g.e
-    | Cache(g)      -> fn g; g.e
+    | Cache(_,g)    -> fn g; g.e
+    | Test(_,_,g)   -> fn g;
+                       if g.e <> [] then
+                         failwith "illegal test on grammar accepting empty";
+                       []
     | Tmp           -> failwith "grammar compiled before full definition"
   in
   let rec hn : type a. a grammar -> unit = fun g ->
@@ -413,30 +469,34 @@ let factor_empty g =
   and gn : type a. a grdf -> a grne = function
     | Fail -> EFail
     | Empty _ -> EFail
+    | Err m -> EErr m
     | Term(x) -> ETerm(x)
     | Alt(gs) -> List.iter hn gs; ne_alt (List.map get gs)
     | Appl(g,f) -> hn g; ne_appl (get g) f
     | Seq(g1,g2) -> hn g1; hn g2;
                     let ga = ne_seq (get g1) g2 in
-                    let gb = match g1.e with
-                      | None   -> EFail
-                      | Some x -> ne_appl (get g2) (fun y -> y x)
+                    let gb = ne_alt (List.map (fun x ->
+                                         ne_appl (get g2) (fun y -> y x)) g1.e)
                     in
                     ne_alt [ga; gb]
-    | DSeq(g1,cs,g2) -> hn g1; let ga = ne_dseq (get g1) cs g2 in
-                       let gb = match g1.e with
-                         | None   -> EFail
-                         | Some (x,x') ->
-                            let g2 = g2 x in fn g2; hn g2;
-                                             ne_appl (get g2) (fun y -> y x')
-                            (* FIXME, fn called twice on g2 x *)
+    | DSeq(g1,cs,g2) -> hn g1;
+                        let ga = ne_dseq (get g1) cs g2 in
+                        let gb =
+                          ne_alt (List.fold_left (fun acc (x,x') ->
+                                   try
+                                     let g2 = g2 x in
+                                     fn g2; hn g2;
+                                     ne_appl (get g2) (fun y -> y x') :: acc
+                                   with NoParse -> acc) [] g1.e)
+                                (* FIXME, fn called twice on g2 x *)
                        in
                        ne_alt [ga; gb]
     | Lr(g1,k,pk,g2) -> hn g1; hn g2; ne_lr (get g1) k ?pk g2
     | Rkey k    -> ERkey k
     | LPos(pk,g1) -> hn g1; ne_lpos ?pk (get g1)
     | RPos(g1) -> hn g1; ne_rpos (get g1)
-    | Cache(g1) -> hn g1; ne_cache(get g1)
+    | Cache(m,g1) -> hn g1; ne_cache m (get g1)
+    | Test(f,b,g1) -> hn g1; ne_test f b (get g1)
     | Layout(b,g,cfg) -> hn g; ne_layout b (get g) cfg
     | Tmp           -> failwith "grammar compiled before full definition"
 
@@ -444,23 +504,13 @@ let factor_empty g =
 
 (** remove a cache prefix and move it up to the grammar definition. *)
 let remove_cache : type a. a grammar -> unit =
-  let rec fn : type a. a grne -> bool * a grne = fun g ->
-    let cache = ref false in
-    let rec fn : type a. bool -> a grne -> a grne =
+  let rec fn : type a. a grne -> (a -> a -> a) option option * a grne = fun g ->
+    let cache = ref None in
+    let rec fn : bool -> a grne -> a grne =
       fun r -> function
-        | EAlt(gs) -> ne_alt (List.map (fn r) gs)
-        | EAppl(g1,f) -> ne_appl (fn r g1) f
-        | ESeq(g1,g2) -> ne_seq (fn r g1) g2
-        | EDSeq(g1,cs,g2) -> ne_dseq (fn r g1) cs g2
-        | ERPos(g1) -> ne_rpos(fn r g1)
-        | ELPos(pk,g1) -> ne_lpos ?pk (fn r g1)
-        | ELr _  -> assert false
-        | ERkey _  -> assert false
-        | ECache(g1) -> cache := true; fn r g1
+        | ECache(m,g1) -> cache := Some m; fn r g1
         | ELayout(b,g1,cfg) -> ne_layout b (fn r g1) cfg
-        | ERef g0 as g -> gn g0; g
-        | ETmp -> assert false
-        | EFail | ETerm _ as g -> g
+        | g -> g
     in
     let g = fn false g in
     (!cache, g)
@@ -492,8 +542,7 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
   let rec fn : type b. b grne -> b grne * b grammar =
     fun g ->
       match g with
-      | EFail -> (EFail, fail ())
-      | ETerm _ -> (g, fail ())
+      | EFail | ETerm _ | EErr _ -> (g, fail ())
       | ESeq(g1,g2) ->
          let (g1, s1) = fn g1 in
          (ne_seq g1 g2, seq s1 g2)
@@ -512,8 +561,8 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
          let (g1,s) = fn g1 in
          (ne_appl g1 f, appl s f)
       | ERef(g) -> gn g
-      | ECache(g1) as g ->
-         assert ((snd (fn g1)).d = Fail);
+      | ECache(_,g1) as g ->
+         if ((snd (fn g1)).d <> Fail) then failwith "Illegal cache";
          (g, fail())
       | ERPos(g1) ->
          let (g1, s1) = fn g1 in
@@ -525,6 +574,9 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
          let pk = get_pk () in
          let (g1, s1) = fn g1 in
          (ne_lpos ?pk:None g1, lpos ?pk s1)
+      | ETest(f, b, g1) ->
+         let (g1, s1) = fn g1 in
+         (ne_test f b g1, if b then s1 else test f b s1)
       | ELayout(_,g1,_) ->
          let (_, s1) = fn g1 in
          if s1.d <> Fail then
@@ -547,18 +599,18 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
               elim_left_rec (E u :: above) g;
               let (g',s) = fn g.ne in
               factor_empty s;
-              assert(s.e = None);
+              assert(s.e = []);
               s.phase <- LeftRecEliminated;
               if s.ne = EFail then (ERef g, fail()) else (g', s)
             end
    in
-   assert (g.phase>=CacheFactored);
+   if g.phase < CacheFactored then remove_cache g;
    if g.phase = CacheFactored then
      begin
        g.phase <- LeftRecEliminated;
        let (g1,s) = fn g.ne in
        factor_empty s;
-       s.e <- None;
+       s.e <- [];
        s.phase <- LeftRecEliminated;
        let pk = !pk in
        if s.ne <> EFail then g.ne <- ne_lr g1 g.k ?pk s;
@@ -570,6 +622,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
   let rec fn : type a. a grne -> bool * Charset.t = fun g ->
     match g with
     | EFail -> (false, Charset.empty)
+    | EErr _ -> (false, Charset.full)
     | ETerm(c) -> (false, c.c)
     | EAlt(gs) ->
        List.fold_left (fun (shift,s) g ->
@@ -592,7 +645,8 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
     | ERef g -> gn g
     | ERPos g -> fn g
     | ELPos (_,g) -> fn g
-    | ECache g -> fn g
+    | ECache (_,g) -> fn g
+    | ETest (_,_,g) -> fn g
     | ELayout(_,g,cfg) -> if cfg.old_blanks_before
                              && not cfg.old_blanks_after
                           then fn g else (false, Charset.full)
@@ -618,40 +672,46 @@ let split_list l =
   fn [] [] l
 
 (** compilation of a grammar to combinators *)
-let rec compile_ne : type a. bool -> a grne -> a Comb.t = fun direct g ->
+let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   let open Comb in
   match g with
   | EFail -> fail
-  | ETerm(c) -> if direct then direct_lexeme c.f else lexeme c.f
+  | EErr m -> error m
+  | ETerm(c) -> lexeme c.f
   | EAlt(gs) -> compile_alt gs
-  | ESeq(g1,g2) -> seq (compile_ne direct g1) (compile false true g2)
-  | EDSeq(g1,_,g2) -> dseq (compile_ne direct g1)
-                      (fun x -> compile false true (g2 x))
-  | EAppl(g1,f) -> app (compile_ne direct g1) f
-  | ELr(g,k,None,s) -> lr (compile_ne direct g) k (compile_ne false s.ne)
-  | ELr(g,k,Some pk,s) -> lr_pos (compile_ne direct g) k pk
-                            (compile_ne false s.ne)
+  | ESeq(g1,g2) -> seq (compile_ne g1) (compile false g2)
+  | EDSeq(g1,_,g2) -> dseq (compile_ne g1)
+                      (fun x -> compile false (g2 x))
+  | EAppl(g1,f) -> app (compile_ne g1) f
+  | ELr(g,k,None,s) -> lr (compile_ne g) k (compile_ne s.ne)
+  | ELr(g,k,Some pk,s) -> lr_pos (compile_ne g) k pk (compile_ne s.ne)
   | ERkey k -> read_tbl k
-  | ERef g -> compile true direct g
-  | ERPos(g) -> right_pos (compile_ne direct g)
-  | ELPos(None,g) -> left_pos (compile_ne direct g)
-  | ELPos(Some pk,g) -> read_pos pk (compile_ne direct g)
-  | ECache(g) -> cache (compile_ne false g)
-  | ELayout(b,g,cfg) -> change_layout ~config:cfg b (compile_ne direct g)
+  | ERef g -> compile true g
+  | ERPos(g) -> right_pos (compile_ne g)
+  | ELPos(None,g) -> left_pos (compile_ne g)
+  | ELPos(Some pk,g) -> read_pos pk (compile_ne g)
+  | ECache(merge,g) -> cache ?merge (compile_ne g)
+  | ETest(f,true,g) -> Comb.test_before f (compile_ne g)
+  | ETest(f,false,g) -> Comb.test_after f (compile_ne g)
+  | ELayout(b,g,cfg) -> change_layout ~config:cfg b (compile_ne g)
   | ETmp -> assert false
 
  and compile_alt : type a. a grne list -> a Comb.t = fun gs ->
-   let rec fn = function
+  let l = List.map (fun g -> (first_charset g, compile_ne g)) gs in
+  alts l
+
+ and alts : type a. (Charset.t * a Comb.t) list -> a Comb.t = fun l ->
+  let rec fn = function
      | [] -> (Charset.empty, Comb.fail)
-     | [g] -> (first_charset g, compile_ne false g)
+     | [(cs,g)] -> (cs, g)
      | l -> let (l1,l2) = split_list l in
             let (cs1,c1) = fn l1 in
             let (cs2,c2) = fn l2 in
             (Charset.union cs1 cs2, Comb.alt cs1 c1 cs2 c2)
-   in snd (fn gs)
+   in snd (fn l)
 
- and compile : type a. bool -> bool -> a grammar -> a Comb.t =
-  fun ne direct g ->
+ and compile : type a. bool -> a grammar -> a Comb.t =
+  fun ne g ->
     factor_empty g;
     remove_cache g;
     elim_left_rec [] g;
@@ -668,21 +728,27 @@ let rec compile_ne : type a. bool -> a grne -> a Comb.t = fun direct g ->
       | Compiled | Compiling -> get g
       | _ ->
          g.phase <- Compiling;
-         let cg = compile_ne direct g.ne in
-         let cg = if g.cache then Comb.cache cg else cg in
+         let cg = compile_ne g.ne in
+         let cg = match g.cache with
+           | None -> cg
+           | Some merge -> Comb.cache ?merge cg
+         in
          g.compiled := cg;
          g.phase <- Compiled;
          get g
     in
-    let e = if ne then None else g.e in
+    let e = if ne then [] else g.e in
     match e with
-    | Some x ->
+    | [] ->
+       if g.ne = EFail then Comb.fail else cg
+    | [x] ->
        if g.ne = EFail then Comb.empty x
        else Comb.option x (first_charset g.ne) cg
-    | None ->
-       if g.ne = EFail then Comb.fail else cg
+    | l ->
+       let ce = alts (List.map (fun x -> Charset.full, Comb.empty x) l) in
+       Comb.alt Charset.full ce (first_charset g.ne) cg
 
-let compile g = compile true true g
+let compile g = compile false g
 
 let grammar_name g = g.n
 
@@ -697,18 +763,22 @@ let partial_parse_buffer
     let g = compile g in
     Comb.partial_parse_buffer g blank_fun ~blank_after buf0 col0
 
-let parse_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a =
+let parse_buffer
+    : type a. a t -> Lex.blank -> Lex.buf -> int -> a =
   fun g blank_fun buf col ->
     let g = add_eof g in
     let (v,_,_) = partial_parse_buffer g blank_fun buf col in v
 
-let parse_string : type a. a t -> Lex.blank -> string -> a =
-  fun g b s -> parse_buffer g b (Input.from_string s) 0
+let parse_string
+    : type a. ?filename:string -> a t -> Lex.blank -> string -> a =
+  fun ?filename g b s -> parse_buffer g b (Input.from_string ?filename s) 0
 
-let parse_channel : type a. a t -> Lex.blank -> in_channel -> a =
-  fun g b ic -> parse_buffer g b (Input.from_channel ic) 0
+let parse_channel
+    : type a. ?filename:string -> a t -> Lex.blank -> in_channel -> a =
+  fun ?filename g b ic -> parse_buffer g b (Input.from_channel ?filename ic) 0
 
-let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
+let parse_all_buffer
+    : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
   fun g blank_fun buf0 col0 ->
     let g = compile (add_eof g) in
     Comb.parse_all_buffer g blank_fun buf0 col0

@@ -1,7 +1,5 @@
 (** A small module for efficient regular expressions. *)
 
-open Input
-
 (** Type of a regular expression. *)
 type regexp =
   | Chr of char        (* Single character.                *)
@@ -11,24 +9,32 @@ type regexp =
   | Opt of regexp      (* Optional regexp.                 *)
   | Str of regexp      (* Zero or more times the regexp.   *)
   | Pls of regexp      (* One  or more times the regexp.   *)
-  | Sav of regexp      (* save what is read    *)
+  | Sav of regexp      (* Save the matching string.        *)
 
+(** Short synonym of {!type:regexp}. *)
 type t = regexp
 
-(** Exception that is raised when a regexp cannot be read. *)
-exception Regexp_error of buffer * int
+(** [pp ff re] outputs the regexp [re] to the formatter [ff]. *)
+val pp : Format.formatter -> regexp -> unit
 
-val print : out_channel -> regexp -> unit
+(** [accepts_empty re] tells whether the empty input is valid for [re]. *)
+val accepts_empty : regexp -> bool
 
-val accept_empty : regexp -> bool
-
+(** [accepted_first_chars re] returns the set of characters that are possible,
+    valid first characters for matching [re]. *)
 val accepted_first_chars : regexp -> Charset.t
 
-val from_string : string -> regexp
+(** Exception raised when a regexp does not match.  Note that the given buffer
+    and position correspond to the first character that cannot be matched. *)
+exception Regexp_error of Input.buffer * int
 
-(** [read re buf pos] attempts to parse using the buffer [buf] at
-    position [pos] using the regular expression [re]. The return value is
-    a triple of the parsed string, the buffer after parsing and the
-    position after parsing. The exception [Regexp_error(err_buf, err_pos]
-    is raised in case of failure at the given position. *)
-val read : regexp -> buffer -> int -> string list * buffer * int
+(** [read re  buf pos] attempts to  match the regular expression  [re] in buffer
+    [buf], at position  [pos]. The returned value [(matched,  buf', pos')] gives
+    the new buffer  [buf'] and position [pos'] after the  longest possible match
+    using [re]. It also contains a list of matched strings, all corresponding to
+    a {!constructor:Sav} constructor. If the  regexp [re] cannot be matched then
+    exception {!exception:Regexp_error} is raised. *)
+val read : regexp -> Input.buffer -> int -> string list * Input.buffer * int
+
+(** [from_string s] convert a string into a regexp following [Str] syntax. *)
+val from_string : string -> regexp
