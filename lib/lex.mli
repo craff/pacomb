@@ -40,12 +40,9 @@ type 'a t = 'a terminal
  *)
 exception NoParse
 
-(** from action ony may give an error message when rejecting a rule *)
-exception Give_up of string
-
 (** [give_up ()] rejects parsing from a corresponding semantic action.
     Can be used both in the semantics of terminals and parsing rules. *)
-val give_up : ?msg:string -> unit -> 'a
+val give_up : unit -> 'a
 
 (** {2 Combinators to create terminals} *)
 
@@ -132,10 +129,6 @@ val char_lit : ?name:string -> unit -> char t
     [name] defaults to ["STRINGLIT"] *)
 val string_lit : ?name:string -> unit -> string t
 
-(** Parses a unicode UTF8 char
-    [name] defauls to ["UTF8"] *)
-val utf8 : ?name:string -> unit -> Uchar.t t
-
 (** [keyword ~name k cs x = seq ~name (string  k ()) (test f ()) (fun _ _ -> x)]
      usefull to  accept a  keyword only  when not  followed by  an alpha-numeric
      char *)
@@ -159,12 +152,6 @@ val blank_charset : Charset.t -> blank
 (** Blank from a terminal *)
 val blank_terminal : 'a t -> blank
 
-val blank_regexp : string -> blank
-
 (** Test wether a terminal accept the  empty string. Such a terminal are illegal
    in a grammar, but may be used in combinator below to create terminals *)
 val accept_empty : 'a t -> bool
-
-(** Test constructor for the test constructor in [Grammar] *)
-val test_from_lex : bool t -> buf -> int -> buf -> int -> bool
-val blank_test_from_lex : bool t -> buf -> int -> buf -> int -> bool

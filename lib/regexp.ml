@@ -1,65 +1,64 @@
-(** Type of a regular expression. *)
+(* Type of a regular expression. *)
 type regexp =
-  | Chr of char        (** Single character.              *)
-  | Set of Charset.t   (** Any character in a charset.    *)
-  | Seq of regexp list (** Sequence of regexps.           *)
-  | Alt of regexp list (** Alternative between regexps.   *)
-  | Opt of regexp      (** Optional regexp.               *)
-  | Str of regexp      (** Zero or more times the regexp. *)
-  | Pls of regexp      (** One  or more times the regexp. *)
-  | Sav of regexp      (** Save the matching string.      *)
+  | Chr of char                (* Single character.              *)
+  | Set of Charset.t           (* Any character in a charset.    *)
+  | Seq of regexp list         (* Sequence of regexps.           *)
+  | Alt of regexp list         (* Alternative between regexps.   *)
+  | Opt of regexp              (* Optional regexp.               *)
+  | Str of regexp              (* Zero or more times the regexp. *)
+  | Pls of regexp              (* One  or more times the regexp. *)
+  | Sav of regexp              (* Save what is read.             *)
 
-(** Short synonym of {!type:regexp}. *)
 type t = regexp
 
-(** [pp ff re] outputs the regexp [re] to the formatter [ff]. *)
-let rec pp : Format.formatter -> t -> unit = fun ff re ->
-  let pp_sep ff _ = Format.pp_print_string ff ";" in
-  let pp_list ff = Format.pp_print_list ~pp_sep pp ff in
-  match re with
-  | Chr(c) ->Format.fprintf ff "Chr(%C)" c
-  | Set(s) ->Format.fprintf ff "Set(%a)" Charset.pp s
-  | Seq(l) ->Format.fprintf ff "Seq([%a])" pp_list l
-  | Alt(l) ->Format.fprintf ff "Alt([%a])" pp_list l
-  | Opt(r) ->Format.fprintf ff "Opt(%a)" pp r
-  | Str(r) ->Format.fprintf ff "Str(%a)" pp r
-  | Pls(r) ->Format.fprintf ff "Pls(%a)" pp r
-  | Sav(r) ->Format.fprintf ff "Sav(%a)" pp r
+let print ch re =
+  let rec pregexp ch = function
+    | Chr(c) -> Printf.fprintf ch "Chr(%C)" c
+    | Set(s) -> Printf.fprintf ch "Set(%a)" Charset.print s
+    | Seq(l) -> Printf.fprintf ch "Seq([%a])" pregexps l
+    | Alt(l) -> Printf.fprintf ch "Alt([%a])" pregexps l
+    | Opt(r) -> Printf.fprintf ch "Opt(%a)" pregexp r
+    | Str(r) -> Printf.fprintf ch "Str(%a)" pregexp r
+    | Pls(r) -> Printf.fprintf ch "Pls(%a)" pregexp r
+    | Sav(r) -> Printf.fprintf ch "Sav(%a,<ref>)" pregexp r
+  and pregexps ch = function
+    | []    -> ()
+    | [r]   -> pregexp ch r
+    | r::rs -> Printf.fprintf ch "%a;%a" pregexp r pregexps rs
+  in
+  pregexp ch re
 
-(** [accepts_empty re] tells whether the empty input is valid for [re]. *)
-let rec accepts_empty : regexp -> bool = fun re ->
-  match re with
+let rec accept_empty = function
   | Chr(_) -> false
-  | Set(s) -> Charset.equal s Charset.empty
-  | Seq(l) -> List.for_all accepts_empty l
-  | Alt(l) -> List.exists accepts_empty l
+  | Set(_) -> false
+  | Seq(l) -> List.for_all accept_empty l
+  | Alt(l) -> List.exists accept_empty l
   | Opt(_) -> true
   | Str(_) -> true
-  | Pls(r) -> accepts_empty r
-  | Sav(r) -> accepts_empty r
+  | Pls(r) -> accept_empty r
+  | Sav(r) -> accept_empty r
 
-(** [accepted_first_chars re] returns the set of characters that are possible,
-    valid first characters for matching [re]. *)
-let rec accepted_first_chars : regexp -> Charset.t = fun re ->
-  let rec aux_seq l =
-    match l with
-    | []   -> Charset.empty
-    | r::l -> let cs = accepted_first_chars r in
-              if accepts_empty r then Charset.union cs (aux_seq l) else cs
-  in
-  match re with
-  | Chr(c) -> Charset.singleton c
-  | Set(s) -> s
-  | Seq(l) -> aux_seq l
-  | Alt(l) -> let fn cs r = Charset.union cs (accepted_first_chars r) in
-              List.fold_left fn Charset.empty l
-  | Opt(r) -> accepted_first_chars r
-  | Str(r) -> accepted_first_chars r
-  | Pls(r) -> accepted_first_chars r
-  | Sav(r) -> accepted_first_chars r
+let accepted_first_chars : regexp -> Charset.t =
+  let open Charset in
+  let rec aux = function
+    | Chr(c) -> singleton c
+    | Set(s) -> s
+    | Seq(l) -> begin
+                  match l with
+                  | []    -> empty
+                  | r::rs -> if accept_empty r then
+                               union (aux r) (aux (Seq(rs)))
+                             else aux r
+                end
+    | Alt(l) -> List.fold_left (fun cs r -> union cs (aux r)) empty l
+    | Opt(r) -> aux r
+    | Str(r) -> aux r
+    | Pls(r) -> aux r
+    | Sav(r) -> aux r
+  in aux
 
 type construction =
-  | Acc of regexp list
+    Acc of regexp list
   | Par of regexp list * regexp list
 
 let push x = function
@@ -102,12 +101,10 @@ let from_string : string -> regexp = fun s ->
     | '\\'::[]            -> invalid_arg "Regexp: nothing to escape."
     | '[' ::'^':: ']'::cs -> let (rng, cs) = read_range cs in
                              let rng = Charset.add rng ']' in
-                             let rng = Charset.add rng '\255' in
                              `Set(Charset.complement rng) :: tokens cs
     | '[' ::']':: cs      -> let (rng, cs) = read_range cs in
                              `Set(Charset.add rng ']') :: tokens cs
     | '[' ::'^'::cs       -> let (rng, cs) = read_range cs in
-                             let rng = Charset.add rng '\255' in
                              `Set(Charset.complement rng) :: tokens cs
     | '[' ::cs            -> let (rng, cs) = read_range cs in
                              `Set(rng) :: tokens cs

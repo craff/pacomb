@@ -1,4 +1,5 @@
 open Pacomb
+open Lex
 open Pos
 open Grammar
 
@@ -132,44 +133,3 @@ let _ = test_fail f "a a"
 
 let _ = test H.f "b aa " 2
 let _ = test_fail H.f "b a a "
-
-type tree = Nil of int | Bin of tree * tree | Alt of tree * tree
-let rec nb_tree = function
-  | Nil _ -> 1
-  | Bin(t1,t2) -> nb_tree t1 * nb_tree t2
-  | Alt(t1,t2) -> nb_tree t1 + nb_tree t2
-
-let size t =
-  let adone = ref [] in
-  let rec fn t =
-    if List.memq t !adone then 0 else
-      begin
-        adone := t :: !adone;
-        match t with
-        | Nil _ -> 0
-        | Bin(t1,t2) -> fn t1 + fn t2 + 1
-        | Alt(t1,t2) -> fn t1 + fn t2 + 1
-      end
-  in fn t
-
-let catalan_fn =
-  let memo = Hashtbl.create 128 in
-  let rec fn n =
-    if n = 0 then 1 else if n = 1 then 1 else
-    try Hashtbl.find memo n
-    with Not_found ->
-      let r = ref 0 in
-      for i = 0 to n-1 do
-        r := fn i * fn (n - i - 1) + !r
-      done;
-      Hashtbl.add memo n !r;
-      !r
-  in
-  fn
-                                    (* test cache and merge attribute *)
-let%parser [@merge (fun x y -> Alt(x,y))] rec catalan =
-    (x::INT) => Nil x
-  ; (t1::catalan) ',' (t2::catalan) => Bin(t1,t2)
-
-let _ = nb_tree (parse_string catalan bspace "0,0,0,0") = catalan_fn 4
-let _ = nb_tree (parse_string catalan bspace "0,0,0,0,0,0") = catalan_fn 6

@@ -1,4 +1,5 @@
 open Pacomb
+open Lex
 open Pos
 open Grammar
 
@@ -28,7 +29,7 @@ let _ =
         let n = parse_string top blank line in
         Printf.printf "%f\n%!" n
       in
-      handle_exception ~error:(fun _ -> ()) f ()
+      handle_exception f ()
     done
   with
     End_of_file -> ()

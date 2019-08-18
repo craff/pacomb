@@ -34,7 +34,7 @@ let%parser op pmin pmax =
           | _          -> p -. 1e-10
         in
         (p,f)
-    with Not_found -> give_up ~msg:("unbound op bin "^c) ()
+    with Not_found -> give_up ()
 
 let%parser rec
  expr pmax = ((pe,e1)>:expr pmax [@cs Charset.from_string "-&~^+=*/\\$!:"])
@@ -55,7 +55,7 @@ let _ =
         Printf.printf "=> %!";
         let line = input_line stdin in
         Printf.printf "%f\n%!" (parse_string expr_top blank line )
-      in handle_exception ~error:(fun _ -> ()) f ()
+      in handle_exception f ()
     done
   with
     End_of_file -> ()

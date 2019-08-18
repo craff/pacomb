@@ -1,3 +1,2 @@
-(lang dune 1.9)
+(lang dune 1.2)
 (name pacomb)
-(allow_approximate_merlin)

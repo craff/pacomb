@@ -18,15 +18,12 @@ val print_grammar : ?def:bool -> out_channel -> 'a grammar -> unit
 (** [fail ()] is a grammar that parses nothing (always fails) *)
 val fail : unit -> 'a grammar
 
-(** fails reporting an error *)
-val error : string -> 'a grammar
-
 (** [empty a] accepts the empty input and returns [a] *)
 val empty : 'a -> 'a grammar
 
 (** [test  b] is  [if b then  empty ()  else fail ()].  Very usefull  in grammar
     family at the beginning of a rule *)
-val cond : bool -> unit grammar
+val test : bool -> unit grammar
 
 (** [term  t] accepts the  terminal [t] and  returns its semantics.   See module
     [Lex] *)
@@ -69,17 +66,7 @@ val seq_rpos : 'a grammar -> ('a * Pos.t -> 'b) grammar -> 'b grammar
     result of  the first parsing. Using  [cache] allows to recover  a polynomial
     time complexity (cubic at  worst) and a quadratic space (in  the size of the
     input) *)
-val cache : ?merge:('a -> 'a -> 'a) -> 'a grammar -> 'a grammar
-
-(** allows to perform a test, the test function receive the position before
-    and after the blanks *)
-val test_before : (Input.buffer -> int -> Input.buffer -> int -> bool)
-                 -> 'a grammar -> 'a grammar
-
-val test_after : (Input.buffer -> int -> Input.buffer -> int -> bool)
-                 -> 'a grammar -> 'a grammar
-
-val no_blank_before : 'a grammar -> 'a grammar
+val cache : 'a grammar -> 'a grammar
 
 type layout_config = Comb.layout_config
 
@@ -104,14 +91,6 @@ val set_grammar : 'a grammar -> 'a grammar -> unit
 (** [fixpoint g] compute  the fixpoint of [g], that is a  grammar [g0] such that
     [g0 = g g0] *)
 val fixpoint : ?name:string -> ('a grammar -> 'a grammar) -> 'a grammar
-
-(** usual option combinator *)
-val option : 'a grammar -> 'a option grammar
-val default_option : 'a -> 'a grammar -> 'a grammar
-val star : 'a grammar -> 'a list grammar
-val plus : 'a grammar -> 'a list grammar
-val star_sep : 'b grammar -> 'a grammar -> 'a list grammar
-val plus_sep : 'b grammar -> 'a grammar -> 'a list grammar
 
 (** [grammar_family to_str name] returns a  pair [(gs, set_gs)], where [gs] is a
     finite  family of  grammars parametrized  by a  value of  type ['a].  A name
@@ -153,12 +132,10 @@ val give_name : string -> 'a grammar -> 'a grammar
 val parse_buffer : 'a grammar -> Lex.blank -> Input.buffer -> int -> 'a
 
 (** Parse a whole string *)
-val parse_string
-    : ?filename:string -> 'a grammar -> Lex.blank -> string -> 'a
+val parse_string : 'a grammar -> Lex.blank -> string -> 'a
 
 (** Parse a whole input channel *)
-val parse_channel
-    : ?filename:string -> 'a grammar -> Lex.blank -> in_channel -> 'a
+val parse_channel : 'a grammar -> Lex.blank -> in_channel -> 'a
 
 (** Partial parsing.  Beware, the returned position is not  the maximum position
     that can be reached by the grammar. The charset is the character accepted at

@@ -24,9 +24,6 @@ val parse_all_buffer : 'a t -> Lex.blank -> Input.buffer -> int -> 'a list
 (** [fail] is a parser rejecting every input (it always fails). *)
 val fail : 'a t
 
-(** Fails and report an error *)
-val error : string -> 'a t
-
 val assert_false : 'a t
 
 (** [empty v] is  a parser that only accepts the empty input  and returns [v] as
@@ -36,6 +33,7 @@ val empty : 'a -> 'a t
 (** [lexeme l] is  a parser accepting the lexeme (or  terminal) [l], and returns
     the corresponding semantic value. *)
 val lexeme : 'a Lex.lexeme -> 'a t
+val direct_lexeme : 'a Lex.lexeme -> 'a t
 
 (**  [seq g1  g2] sequences  the parsers  [g1] and  [g2].  The  resulting parser
     starts by parsing  using [g1], and then  parses the rest of  the input using
@@ -80,7 +78,8 @@ val right_pos : (Pos.t -> 'a) t -> 'a t
 val read_pos : Pos.t Assoc.key -> (Pos.t -> 'a) t -> 'a t
 
 (** key used by lr below *)
-type 'a key = 'a Lazy.t Assoc.key
+type 'a app
+type 'a key = 'a app Assoc.key
 
 (** [lr c1 v c2] is an optimized version  of [let rec r = seq c1 (seq r c2)]
     which is  illegal as it  is left recursive  and loops. The  optional charset
@@ -98,14 +97,6 @@ val lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t
     the action and  produce closure. The code for elimination  of left recursion
     is also much simpler *)
 val read_tbl : 'a key -> 'a t
-
-(** Allow to test the blank characteres before a grammar and more *)
-val test_before : (Input.buffer -> int -> Input.buffer -> int -> bool)
-                 -> 'a t -> 'a t
-
-(** Allow to test the blank characteres after a grammar and more *)
-val test_after : (Input.buffer -> int -> Input.buffer -> int -> bool)
-                 -> 'a t -> 'a t
 
 (** Access to a reference to a combinator, used by Grammar.compile for recursive
     grammars (not for left recursion *)
@@ -133,4 +124,4 @@ val change_layout : ?config:layout_config -> Lex.blank -> 'a t -> 'a t
 (** Combinator  that caches  a grammar to  avoid exponential  behavior.  parsing
     with the grammar  from each position is memoized to  avoid parsing twice the
     same sequence with the same grammar. *)
-val cache : ?merge:('a -> 'a -> 'a) -> 'a t -> 'a t
+val cache : 'a t -> 'a t

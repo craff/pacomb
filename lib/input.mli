@@ -61,13 +61,14 @@ module type Preprocessor =
     (** [update st name lnum line] takes as input the state [st] of  the
         preprocessor, the file name [name], the number of the next input
         line [lnum] and the next input line [line] itself. It returns  a
-        tuple of the new state, the new file name, and [None] if the line
-        must be ignored or [Some(lnum,line)] which is the new line number
-        and ne new line. The new file name and line number can be used to
-        implement  line  number  directives.   The  function  may   aise
-        [Preprocessor_error] in case of error. *)
+        tuple of the new state, the new file name, the new line  number,
+        and a boolean. The new file name and line number can be used  to
+        implement line number directives. The boolean is [true]  if  the
+        line should be part of the input (i.e.  it  is  not  a  specific
+        preprocessor line) and [false] if  it  should  be  ignored.  The
+        function may raise [Preprocessor_error] in case of error. *)
     val update : state -> string -> int -> string
-                   -> state * string * int * string option
+                   -> state * string * int * bool
 
     (** [check_final st name] check that [st] indeed is a correct  state
         of the preprocessor for the end of input of file [name].  If  it
