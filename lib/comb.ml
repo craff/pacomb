@@ -402,25 +402,9 @@ let read_tbl : 'a key -> 'a t = fun key env k err ->
 (** Combinator under a refrerence used to implement recursive grammars. *)
 let deref : 'a t ref -> 'a t = fun gref env k err -> !gref env k err
 
-type layout_config =
-  { old_blanks_before : bool
-  (** Ignoring blanks with the old blank function before parsing? *)
-  ; new_blanks_before : bool
-  (** Then ignore blanks with the new blank function (before parsing)? *)
-  ; new_blanks_after  : bool
-  (** Use the new blank function one last time before resuming old layout? *)
-  ; old_blanks_after  : bool
-  (** Use then the old blank function one last time as well? *) }
-
-let default_layout_config : layout_config =
-  { old_blanks_before = true
-  ; new_blanks_before = false
-  ; new_blanks_after  = false
-  ; old_blanks_after  = true }
-
 (** Combinator changing the "blank function". *)
-let change_layout : ?config:layout_config -> Lex.blank -> 'a t -> 'a t =
-    fun ?(config=default_layout_config) blank_fun g env k err ->
+let change_layout : ?config:Lex.layout_config -> Lex.blank -> 'a t -> 'a t =
+    fun ?(config=Lex.default_layout_config) blank_fun g env k err ->
     let (s, n) as buf =
       if config.old_blanks_before then (env.current_buf, env.current_col)
       else (env.buf_before_blanks, env.col_before_blanks)

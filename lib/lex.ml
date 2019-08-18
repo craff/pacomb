@@ -529,3 +529,19 @@ let blank_terminal : 'a t -> blank =
     with NoParse -> (s,n)
 
 let blank_regexp s = blank_terminal (regexp (Regexp.from_string s))
+
+type layout_config =
+  { old_blanks_before : bool
+  (** Ignoring blanks with the old blank function before parsing? *)
+  ; new_blanks_before : bool
+  (** Then ignore blanks with the new blank function (before parsing)? *)
+  ; new_blanks_after  : bool
+  (** Use the new blank function one last time before resuming old layout? *)
+  ; old_blanks_after  : bool
+  (** Use then the old blank function one last time as well? *) }
+
+let default_layout_config : layout_config =
+  { old_blanks_before = true
+  ; new_blanks_before = false
+  ; new_blanks_after  = false
+  ; old_blanks_after  = true }

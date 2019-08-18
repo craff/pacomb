@@ -81,13 +81,11 @@ val test_after : (Input.buffer -> int -> Input.buffer -> int -> bool)
 
 val no_blank_before : 'a grammar -> 'a grammar
 
-type layout_config = Comb.layout_config
-
 (** [layout b g] changes the blank  function to parse the input with the grammar
     [g].  The optional parameters allow to  control which blanks are used at the
     bounndary. Both  can be used  in which case the  new blanks are  used second
     before parsing with [g] and first after. *)
-val layout : ?config:layout_config -> Lex.blank -> 'a grammar -> 'a grammar
+val layout : ?config:Lex.layout_config -> Lex.blank -> 'a grammar -> 'a grammar
 
 (** {2 Definition of recursive grammars } *)
 

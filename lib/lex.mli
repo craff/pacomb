@@ -168,3 +168,18 @@ val accept_empty : 'a t -> bool
 (** Test constructor for the test constructor in [Grammar] *)
 val test_from_lex : bool t -> buf -> int -> buf -> int -> bool
 val blank_test_from_lex : bool t -> buf -> int -> buf -> int -> bool
+
+type layout_config =
+  { old_blanks_before : bool
+  (** Ignoring blanks with the old blank function before parsing? *)
+  ; new_blanks_before : bool
+  (** Then ignore blanks with the new blank function (before parsing)? *)
+  ; new_blanks_after  : bool
+  (** Use the new blank function one last time before resuming old layout? *)
+  ; old_blanks_after  : bool
+  (** Use then the old blank function one last time as well? *) }
+
+(** Default configuration,  parsing with the old blanks before  (i.e., the field
+    [old_blanks_before] is  [true]), and the  new blanks after (i.e.,  the field
+    [old_blanks_after] is also [true]). The other two fields are [false]. *)
+val default_layout_config : layout_config
