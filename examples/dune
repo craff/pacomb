@@ -24,3 +24,12 @@
   (deps ../tests/big_expr.exe calc_ext.exe)
   (action
     (system "../tests/big_expr.exe 3 4 4 | ./calc_ext.exe")))
+
+(test
+  (name paragraphs)
+  (modules paragraphs)
+  (preprocess (pps pacomb.ppx))
+  (libraries unix pacomb)
+  (deps paragraphs.exe test.txt)
+  (action
+    (system "./paragraphs.exe < test.txt")))
