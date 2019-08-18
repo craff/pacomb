@@ -1,0 +1,8 @@
+(test
+  (name calc_ext)
+  (modules calc_ext)
+  (preprocess (pps pacomb.ppx))
+  (libraries unix pacomb)
+  (deps ../tests/big_expr.exe calc_ext.exe)
+  (action
+    (system "../tests/big_expr.exe 3 4 4 | ./calc_ext.exe")))
