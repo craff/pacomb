@@ -29,24 +29,6 @@
   (libraries))
 
 (test
-  (name calc)
-  (modules calc)
-  (preprocess (pps pacomb.ppx))
-  (libraries unix pacomb)
-  (deps big_expr.exe calc.exe)
-  (action
-    (system "./big_expr.exe 4 4 4 | ./calc.exe")))
-
-(test
-  (name calc_prio)
-  (modules calc_prio)
-  (preprocess (pps pacomb.ppx))
-  (libraries unix pacomb)
-  (deps big_expr.exe calc_prio.exe)
-  (action
-    (system "./big_expr.exe 4 4 4 | ./calc_prio.exe")))
-
-(test
   (name calc_factor)
   (modules calc_factor)
   (preprocess (pps pacomb.ppx))

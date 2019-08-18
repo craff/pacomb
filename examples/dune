@@ -1,4 +1,22 @@
 (test
+  (name calc)
+  (modules calc)
+  (preprocess (pps pacomb.ppx))
+  (libraries unix pacomb)
+  (deps ../tests/big_expr.exe calc.exe)
+  (action
+    (system "../tests/big_expr.exe 4 4 4 | ./calc.exe")))
+
+(test
+  (name calc_prio)
+  (modules calc_prio)
+  (preprocess (pps pacomb.ppx))
+  (libraries unix pacomb)
+  (deps ../tests/big_expr.exe calc_prio.exe)
+  (action
+    (system "../tests/big_expr.exe 4 4 4 | ./calc_prio.exe")))
+
+(test
   (name calc_ext)
   (modules calc_ext)
   (preprocess (pps pacomb.ppx))

@@ -23,10 +23,10 @@ echo "testing sexp (with ocamlyacc)"
 dune exec $opts -- ./big_sexp.exe 5_000_000 | time dune exec $opts ./sexp_yacc/sexp.exe > /dev/null
 
 echo "testing the calculator (with grammar/combinator)"
-dune exec $opts -- ./big_expr.exe 5 4 4 | time dune exec $opts ./calc.exe > /dev/null
+dune exec $opts -- ./big_expr.exe 5 4 4 | time dune exec $opts ../examples/calc.exe > /dev/null
 
 echo "testing the calculator (with grammar/combinator, using fammilies for prio)"
-dune exec $opts -- ./big_expr.exe 5 4 4 | time dune exec $opts ./calc_prio.exe > /dev/null
+dune exec $opts -- ./big_expr.exe 5 4 4 | time dune exec $opts ../examples/calc_prio.exe > /dev/null
 
 echo "testing the calculator (with grammar/combinator, using fammilies for prio and left factorised)"
 dune exec $opts -- ./big_expr.exe 5 4 4 | time dune exec $opts ./calc_factor.exe > /dev/null
