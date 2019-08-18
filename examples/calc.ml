@@ -11,7 +11,6 @@ let show_sub = Array.length Sys.argv > 1 && Sys.argv.(1) = "-v"
 
    Here, we deal with priorities  by manually defining three different grammars.
    Starting with the grammar for atomic expressions. *)
- *)
 let%parser rec
         atom = (x::FLOAT)        => x                             (* constant *)
              ; (show_sub=false) '(' (e::expr) ')' => e (*   rule for parenthesis
