@@ -171,10 +171,13 @@ let%parser eq = '=' => () ; ERROR("=")
 let%parser priority_kwd = "priority" => (); ERROR("priority keyword")
 let%parser assoc_kwd = "associative" => (); ERROR("associative keyword")
 
+
+(* list of parameters for definition of functions *)
 let%parser params =
     ()                                     => [||]
   ; opening (l:: ~+ [comma] ident) closing => Array.of_list l
 
+(* toplevel commands *)
 let%parser cmd =
     (e::expr_top)
       => (Printf.printf "%f\n%!" (eval !env e))
@@ -194,8 +197,10 @@ let%parser cmd =
          env := ((id,Array.length params),Def(e,params)) :: !env;
          infix_tbl := (id,(p,a)) :: !infix_tbl)
 
+(* blanks *)
 let blank = Lex.blank_charset (Charset.singleton ' ')
 
+(* main loop *)
 let _ =
   try
     while true do
