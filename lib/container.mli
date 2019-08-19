@@ -100,6 +100,7 @@ module type Param = sig
   val add : 'a table -> 'b container -> ('a, 'b) elt -> unit
   val find : 'a table -> 'b container -> ('a, 'b) elt
   val clear : 'a table -> unit
+  val length : 'a table -> int
   type 'a iter = { f : 'b.('a, 'b) elt -> unit }
   val iter : 'a iter -> 'a table -> unit
   type ('a,'c) fold = { f : 'b.('a, 'b) elt -> 'c -> 'c }

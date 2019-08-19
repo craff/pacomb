@@ -34,8 +34,7 @@ module Make(V : sig type ('a,'b) elt end) = struct
   let eq : 'a container -> 'b container -> ('a, 'b) eq =
     fun c1 c2 -> c1.eq c2.uid
 
-  (** unboxed mandatory for weak hashtbl to work, 4.04.0 only
-      we use Obj until 4.04.0 is more spreaded *)
+  (** unboxed mandatory for weak hashtbl to work, from 4.04.0 *)
   type any = C : 'b container -> any [@@unboxed]
   let cast : 'b container -> any = fun x -> C x
 
@@ -47,7 +46,7 @@ module Make(V : sig type ('a,'b) elt end) = struct
     }
 
   (** Insert a new value associated to the given table and container. If a
-    value is already pre sent, it is overwriten. *)
+    value is already present, it is overwriten. *)
   let add : type a b. a table -> b container -> (a, b) elt -> unit =
     fun tab c v ->
     let rec fn = function
@@ -94,6 +93,21 @@ module Make(V : sig type ('a,'b) elt end) = struct
     Gc.finalise clear res;
     res
 
+  let length : type a. a table -> int = fun tab ->
+    let n = ref 0 in
+    let rec fn : type b. b nu_list -> unit = function
+      | Nil -> ()
+      | Cons(t,_,r) ->
+         begin
+           match tab.eq t with
+           | Y -> incr n;
+           | N -> ()
+         end;
+         fn r
+    in
+    List.iter (fun (C c) -> fn c.data) tab.elts;
+    !n
+
   type 'a iter = { f : 'b.('a, 'b) elt -> unit }
 
   let iter : type a. a iter -> a table -> unit = fun f tab ->
@@ -138,6 +152,7 @@ module type Param = sig
   val add : 'a table -> 'b container -> ('a, 'b) elt -> unit
   val find : 'a table -> 'b container -> ('a, 'b) elt
   val clear : 'a table -> unit
+  val length : 'a table -> int
   type 'a iter = { f : 'b.('a, 'b) elt -> unit }
   val iter : 'a iter -> 'a table -> unit
   type ('a,'c) fold = { f : 'b.('a, 'b) elt -> 'c -> 'c }
