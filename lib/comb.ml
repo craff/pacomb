@@ -208,14 +208,11 @@ let extract : res list -> res list * res list = function
        | l -> acc, l
      in fn [r] l
 
-exception ReallyExit
-
 (** [scheduler  env g] drives  the parsing, it calls  the combinator [g]  in the
     given environment and when lexeme returns to the scheduler, it continues the
     parsing,  but  trying the error case too,  this way all  parsing progress in
     parallel in the input. *)
-let scheduler : ?all:bool -> env -> 'a t -> ('a * env) list =
-  fun ?(all=false) env g ->
+let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
     (* a reference holding the final result *)
     let res = ref [] in
     (* the final continuation evaluating and storing the result,
@@ -223,7 +220,7 @@ let scheduler : ?all:bool -> env -> 'a t -> ('a * env) list =
     let k env err x =
       (try
          res := (Lazy.force x,env)::!res;
-         (fun () -> if all then err () else raise ReallyExit)
+         err
        with Lex.NoParse   -> fun () -> next env err
           | Lex.Give_up m -> fun () -> next_msg m env err) ();
     in
@@ -248,7 +245,7 @@ let scheduler : ?all:bool -> env -> 'a t -> ('a * env) list =
                 with Exit -> ())) t0
       done;
       assert false
-    with Exit | ReallyExit -> !res
+    with Exit -> !res
 
 (** Combinator that always fails. *)
 let fail : 'a t = fun env _ err -> next env err
@@ -498,9 +495,9 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
 
 (** function doing the parsing *)
 let gen_parse_buffer
-    : type a. a t -> ?all:bool -> Lex.blank -> ?blank_after:bool
+    : type a. a t -> Lex.blank -> ?blank_after:bool
                   -> Lex.buf -> int -> (a * Lex.buf * int) list =
-  fun g ?(all=false) blank_fun ?(blank_after=false) buf0 col0 ->
+  fun g blank_fun ?(blank_after=false) buf0 col0 ->
     let p0 = Input.line_offset buf0 + col0 in
     let max_pos = ref (p0, buf0, col0, ref []) in
     let (buf, col) = blank_fun buf0 col0 in
@@ -509,7 +506,7 @@ let gen_parse_buffer
         ; current_buf = buf ; current_col = col; lr = Assoc.empty
         ; max_pos ; blank_fun ; merge_depth = 0}
     in
-    let r = scheduler ~all env g in
+    let r = scheduler env g in
     match r with
     | [] ->
        let (_, buf, col, msgs) = !max_pos in
@@ -524,10 +521,11 @@ let partial_parse_buffer : type a. a t -> Lex.blank -> ?blank_after:bool
                                 -> Lex.buf -> int -> a * Lex.buf * int =
   fun g blank_fun ?(blank_after=false) buf0 col0 ->
     let l = gen_parse_buffer g blank_fun ~blank_after buf0 col0 in
-    match l with [r] -> r
-               | _ -> assert false
+    match l with [r]  -> r
+               | r::_ -> Printf.eprintf "Parsing ambiguity, use merge\n%!"; r
+               | []   -> assert false
 
 let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
   fun g blank_fun buf0 col0 ->
-    let l = gen_parse_buffer g ~all:true blank_fun buf0 col0 in
+    let l = gen_parse_buffer g blank_fun buf0 col0 in
     List.map (fun (r,_,_) -> r) l
