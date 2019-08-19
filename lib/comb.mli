@@ -86,10 +86,11 @@ type 'a key = 'a Lazy.t Assoc.key
     which is  illegal as it  is left recursive  and loops. The  optional charset
     indicates the characteres accepted by [c2] at the beginning of input. [v] is
     like variable bound in [c2], see [read_tbl] below *)
-val lr : 'a t -> 'a key -> 'a t -> 'a t
+val lr : ?merge:('a -> 'a -> 'a) -> 'a t -> ('a -> 'a) t -> 'a t
+val lrr : 'a t -> 'a key -> 'a t -> 'a t
 
 (** Same as above, but also store the position *)
-val lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t
+val lrr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t
 
 (** combinator to  access the value stored by  lr. It must be uses  as prefix of
     [c2] in [lr c1 c2].  For instance, the coding  of [let rec r = seq c1 (seq r

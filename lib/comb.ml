@@ -365,7 +365,7 @@ type 'a key = 'a Lazy.t Assoc.key
     defined as [seq Charset.full g cs (let rec r = seq cs r cs gf in r)].
     NOTE: left recusion forces evaluation and this is good!
 *)
-let lr : 'a t -> 'a key -> 'a t -> 'a t = fun g key gf env k err ->
+let lrr : 'a t -> 'a key -> 'a t -> 'a t = fun g key gf env k err ->
     let rec klr env err v =
       let err () =
         let lr = Assoc.add key v env.lr in
@@ -376,7 +376,7 @@ let lr : 'a t -> 'a key -> 'a t -> 'a t = fun g key gf env k err ->
     in
     g env (ink klr) err
 
-let lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t =
+let lrr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t =
   fun g key pkey gf env k err ->
     let pos = Pos.get_pos env.current_buf env.current_col in
     let rec klr env err v =
@@ -466,13 +466,13 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
                  | Some x, Some y -> Some (merge x y)
                in
                lazy (
+                 too_late := true;
                  let r = ref [] in
                  let force x = try Some (Lazy.force x)
                                  with Lex.NoParse -> None
                                     | Lex.Give_up m -> r := m :: !r; None
                  in
                  let gn x =
-                   too_late := true;
                    List.fold_left (fun x v -> merge x (force v)) x !vptr
                  in
                  match gn (force v) with
@@ -481,17 +481,29 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
                  | Some x -> x)
           in
           let l0 = !ptr in
+          ptr := [];
           let rec fn l =
             match l with
-            | [] -> assert (!ptr == l0); err ()
+            | [] -> assert (!ptr = []); err ()
             | (k,d) :: l ->
                let env = {env with merge_depth = env.merge_depth + d - 1 } in
                Cont(env, k, (fun () -> fn l), v)
           in
+          Printf.printf "l0: %d\n%!" (List.length l0);
           fn l0
       in
       let env = { env0 with merge_depth = env0.merge_depth + 1 } in
       g env (ink k0) err
+
+let lr : type a. ?merge:(a -> a -> a) -> a t -> (a -> a) t -> a t  = fun ?merge g gf ->
+  let _merge = match merge with
+    | None -> Printf.printf "kuku 0\n%!"; None
+    | Some m -> Printf.printf "kuku 1\n%!"; Some(fun f1 f2 a -> m (f1 a) (f2 a))
+  in
+  let glr : (a -> a) t ref = ref assert_false in
+  glr := option (fun x -> x)
+           Charset.full ((*cache ?merge*) (seq gf (app (deref glr) (fun f g a -> f (g a)))));
+  seq g !glr
 
 (** function doing the parsing *)
 let gen_parse_buffer

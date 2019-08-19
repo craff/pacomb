@@ -13,10 +13,7 @@ type 'a grammar =
                               valid from phase Empty Removed *)
   ; mutable ne : 'a grne  (** the part of the grammar that does not accept empty
                               valid from phase Empty Removed, but transformed
-                              at CacheFactored and LeftRecEliminated *)
-  ; mutable cache : ('a -> 'a -> 'a) option option
-                          (** Does this grammar needs a cache ? a merge ?
-                              valid from phase CacheFactored *)
+                              at LeftRecEliminated *)
   ; mutable compiled : 'a Comb.t ref
   (** the combinator for the grammar. One needs a ref for recursion.  valid from
                               phase Compiled *)
@@ -28,7 +25,7 @@ type 'a grammar =
  and 'a t = 'a grammar
 
  (** The various transformation phase before until compilation to combinators *)
- and phase = Defined | EmptyComputed | EmptyRemoved | CacheFactored
+ and phase = Defined | EmptyComputed | EmptyRemoved
              | LeftRecEliminated | Compiling | Compiled
 
  (** Grammar constructors at definition *)
@@ -43,8 +40,14 @@ type 'a grammar =
                                            (** sequence *)
    | DSeq : ('a * 'b) t * Charset.t * ('a -> ('b -> 'c) t) -> 'c grdf
                                            (** dependant sequence *)
-   | Lr   : 'a t * 'a Comb.key * Pos.t Assoc.key option * 'a t -> 'a grdf
+   | Lr   : ('a -> 'a -> 'a) option * 'a t * ('a -> 'a) t -> 'a grdf
                                            (** Lr(g1,g2) represents g1 g2* and
+                                               is used to eliminate left
+                                               recursion.  It can not be exposed
+                                               as left recursion under Lr is not
+                                               supported *)
+   | Lrr   : 'a t * 'a Comb.key * Pos.t Assoc.key option * 'a t -> 'a grdf
+                                          (** Lr(g1,g2) represents g1 g2* and
                                                is used to eliminate left
                                                recursion.  It can not be exposed
                                                as left recursion under Lr is not
@@ -73,7 +76,8 @@ type 'a grammar =
    | EAppl : 'a grne * ('a -> 'b) -> 'b grne
    | ESeq  : 'a grne * ('a -> 'b) t -> 'b grne
    | EDSeq : ('a * 'b) grne * Charset.t * ('a -> ('b -> 'c) t) -> 'c grne
-   | ELr   : 'a grne * 'a Comb.key * Pos.t Assoc.key option * 'a grammar
+   | ELr   : ('a -> 'a -> 'a) option * 'a grne * ('a -> 'a) grammar  -> 'a grne
+   | ELrr  : 'a grne * 'a Comb.key * Pos.t Assoc.key option * 'a grammar
                -> 'a grne
    | ERkey : 'a Comb.key -> 'a grne
    | ERef  : 'a t -> 'a grne
@@ -93,7 +97,7 @@ let mkg : ?name:string -> ?recursive:bool -> 'a grdf -> 'a grammar =
   fun ?(name="...") ?(recursive=false) d ->
     let k = Assoc.new_key () in
     { e = []; d; n = name; k; recursive; compiled = ref Comb.assert_false
-    ; charset = None; phase = Defined; ne = ETmp; cache = None }
+    ; charset = None; phase = Defined; ne = ETmp }
 
 (** A type to store list of grammar keys *)
 type ety = E : 'a Assoc.ty -> ety [@@unboxed]
@@ -124,7 +128,8 @@ let print_grammar ?(def=true) ch s =
     | EAppl(g,_)    -> pr "App(%a)" pg g
     | ESeq(g1,g2)   -> pr "%a%a" pg g1 pv g2
     | EDSeq(g1,_,_) -> pr "%a???" pg g1
-    | ELr(g,_,_,s)  -> pr "%a(%a)*" pg g pv s
+    | ELr(_,g,s)    -> pr "%a(%a)*" pg g pv s
+    | ELrr(g,_,_,s) -> pr "%a(%a)*" pg g pv s
     | ERkey _       -> ()
     | ERef(g)       -> pr "%a" pv g
     | ERPos(g)      -> pr "%a" pg g
@@ -147,7 +152,8 @@ let print_grammar ?(def=true) ch s =
     | Appl(g,_)    -> pr "App(%a)" pg g
     | Seq(g1,g2)   -> pr "%a%a" pg g1 pg g2
     | DSeq(g1,_,_) -> pr "%a???" pg g1
-    | Lr(g,_,_,s)  -> pr "%a(%a)*" pg g pg s
+    | Lr(_,g,s)    -> pr "%a(%a)*" pg g pg s
+    | Lrr(g,_,_,s) -> pr "%a(%a)*" pg g pg s
     | Rkey _       -> ()
     | RPos(g)      -> pr "%a" pg g
     | LPos(_,g)    -> pr "%a" pg g
@@ -229,9 +235,13 @@ let seq g1 g2 = mkg (
 let dseq g1 ?(cs=Charset.full) g2 =
   mkg (if g1.d = Fail then Fail else DSeq(g1,cs,g2))
 
-let lr g1 k ?(pk) g2 =
+let lr ?merge g1 g2 =
   if g2.d = Fail then g1
-  else mkg (if g1.d = Fail then Fail else Lr(g1,k,pk,g2))
+  else mkg (if g1.d = Fail then Fail else Lr(merge,g1,g2))
+
+let lrr g1 k ?(pk) g2 =
+  if g2.d = Fail then g1
+  else mkg (if g1.d = Fail then Fail else Lrr(g1,k,pk,g2))
 
 let lpos ?pk g = mkg (if g.d = Fail then Fail else LPos(pk,g))
 
@@ -365,11 +375,17 @@ let ne_dseq g1 cs g2 = match g1 with
   | EFail -> EFail
   | _     -> EDSeq(g1,cs,g2)
 
-let ne_lr g k ?pk s =
+let ne_lr ?merge g s =
   match (g, s) with
   | EFail, _      -> EFail
   | _, {ne=EFail} -> g
-  | _             -> ELr(g,k,pk,s)
+  | _             -> ELr(merge,g,s)
+
+let ne_lrr g k ?pk s =
+  match (g, s) with
+  | EFail, _      -> EFail
+  | _, {ne=EFail} -> g
+  | _             -> ELrr(g,k,pk,s)
 
 let ne_lpos ?pk g1 = match g1 with
   | EFail -> EFail
@@ -401,12 +417,7 @@ let factor_empty g =
     if g.recursive then ERef g else
       begin
         assert (g.ne <> ETmp);
-        let ge = g.ne in
-        let ge = match g.cache with
-        | None -> ge
-        | Some f -> ECache(f,ge)
-        in
-        ge
+        g.ne
       end
   in
 
@@ -442,7 +453,8 @@ let factor_empty g =
                                  with NoParse -> acc) acc g2.e
                          with NoParse -> acc)
                          [] g1.e
-    | Lr(g1,_,_,g2) -> fn g1; fn g2; g1.e
+    | Lr(_,g1,g2)   -> fn g1; fn g2; g1.e
+    | Lrr(g1,_,_,g2)-> fn g1; fn g2; g1.e
     | Rkey _        -> []
     | LPos(_,g1)    -> fn g1; List.map (fun x -> x Pos.phantom) g1.e
                        (* FIXME #14: Loose position *)
@@ -460,7 +472,7 @@ let factor_empty g =
     if g.phase = EmptyComputed then
       begin
         g.phase <- EmptyRemoved;
-        g.e <- kn g.d; (* need to computation to reach fixpoint *)
+        g.e <- kn g.d; (* need two computations to reach fixpoint *)
         g.ne  <- gn g.d;
       end
 
@@ -489,7 +501,8 @@ let factor_empty g =
                                 (* FIXME, fn called twice on g2 x *)
                        in
                        ne_alt [ga; gb]
-    | Lr(g1,k,pk,g2) -> hn g1; hn g2; ne_lr (get g1) k ?pk g2
+    | Lr(merge,g1,g2) -> hn g1; hn g2; ne_lr ?merge (get g1) g2
+    | Lrr(g1,k,pk,g2) -> hn g1; hn g2; ne_lrr (get g1) k ?pk g2
     | Rkey k    -> ERkey k
     | LPos(pk,g1) -> hn g1; ne_lpos ?pk (get g1)
     | RPos(g1) -> hn g1; ne_rpos (get g1)
@@ -499,31 +512,6 @@ let factor_empty g =
     | Tmp           -> failwith "grammar compiled before full definition"
 
   in fn g; hn g
-
-(** remove a cache prefix and move it up to the grammar definition. *)
-let remove_cache : type a. a grammar -> unit =
-  let rec fn : type a. a grne -> (a -> a -> a) option option * a grne = fun g ->
-    let cache = ref None in
-    let rec fn : bool -> a grne -> a grne =
-      fun r -> function
-        | ECache(m,g1) -> cache := Some m; fn r g1
-        | ELayout(b,g1,cfg) -> ne_layout b (fn r g1) cfg
-        | g -> g
-    in
-    let g = fn false g in
-    (!cache, g)
-
-  and gn : type a.a grammar -> unit = fun g ->
-    assert(g.phase >= EmptyRemoved);
-    if g.phase = EmptyRemoved then
-      begin
-        g.phase <- CacheFactored;
-        assert(g.ne <> ETmp);
-        let (cache, g1) = fn g.ne in
-        g.ne <- g1;
-        g.cache <- cache;
-      end
-  in gn
 
 (** Elimination of left recursion which is not supported by combinators *)
 let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
@@ -550,9 +538,12 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
       | EAlt(gs) ->
          let (gs,ss) = List.split (List.map fn gs) in
          (ne_alt gs, alt ss)
-      | ELr(g1,k,pk,s)   ->
+      | ELr(merge,g1,s)   ->
          let (g1,s1) = fn g1 in
-         (ne_lr g1 k ?pk s, lr s1 k ?pk s)
+         (ne_lr ?merge g1 s, lr ?merge s1 s)
+      | ELrr(g1,k,pk,s)   ->
+         let (g1,s1) = fn g1 in
+         (ne_lrr g1 k ?pk s, lrr s1 k ?pk s)
       | ERkey _ ->
          assert false; (* handled in gn *)
       | EAppl(g1,f) ->
@@ -560,8 +551,9 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
          (ne_appl g1 f, appl s f)
       | ERef(g) -> gn g
       | ECache(_,g1) as g ->
-         if ((snd (fn g1)).d <> Fail) then failwith "Illegal cache";
-         (g, fail())
+         let (_, s1) = fn g1 in
+         if s1.d <> Fail then (Printf.printf "kiki\n%!"; raise Exit);
+         (g, fail ())
       | ERPos(g1) ->
          let (g1, s1) = fn g1 in
          (ne_rpos g1, rpos s1)
@@ -577,6 +569,64 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
          (ne_test f b g1, if b then s1 else test f b s1)
       | ELayout(_,g1,_) ->
          let (_, s1) = fn g1 in
+         if s1.d <> Fail then
+           invalid_arg "fixpoint: left recursion under layout change";
+         (g, fail())
+      | ETmp -> assert false
+
+    and fn' : type b. b grne -> b grne * (a -> b) grammar =
+    fun g ->
+      match g with
+      | EFail | ETerm _ | EErr _ -> (g, fail ())
+      | ESeq(g1,g2) ->
+         let (g1, s1) = fn' g1 in
+         (ne_seq g1 g2, seq s1 (appl g2 (fun f g a -> f (g a))))
+      | EDSeq(g1,_,_) as g ->
+         let (_, s1) = fn' g1 in
+         if s1.d  <> Fail then failwith "cache + left recursion + dseq unsupported" ;
+         (g, fail ())
+      | EAlt(gs) ->
+         let (gs,ss) = List.split (List.map fn' gs) in
+         (ne_alt gs, alt ss)
+      | ELr(merge, g1,s)   ->
+         let (g1,s1) = fn' g1 in
+         let m1 = match merge with
+           | None -> None
+           | Some m -> Some (fun f1 f2 a -> m (f1 a) (f2 a))
+         in
+         (ne_lr ?merge g1 s, lr ?merge:m1 s1 (appl s (fun f g a -> f (g a))))
+      | ELrr(g1,_,_,_) as g ->
+         let (_,s1) = fn' g1 in
+         if s1.d  <> Fail then assert false; (* FIXME: check *)
+         (g, fail ())
+      | ERkey _ ->
+         assert false; (* handled in gn *)
+      | EAppl(g1,f) ->
+         let (g1,s) = fn' g1 in
+         (ne_appl g1 f, appl s (fun sf a -> f (sf a)))
+      | ERef(g) -> gn' g
+      | ECache(m,g1)  ->
+         let (g1,s1) = fn' g1 in
+         let m1 = match m with
+           | None -> None
+           | Some m -> Some (fun f1 f2 a -> m (f1 a) (f2 a))
+         in
+         (ne_cache m g1, cache ?merge:m1 s1)
+      | ERPos(g1) ->
+         let (g1, s1) = fn' g1 in
+         (ne_rpos g1, rpos (appl s1 (fun f pos a -> f a pos)))
+      | ELPos(Some _, g1) as g ->
+         let (_, s1) = fn g1 in
+         if s1.d  <> Fail then assert false; (* FIXME: check *)
+         (g, fail ())
+      | ELPos(None, g1) ->
+         let (g1, s1) = fn' g1 in
+         (ne_lpos g1, lpos (appl s1 (fun f pos a -> f a pos)))
+      | ETest(f, b, g1) ->
+         let (g1, s1) = fn' g1 in
+         (ne_test f b g1, if b then s1 else test f b s1)
+      | ELayout(_,g1,_) ->
+         let (_, s1) = fn' g1 in
          if s1.d <> Fail then
            invalid_arg "fixpoint: left recursion under layout change";
          (g, fail())
@@ -601,17 +651,50 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
               s.phase <- LeftRecEliminated;
               if s.ne = EFail then (ERef g, fail()) else (g', s)
             end
+
+   and gn' : type b. b grammar -> b grne * (a -> b) grammar =
+     fun g ->
+       match g.k.eq u with
+       | Assoc.Eq  ->
+          (EFail, mkg (Empty (fun x -> x)))
+       | Assoc.NEq ->
+          if List.mem (E g.k.k) above then
+            begin
+              (ERef g, fail ())
+            end
+          else
+            begin
+              elim_left_rec (E u :: above) g;
+              let (g',s) = fn' g.ne in
+              factor_empty s;
+              assert(s.e = []);
+              s.phase <- LeftRecEliminated;
+              if s.ne = EFail then (ERef g, fail()) else (g', s)
+            end
    in
-   if g.phase < CacheFactored then remove_cache g;
-   if g.phase = CacheFactored then
+   assert(g.phase >= EmptyRemoved);
+   if g.phase = EmptyRemoved then
      begin
        g.phase <- LeftRecEliminated;
-       let (g1,s) = fn g.ne in
-       factor_empty s;
-       s.e <- [];
-       s.phase <- LeftRecEliminated;
-       let pk = !pk in
-       if s.ne <> EFail then g.ne <- ne_lr g1 g.k ?pk s;
+       try
+         let (g1,s) = fn g.ne in
+         factor_empty s;
+         s.e <- [];
+         s.phase <- LeftRecEliminated;
+         let pk = !pk in
+         if s.ne <> EFail then g.ne <- ne_lrr g1 g.k ?pk s;
+       with Exit ->
+         Printf.printf "kiki\n%!";
+         let (g1,s) = fn' g.ne in
+         factor_empty s;
+         s.e <- [];
+         s.phase <- LeftRecEliminated;
+         let merge = match g1 with
+           | ECache(m,_) -> m
+           | _ -> None
+         in
+         if s.ne <> EFail then g.ne <- ne_lr ?merge g1 s
+
      end
 
 (** compute the characters set accepted at the beginning of the input *)
@@ -638,7 +721,8 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
     | EDSeq(g,cs,_) ->
        let (shift, _ as r) = fn g in if shift then (true, cs) else r
     | EAppl(g,_) -> fn g
-    | ELr(g,_,_,_) -> fn g
+    | ELr(_,g,_) -> fn g
+    | ELrr(g,_,_,_) -> fn g
     | ERkey _ -> (true, Charset.empty)
     | ERef g -> gn g
     | ERPos g -> fn g
@@ -675,14 +759,19 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   match g with
   | EFail -> fail
   | EErr m -> error m
-  | ETerm(c) -> lexeme c.f
-  | EAlt(gs) -> compile_alt gs
-  | ESeq(g1,g2) -> seq (compile_ne g1) (compile false g2)
+  | ETerm(c) -> Printf.printf "cp term\n%!"; lexeme c.f
+  | EAlt(gs) -> Printf.printf "cp alt\n%!"; compile_alt gs
+  | ESeq(g1,g2) -> Printf.printf "cp seq1\n%!";
+                   let c1 = compile_ne g1 in
+                   Printf.printf "cp seq2\n%!";
+                   let c2 = compile false g2 in
+                   seq c1 c2
   | EDSeq(g1,_,g2) -> dseq (compile_ne g1)
                       (fun x -> compile false (g2 x))
   | EAppl(g1,f) -> app (compile_ne g1) f
-  | ELr(g,k,None,s) -> lr (compile_ne g) k (compile_ne s.ne)
-  | ELr(g,k,Some pk,s) -> lr_pos (compile_ne g) k pk (compile_ne s.ne)
+  | ELr(merge,g,s) -> lr ?merge (compile_ne g) (compile_ne s.ne)
+  | ELrr(g,k,None,s) -> lrr (compile_ne g) k (compile_ne s.ne)
+  | ELrr(g,k,Some pk,s) -> lrr_pos (compile_ne g) k pk (compile_ne s.ne)
   | ERkey k -> read_tbl k
   | ERef g -> compile true g
   | ERPos(g) -> right_pos (compile_ne g)
@@ -711,7 +800,6 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
  and compile : type a. bool -> a grammar -> a Comb.t =
   fun ne g ->
     factor_empty g;
-    remove_cache g;
     elim_left_rec [] g;
     assert (g.phase >= LeftRecEliminated);
     (* NOTE: g.recursive is not enough here, with mutual recursion; after
@@ -727,10 +815,6 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
       | _ ->
          g.phase <- Compiling;
          let cg = compile_ne g.ne in
-         let cg = match g.cache with
-           | None -> cg
-           | Some merge -> Comb.cache ?merge cg
-         in
          g.compiled := cg;
          g.phase <- Compiled;
          get g
