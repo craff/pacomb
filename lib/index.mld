@@ -156,6 +156,12 @@ grammar parametrized by [p_i] in the grammar parametrized by [p_(i+1)]. Recall
 that due to the type of {!Pacomb.Grammar.grammar_family} recursive grammars
 can only have one parameter.
 
+[let%parser] accepts three attribute:
+  - [[@cache]] to cache the grammar (that is call [Grammar.cache] on the grammar)
+  - [[@merge f]] to apply [f] is two parsetrees are possible for the same input.
+    This corresponds to [Grammar.cache ~merge:f].
+  - [[@layout blank]] or [[@layout blank ~config:expr]] to apply Grammar.layout.
+
 Anything which does not correspond to this grammar will be unchanged
 in the ocaml code (like the type definition in the example
 above).  A mutually recursive definition can also mix the definition of

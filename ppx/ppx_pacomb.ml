@@ -23,6 +23,13 @@ let merge_att =
                Ast_pattern.(single_expr_payload __)
                (fun x -> x))
 
+let layout_att =
+  let open Ppxlib in
+  Attribute.(declare "layout"
+               Context.Value_binding
+               Ast_pattern.(single_expr_payload __)
+               (fun x -> x))
+
 let cs_att =
   let open Ppxlib in
   Attribute.(declare "cs"
@@ -160,12 +167,22 @@ let rec exp_to_rule e =
       (Nolabel,a3)::rest) ->
      let (rule,_) = exp_to_rule (Exp.apply a3 rest) in
      (rule, Some cond)
+  | Pexp_construct({txt = Lident "()"; loc}, None) ->
+     ([None, None, [%expr Pacomb.Grammar.empty ()], loc_e], None)
   | Pexp_apply(e1, args) ->
+     let e1, args = match e1, args with
+       | (([%expr (~* )] | [%expr (~+) ] | [%expr (~?) ])
+          , ((Nolabel, ([%expr [__]] as a1))::(Nolabel, a2)::args))
+         -> let loc = merge_loc e1.pexp_loc a2.pexp_loc in
+            ([%expr [%e e1] [%e a1] [%e a2]], args)
+       | (([%expr (~* )] | [%expr (~+) ] | [%expr (~?) ]) , (Nolabel, a1)::args)
+         -> let loc = merge_loc e1.pexp_loc a1.pexp_loc in
+            ([%expr [%e e1] [%e a1]], args)
+       | _ -> (e1, args)
+     in
      let kn (_,e') = (e',merge_loc e'.pexp_loc loc_e) in
      let l = (e1, e.pexp_loc) :: List.map kn args in
      (List.map exp_to_rule_item l, None)
-  | Pexp_construct({txt = Lident "()"; loc}, None) ->
-     ([None, None, [%expr Pacomb.Grammar.empty ()], loc_e], None)
   | _ ->
      ([exp_to_rule_item (e, e.pexp_loc)], None)
 
@@ -379,6 +396,14 @@ let vb_to_parser rec_ vb =
     if changed && do_warn then
       warn vb.pvb_pat.ppat_loc
         "Pattern not allowed here for grammar parameter";
+    let rules =
+      match Ppxlib.Attribute.get layout_att vb with
+      | Some [%expr [%e? blank] ~config:[%e? config]]  ->
+        [%expr Pacomb.Grammar.layout ~config:[%e config] [%e blank] [%e rules]]
+      | Some [%expr [%e? blank] ]  ->
+        [%expr Pacomb.Grammar.layout [%e blank] [%e rules]]
+      | None   -> rules
+    in
     let rules =
       match Ppxlib.Attribute.get merge_att vb with
       | Some e ->
