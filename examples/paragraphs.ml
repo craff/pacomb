@@ -5,31 +5,31 @@ let%parser word =
   ; (p::RE"[.;,:!?]") => p
 
 (* blank with at most one newline for paragraphs *)
-
 let blank1 = Lex.blank_regexp "[ \t\r]*\n?[ \t\r]*"
 
-(* general blank, no newline, we parse them. *)
+(* general blank, no newline, we parse them as separator. *)
 let blank2 = Lex.blank_regexp "[ \t\r]*"
 
-(* paragraph separator, at least one newline, or EOF *)
-(* not: ~+ in pervasives forces __:: ?, strange*)
-let%parser sep = (__:: ~+ '\n') => () ; EOF => ()
+(* for paragraph, we use [Grammar.layout] to change the blank from [blank2] to
+   [blank1] and we parse with blank1 after the paragraph to read the last
+   newline at the end of each paragraph, the default would be to parse with
+   [blank2] only after the paragraph. This way, the minimum number of newline left to
+   parse as paragraph separation is 1.  *)
+let%parser
+      [@layout blank1 ~config:Lex.{ default_layout_config with
+                                    new_blanks_after = true
+                                  ; old_blanks_after = false }]
+      paragraph = ((p:: ~+ word) => (p, p_pos))
 
-(* for paragraph, we change the blank from blank2 to blank1
-   and we parse with blank1 after to read the first newline if any,
-   the default would be to parse with blank2 only *)
-let%parser paragraph = Grammar.layout
-                         ~config:Lex.{ default_layout_config with
-                           new_blanks_after = true
-                         ; old_blanks_after = false }
-                         blank1
-                         ((p:: ~+ word) sep => p)
+(* paragraph separator, at least one newline *)
+let%parser sep = (~+ (CHAR('\n'))) => ()
 
-(* test may have initial newlines *)
-let%parser text = (~? sep) (t:: ~* paragraph) => t
+(* text are list separated by sep and may have initial and final newlines *)
+let%parser text = (~? sep) (t:: ~* [sep] paragraph) (~? sep) => t
 
 (* we call the parser *)
 let _ =
   let t = Pos.handle_exception (Grammar.parse_channel text blank2) stdin in
   Printf.printf "%d paragraphs\n%!" (List.length t);
-  List.iteri (fun i p -> Printf.printf "  paragraph %d: %d word(s)\n%!" i (List.length p)) t
+  List.iteri (fun i (p,pos) -> Printf.printf "  paragraph %d at %a: %d word(s)\n%!"
+                                 i (Pos.print_interval ~style:Short ()) pos (List.length p)) t
