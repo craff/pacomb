@@ -33,3 +33,12 @@
   (deps paragraphs.exe test.txt)
   (action
     (system "./paragraphs.exe < test.txt")))
+
+(test
+  (name catalan)
+  (modules catalan)
+  (preprocess (pps pacomb.ppx))
+  (libraries unix pacomb)
+  (deps catalan.exe)
+  (action
+    (system "./catalan.exe 30")))
