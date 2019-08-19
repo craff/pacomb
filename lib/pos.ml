@@ -53,18 +53,32 @@ let print_pos ?(utf8_col=false) ?(style=OCaml) () ch pos =
 
 let print_interval ?(style=OCaml) () ch { start; end_ } =
   let open Printf in
-  if start.line = end_.line then
-    let format : (_,_,_) format = match style with
-      | OCaml -> "File %S, line %d, characters %d-%d"
-      | Short -> "%S:%d:%d-%d"
-    in
-    fprintf ch format start.name start.line start.col end_.col
+  if start.name = "" then
+    if start.line = end_.line then
+      let format : (_,_,_) format = match style with
+        | OCaml -> "line %d, characters %d-%d"
+        | Short -> "%d:%d-%d"
+      in
+      fprintf ch format start.line start.col end_.col
+    else
+      let format : (_,_,_) format = match style with
+        | OCaml -> "line %d, character %d - line %d, character %d"
+        | Short -> "%d:%d-%d:%d"
+      in
+      fprintf ch format start.line start.col end_.line end_.col
   else
-    let format : (_,_,_) format = match style with
-      | OCaml -> "File %S, line %d, character %d - line %d, character %d"
-      | Short -> "%S:%d:%d-%d:%d"
-    in
-    fprintf ch format start.name start.line start.col end_.line end_.col
+    if start.line = end_.line then
+      let format : (_,_,_) format = match style with
+        | OCaml -> "File %S, line %d, characters %d-%d"
+        | Short -> "%S:%d:%d-%d"
+      in
+      fprintf ch format start.name start.line start.col end_.col
+    else
+      let format : (_,_,_) format = match style with
+        | OCaml -> "File %S, line %d, character %d - line %d, character %d"
+        | Short -> "%S:%d:%d-%d:%d"
+      in
+      fprintf ch format start.name start.line start.col end_.line end_.col
 
 let print_buf_pos ?(utf8_col=false) ?(style=OCaml) () ch (buf,col) =
   compute_utf8_col := true;
