@@ -10,9 +10,12 @@ module Make(V : sig type ('a,'b) elt end) = struct
   include V
 
   (** Non-uniform list (containing elements of possibly different types). *)
-  type 'b nu_list =
-    | Cons : 'a tag * ('a,'b) elt * 'b nu_list -> 'b nu_list
-    | Nil  : 'b nu_list
+  type ptag = T : 'a tag -> ptag [@@unboxed]
+
+  type 'b etag = E : 'a tag * ('a,'b) elt -> 'b etag
+
+  type 'b nu_list = (ptag, 'b etag) Hashtbl.t
+
 
   (** Actual container. *)
   type 'a container =
@@ -25,7 +28,7 @@ module Make(V : sig type ('a,'b) elt end) = struct
     fun () ->
       let module M = struct type _ tag += T : a tag end in
       let eq : type b. b tag -> (a, b) eq = function M.T -> Y | _ -> N in
-      {data = Nil; uid = M.T; eq }
+      {data = Hashtbl.create 16; uid = M.T; eq }
 
   (** Obtain the UID of a container. *)
   let address : 'b container -> 'b tag = fun c -> c.uid
@@ -36,7 +39,6 @@ module Make(V : sig type ('a,'b) elt end) = struct
 
   (** unboxed mandatory for weak hashtbl to work, from 4.04.0 *)
   type any = C : 'b container -> any [@@unboxed]
-  let cast : 'b container -> any = fun x -> C x
 
   (** Container table. *)
   type 'a table =
@@ -45,45 +47,24 @@ module Make(V : sig type ('a,'b) elt end) = struct
     ; mutable elts : any list
     }
 
+  (* Find the value associated to the given table and container. *)
+  let find : type a b. a table -> b container -> (a, b) elt =
+    fun tab c ->
+      match Hashtbl.find c.data (T tab.tag) with E(t,v) ->
+        match tab.eq t with
+        | Y -> v
+        | N -> assert false
+
   (** Insert a new value associated to the given table and container. If a
     value is already present, it is overwriten. *)
   let add : type a b. a table -> b container -> (a, b) elt -> unit =
     fun tab c v ->
-    let rec fn = function
-      | Nil           ->
-         raise Exit
-      | Cons(t, w, r) ->
-         match tab.eq t with
-         | Y -> Cons(t, v, r)
-         | N -> Cons(t, w, fn r)
-    in
-    try
-      c.data <- fn c.data
-    with Exit ->
-      c.data <- Cons(tab.tag, v, c.data);
-      tab.elts <- cast c :: tab.elts
-
-  (* Find the value associated to the given table and container. *)
-  let find : type a b. a table -> b container -> (a, b) elt =
-    let rec find : type a. a table -> b nu_list -> (a, b) elt = fun tab c ->
-      match c with
-      | Nil         -> raise Not_found
-      | Cons(t,v,r) -> match tab.eq t with Y -> v | N -> find tab r
-    in
-    fun tab c -> find tab c.data
-
-  (** Removes the given table from the given list. *)
-  let rec remove_table : type a b. a table -> b nu_list -> b nu_list =
-    fun tab l ->
-    match l with
-    | Nil           -> Nil
-    | Cons(t, v, r) ->
-       match tab.eq t with
-       | Y -> r
-       | N -> Cons(t, v, remove_table tab r)
+      let mem = Hashtbl.mem c.data (T tab.tag) in
+      Hashtbl.replace c.data (T tab.tag) (E(tab.tag, v));
+      if not mem then tab.elts <- C c :: tab.elts
 
   let clear : type a. a table -> unit = fun tab ->
-    List.iter (fun (C c) -> c.data <- remove_table tab c.data) tab.elts;
+    List.iter (fun (C c) -> Hashtbl.remove c.data (T tab.tag)) tab.elts;
     tab.elts <- []
 
   let create_table : type a. unit -> a table = fun () ->
@@ -95,15 +76,11 @@ module Make(V : sig type ('a,'b) elt end) = struct
 
   let length : type a. a table -> int = fun tab ->
     let n = ref 0 in
-    let rec fn : type b. b nu_list -> unit = function
-      | Nil -> ()
-      | Cons(t,_,r) ->
-         begin
-           match tab.eq t with
-           | Y -> incr n;
-           | N -> ()
-         end;
-         fn r
+    let fn : type b. b nu_list -> unit = fun data ->
+      Hashtbl.iter (fun (T t) _ ->
+          match tab.eq t with
+          | Y -> incr n;
+          | N -> assert false) data
     in
     List.iter (fun (C c) -> fn c.data) tab.elts;
     !n
@@ -111,31 +88,22 @@ module Make(V : sig type ('a,'b) elt end) = struct
   type 'a iter = { f : 'b.('a, 'b) elt -> unit }
 
   let iter : type a. a iter -> a table -> unit = fun f tab ->
-    let rec fn : type b. b nu_list -> unit = function
-      | Nil -> ()
-      | Cons(t,v,r) ->
-         begin
-           match tab.eq t with
-           | Y -> f.f v;
-           | N -> ()
-         end;
-         fn r
+    let fn : type b. b nu_list -> unit = fun data ->
+      Hashtbl.iter (fun _ (E (t,v)) ->
+          match tab.eq t with
+          | Y -> f.f v;
+          | N -> assert false) data
     in
     List.iter (fun (C c) -> fn c.data) tab.elts
 
   type ('a,'c) fold = { f : 'b.('a, 'b) elt -> 'c -> 'c }
 
   let fold : type a c. (a, c) fold -> a table -> c -> c = fun f tab acc ->
-    let rec fn : type b. b nu_list -> c -> c = fun l acc ->
-      match l with
-      | Nil -> acc
-      | Cons(t,v,r) ->
-         let acc =
-           match tab.eq t with
-           | Y -> f.f v acc;
-           | N -> acc
-         in
-         fn r acc
+    let fn : type b. b nu_list -> c -> c = fun data acc ->
+      Hashtbl.fold (fun _ (E (t,v)) acc ->
+          match tab.eq t with
+          | Y -> f.f v acc
+          | N -> assert false) data acc
     in
     List.fold_left (fun acc (C c) -> fn c.data acc) acc tab.elts
 
@@ -166,29 +134,20 @@ include Make(struct type ('a, 'b) elt = ('a, 'b) el end)
    https://caml.inria.fr/mantis/view.php?id=7636
  *)
 let iter : type a. (a -> unit) -> a table -> unit = fun f tab ->
-  let rec fn : type b. b nu_list -> unit = function
-    | Nil -> ()
-    | Cons(t,v,r) ->
-       begin
-         match tab.eq t with
-         | Y -> f v;
-         | N -> ()
-       end;
-       fn r
+  let fn : type b. b nu_list -> unit = fun data ->
+  Hashtbl.iter (fun _ (E (t,v)) ->
+      match tab.eq t with
+      | Y -> f v;
+      | N -> assert false) data
   in
   List.iter (fun (C c) -> fn c.data) tab.elts
 
 let fold : type a c. (a -> c -> c) -> a table -> c -> c = fun f tab acc ->
-  let rec fn :  type b. b nu_list -> c -> c = fun l acc ->
-    match l with
-    | Nil -> acc
-    | Cons(t,v,r) ->
-       let acc =
-         match tab.eq t with
-         | Y -> f v acc;
-         | N -> acc
-       in
-       fn r acc
+  let fn : type b. b nu_list -> c -> c = fun data acc ->
+    Hashtbl.fold (fun _ (E (t,v)) acc ->
+      match tab.eq t with
+      | Y -> f v acc
+      | N -> assert false) data acc
   in
   List.fold_left (fun acc (C c) -> fn c.data acc) acc tab.elts
 
