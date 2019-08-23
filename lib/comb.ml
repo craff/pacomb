@@ -328,7 +328,7 @@ let test cs e = Charset.mem cs (Input.get e.current_buf e.current_pos)
     empty in [alt] and use [option] instead.*)
 let option: 'a -> Charset.t -> 'a t -> 'a t = fun x cs1 g1 ->
   fun env k err ->
-    if test cs1 env then g1 env k (fun () -> call k env err (lazy x))
+    if test cs1 env then Cont(env,k,(fun () -> g1 env k err),lazy x)
     else call k env err (lazy x)
 
 (** Alternatives combinator. *)
