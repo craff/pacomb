@@ -41,4 +41,6 @@
   (libraries unix pacomb)
   (deps catalan.exe)
   (action
-    (system "./catalan.exe 30")))
+    (progn
+      (system "./catalan.exe 30 2")
+      (system "./catalan.exe 30 3"))))

@@ -31,18 +31,41 @@ and expr = (a::prod)               => a
          ; (x::expr) '+' (y::prod) => x+.y
          ; (x::expr) '-' (y::prod) => x-.y
 
+(* A subtlety : we want to parse expression, on by one and print the
+   result. Pacomb evaluates action after the next token to avoid some useless
+   evaluation but still make give_up usable. So we evaluate after newline...
+   But if we where parsing blank after newline, we still would have to wait
+   the input after the newline.
+
+   To solve this, we parse line with no blank, use [Grammar.layout] to accept
+   blank inside expression.
+
+   A simpler solution (used in other examples) is to read the input line
+   by line and parse each line using [Grammar.parse_string].
+*)
+
+let config =
+  Lex.{ default_layout_config with
+        new_blanks_before = true
+      ; new_blanks_after = true}
+
 (* we define the characters to be ignored, here space only *)
 let blank = Lex.blank_charset (Charset.singleton ' ')
+
+(* The parsing calling expression and changing the blank,
+   printing the result and the next prompt. *)
+let%parser [@layout blank ~config] top =
+  (e::expr) => Printf.printf "%f\n=> %!" e
+
+let%parser rec exprs = () => () ; exprs top '\n' => ()
 
 let _ =
   try
     while true do
       let f () =
-        Printf.printf "=> %!";
-        (* we read one line and call the parser *)
-        let line = input_line stdin in
-        let n = parse_string expr blank line in
-        Printf.printf "%f\n%!" n
+        Printf.printf "=> %!"; (* initial prompt *)
+        parse_channel exprs Lex.noblank stdin;
+        raise End_of_file
       in
       (* [Pos] module provides a function to handle exception with
          an optional argument to call for error (default is to exit with
