@@ -5,7 +5,8 @@ make
 opts=--no-print-directory
 cd tests
 
-dune build $opts calc.exe test.exe big_expr.exe hard.exe
+dune build $opts  ../examples/calc.exe ../examples/calc_prio.exe \
+                 test.exe big_expr.exe hard.exe
 
 echo general tests
 dune exec $opts -- ./test.exe --catalan 12 --sequence 10000

@@ -22,4 +22,4 @@ let n = int_of_string (Sys.argv.(1))
 let p = int_of_string (Sys.argv.(2))
 let s = int_of_string (Sys.argv.(3))
 
-let _ = expr n p s; flush stdout
+let _ = expr n p s; print_newline ()
