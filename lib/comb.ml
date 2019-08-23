@@ -158,20 +158,23 @@ let eval_lrgs : type a. a cont -> a cont = fun k ->
 
 (** [next env  err] updates the current maximum position  [env.max_pos] and then
     calls the [err] function. *)
-let next : env -> err -> res  = fun env err ->
+
+let record_pos env =
   let (pos_max, _, _, _) = !(env.max_pos) in
   let pos = Input.byte_pos env.current_buf env.current_pos in
   if pos > pos_max  then
-    env.max_pos := (pos, env.current_buf, env.current_pos, ref []);
-  err ()
+    env.max_pos := (pos, env.current_buf, env.current_pos, ref [])
 
-let next_msg : string -> env -> err -> res  = fun msg env err ->
-  let (pos_max, _, _, msgs) = !(env.max_pos) in
+let next : env -> err -> res  = fun env err -> record_pos env; err ()
+
+let record_pos_msg msg env =                                                                   let (pos_max, _, _, msgs) = !(env.max_pos) in
   let pos = Input.byte_pos env.current_buf env.current_pos in
   if pos > pos_max then
     env.max_pos := (pos, env.current_buf, env.current_pos, ref [msg])
-  else if pos = pos_max then msgs := msg :: !msgs;
-  err ()
+  else if pos = pos_max then msgs := msg :: !msgs
+
+let next_msg : string -> env -> err -> res  = fun msg env err ->
+  record_pos_msg msg env; err ()
 
 (** the scheduler stores what remains to do in a list sorted by position in the
     buffer, and vptr key list (see cache below) here are the comparison function
@@ -240,7 +243,6 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
       let tbl = ref (N(r, E, E, 1)) in  (* to do at further position *)
       while true do
         let (Cont(env,k,err,x)),t = extract !tbl in
-        let k = eval_lrgs k in
         tbl := t;
         (* calling the error and the continuation, storing the result in
               tbl1. *)
@@ -249,9 +251,13 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
            tbl := insert r !tbl
          with Exit -> ());
         (try
+           let k = eval_lrgs k in
            let r = call k env (fun _ -> raise Exit) x in
            tbl := insert r !tbl
-         with Exit -> ());
+         with
+         | Exit -> ()
+         | Lex.NoParse -> record_pos env
+         | Lex.Give_up m -> record_pos_msg m env)
       done;
       assert false
     with Not_found | Exit -> List.map (fun (x,env) -> (Lazy.force x, env)) !res
