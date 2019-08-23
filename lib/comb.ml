@@ -84,15 +84,21 @@ type err = unit -> res
    | Arg : ('b,'c) trans * 'a -> ('a -> 'b,'c) trans
    (** [Arg(tr,x)] tranform a value of type ['a -> 'b] into a value of
        type ['c] by applying it to [x] and then applying the transformer [tr] *)
+   | Arg' : ('b,'c) trans * 'a -> ('a -> 'b,'c) trans
+   (** same has above but lrgs appear *)
    | Lrg : ('b,'c) trans * 'a Lazy.t -> ('a -> 'b,'c) trans
    (** Same as above but [x] will results of the application of a transformer.
        [Lrg] means lazy arg *)
    | Pos : ('b,'c) trans * Pos.t ref -> (Pos.t -> 'b,'c) trans
    (** Same  as arg, but [x]  is a position that  will be stored in  a reference
        when calling the continuation *)
+   | Pos' : ('b,'c) trans * Pos.t ref -> (Pos.t -> 'b,'c) trans
+   (** same has above but lrgs appear *)
    | App : ('b,'c) trans * ('a -> 'b) -> ('a,'c) trans
    (** [App(tr,f) transform  a value of type  ['a] into a value of  type ['c] by
         passing it to a [f] and then using [tr] *)
+   | App' : ('b,'c) trans * ('a -> 'b) -> ('a,'c) trans
+   (** same has above but lrgs appear *)
 
  (** Type of a parser combinator with a semantic action of type ['a]. the return
     type [res] will be used by the scheduler function below to drive the
@@ -104,14 +110,25 @@ and 'a t = env -> 'a cont -> err -> res
 (** construction of a continuation with an identity transformer *)
 let ink f = C(f,Idt)
 
+(** read the boolean used to know if lrg is present *)
+let has_lrg : type a b.(a,b) trans -> bool = function
+  | Idt -> false
+  | Arg(_,_) -> false
+  | Pos(_,_) -> false
+  | App(_,_) -> false
+  | _        -> true
+
 (** evaluation function for the [app] type *)
 let rec eval : type a b. a -> (a,b) trans -> b = fun x tr ->
     match tr with
     | Idt        -> x
-    | Arg(tr,y)  -> eval (x y) tr
-    | Lrg(tr,y)  -> eval (x (Lazy.force y)) tr
-    | Pos(tr,p)  -> eval (x !p) tr
-    | App(tr,f)  -> eval (f x) tr
+    | Arg (tr,y) -> eval (x y) tr
+    | Arg'(tr,y) -> eval (x y) tr
+    | Lrg (tr,y) -> eval (x (Lazy.force y)) tr
+    | Pos (tr,p) -> eval (x !p) tr
+    | Pos'(tr,p) -> eval (x !p) tr
+    | App (tr,f) -> eval (f x) tr
+    | App'(tr,f) -> eval (f x) tr
 
 (** function calling a  continuation. It does not evaluate any  action. It is of
     crucial importane that this function be in O(1). *)
@@ -130,8 +147,8 @@ let call : type a.a cont -> env -> err -> a Lazy.t -> res =
 (** access to transformer constructor inside the continuation constructor *)
 let arg : type a b. b cont -> a -> (a -> b) cont = fun k x ->
     match k with
-    | C(k,tr)    -> C(k,Arg(tr,x))
-    | P(k,tr,rp) -> P(k,Arg(tr,x),rp)
+    | C(k,tr)    -> C(k,if has_lrg tr then Arg'(tr,x) else Arg(tr,x))
+    | P(k,tr,rp) -> P(k,(if has_lrg tr then Arg'(tr,x) else Arg(tr,x)),rp)
 
 let larg : type a b. b cont -> a Lazy.t -> (a -> b) cont = fun k x ->
     match k with
@@ -140,17 +157,25 @@ let larg : type a b. b cont -> a Lazy.t -> (a -> b) cont = fun k x ->
 
 let app : type a b. b cont -> (a -> b) -> a cont = fun k f ->
     match k with
-    | C(k,tr)    -> C(k,App(tr,f))
-    | P(k,tr,rp) -> P(k,App(tr,f),rp)
+    | C(k,tr)    -> C(k,if has_lrg tr then App'(tr,f) else App(tr,f))
+    | P(k,tr,rp) -> P(k,(if has_lrg tr then App'(tr,f) else App(tr,f)),rp)
 
-(** transforsms [Lrg] into [Arg] inside a continuation *)
+let posk : type a. a cont -> (Pos.pos -> a) cont = fun k ->
+  match k with
+  | C(k,tr)    -> let rp = ref Pos.phantom in
+                  P(k,(if has_lrg tr then Pos'(tr,rp) else Pos(tr,rp)),rp)
+  | P(k,tr,rp) -> P(k,(if has_lrg tr then Pos'(tr,rp) else Pos(tr,rp)),rp)
+
+(** transforsms [Lrg] into [Arg] inside a continuation, to give
+    a trigger give_up soon enough, that is after net read *)
 let eval_lrgs : type a. a cont -> a cont = fun k ->
-  let rec fn : type a b. (a,b) trans -> (a,b) trans = function
-    | Idt       -> Idt
-    | Arg(tr,x) -> Arg(fn tr, x)
-    | Lrg(tr,x) -> Arg(fn tr, Lazy.force x)
-    | Pos(tr,p) -> Pos(fn tr,p)
-    | App(tr,x) -> App(fn tr,x)
+  let rec fn : type a b. (a,b) trans -> (a,b) trans = fun t ->
+    match t with
+    | Arg'(tr,x) -> Arg(fn tr,x)
+    | Lrg (tr,x) -> Arg(fn tr, Lazy.force x)
+    | Pos'(tr,p) -> Pos(fn tr,p)
+    | App'(tr,x) -> App(fn tr,x)
+    | _          -> t
   in
   match k with
   | C(k,tr)    -> C(k,fn tr)
@@ -356,11 +381,7 @@ let test_after : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
 
 (** Read the position after parsing. *)
 let right_pos : type a.(Pos.t -> a) t -> a t = fun g env k err ->
-    let k = match k with
-      | C(k,tr)    -> let rp = ref Pos.phantom in P(k,Pos(tr,rp),rp)
-      | P(k,tr,rp) -> P(k,Pos(tr,rp),rp)
-    in
-    g env k err
+    g env (posk k) err
 
 (** Read the position before parsing. *)
 let left_pos : (Pos.t -> 'a) t -> 'a t = fun g  env k err ->
