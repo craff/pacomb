@@ -1,4 +1,4 @@
-(** Parser combinator library *)
+(** {1 Parser combinator library} *)
 
 (** Combinators are a standard approach  to parsing in functional language.  The
     major advantage of  combinators is that they allow  manipulating grammars as
@@ -11,7 +11,7 @@
 
     - Exponential semantics.  The parsing problem for  context-free grammars can
       be solved  in polynomial time  (O(n³) implementation are  often proposed).
-      As combinator  backtrack, they usually  lead to an  exponential behaviour.
+      As combinator  backtracks, they usually lead to an  exponential behaviour.
       This is solved here by a [cache] combinator, that avoids parsing twice the
       same part of the input with the same grammar.
 
@@ -30,6 +30,8 @@
       user can call the [give_up] function to reject some parses from the action
       code.  *)
 
+(** {2 main types } *)
+
 (** Environment holding information require for parsing. *)
 type env =
   { blank_fun         : Lex.blank
@@ -39,36 +41,53 @@ type env =
   ; current_buf       : Lex.buf
   (** Current input buffer (or input stream). *)
   ; current_pos       : Lex.pos
-  (** Current column number in buffer [current_buf]. *)
+  (** Current position in buffer [current_buf]. *)
   ; buf_before_blanks : Lex.buf
   (** Input buffer before reading the blanks. *)
   ; pos_before_blanks : Lex.pos
-  (** Column number in [buf_before_blanks] before reading the blanks. *)
+  (** Position in [buf_before_blanks] before reading the blanks. *)
   ; lr                : Assoc.t
   (** Association table for the lr combinator *)
-  ; merge_depth       : int * int
+  ; cache_order       : int * int
+  (** Information used  to order cache parsing, the first  [int] is the position
+      where we started to parse the  cached grammar, the second int is increased
+      when we parse a cached grammar that was called at same position by another
+      cached grammar. *)
   }
 
 (** Type of a function called in case of error. *)
 type err = unit -> res
 
 (**  type  of result  used  by  the scheduler  to  progress  in the  parsing  in
-    parallel *)
+    parallel. It has only one constructor representing a continuation. It must
+    be used instead of calling immediatly the continuation is the scheduler needs
+    to order parsing. This is in two cases:
+    - we progress in the input (solely in the lexeme and layout combinator)
+    - we have constraints to respect for ordering cache (solely in cache) *)
  and res =
    | Cont : env * 'a cont * err * 'a Lazy.t -> res
-   (** returned by lexeme instead of calling the continuation, contains all
-       information to continue parsing. *)
 
  (** Type  of a  parsing continuation. A  value of type  ['a cont]  represents a
     function waiting for a parsing environment, an error function and a value of
-    type ['a] to continue parsing. To avoid quadratic behavior with mainly right
-    recursion, this is splitted in two:
+    type  ['a] to  continue  parsing.  To avoid  quadratic  behavior with  right
+    recursion, this is splitted in two parts:
 
-    - a transformer  of type [('a,'b) trans]  represents a function from ['a] to
+    - a transformer of type [('a,'b) trans] representing a function from ['a] to
       ['b]
 
-    - continuation expect a lzay value, evaluation is retarded to the parsing of
-      the next lexeme.
+    - a continuation  that expect a  lzay value,  evaluation is retarded  to the
+      parsing of the next lexeme.
+
+    - A special continuation [P] is used whe we need to store the position to
+      the right.
+
+    With this type for continuation, we have to benefit:
+
+    - most combinator can transform the continuation in O(1) time without
+      introducing a nested closure.
+
+    - evaluation of action being retarded to the ext lexeme, prefix of
+      right recursive grammar also transform the continuation in O(1).
 *)
  and 'a cont =
    | C : (env -> err -> 'b Lazy.t -> res) * ('a,'b) trans -> 'a cont
@@ -84,33 +103,35 @@ type err = unit -> res
    | Arg : ('b,'c) trans * 'a -> ('a -> 'b,'c) trans
    (** [Arg(tr,x)] tranform a value of type ['a -> 'b] into a value of
        type ['c] by applying it to [x] and then applying the transformer [tr] *)
-   | Arg' : ('b,'c) trans * 'a -> ('a -> 'b,'c) trans
-   (** same has above but lrgs appear *)
    | Lrg : ('b,'c) trans * 'a Lazy.t -> ('a -> 'b,'c) trans
-   (** Same as above but [x] will results of the application of a transformer.
-       [Lrg] means lazy arg *)
+   (** Same as above  but [x] is lazy ([Lrg] means "lazy arg").  This is what we
+       use to delay evaluation *)
    | Pos : ('b,'c) trans * Pos.t ref -> (Pos.t -> 'b,'c) trans
    (** Same  as arg, but [x]  is a position that  will be stored in  a reference
-       when calling the continuation *)
-   | Pos' : ('b,'c) trans * Pos.t ref -> (Pos.t -> 'b,'c) trans
-   (** same has above but lrgs appear *)
+       when calling the continuation constructed with [P] *)
    | App : ('b,'c) trans * ('a -> 'b) -> ('a,'c) trans
    (** [App(tr,f) transform  a value of type  ['a] into a value of  type ['c] by
         passing it to a [f] and then using [tr] *)
+   | Arg' : ('b,'c) trans * 'a -> ('a -> 'b,'c) trans
+   (** same  has above  when lrgs  appear under, to  avoid useless  traversal in
+       [eval_lrgs] *)
+   | Pos' : ('b,'c) trans * Pos.t ref -> (Pos.t -> 'b,'c) trans
+   (** same has above when lrgs appear under *)
    | App' : ('b,'c) trans * ('a -> 'b) -> ('a,'c) trans
-   (** same has above but lrgs appear *)
+   (** same has above when lrgs appear under *)
 
  (** Type of a parser combinator with a semantic action of type ['a]. the return
-    type [res] will be used by the scheduler function below to drive the
+    type  [res] will  be  used by  the  scheduler function  below  to drive  the
     parsing. *)
 and 'a t = env -> 'a cont -> err -> res
 
-(** continuations and trans functions *)
+(** {2 continuations and trans functions} *)
 
-(** construction of a continuation with an identity transformer *)
+(** construction of a continuation with an identity transformer.
+    [ink] means "injection kontinuation" *)
 let ink f = C(f,Idt)
 
-(** read the boolean used to know if lrg is present *)
+(** tells if lrg is present *)
 let has_lrg : type a b.(a,b) trans -> bool = function
   | Idt -> false
   | Arg(_,_) -> false
@@ -118,7 +139,7 @@ let has_lrg : type a b.(a,b) trans -> bool = function
   | App(_,_) -> false
   | _        -> true
 
-(** evaluation function for the [app] type *)
+(** evaluation function for the [trans] type *)
 let rec eval : type a b. a -> (a,b) trans -> b = fun x tr ->
     match tr with
     | Idt        -> x
@@ -130,8 +151,23 @@ let rec eval : type a b. a -> (a,b) trans -> b = fun x tr ->
     | App (tr,f) -> eval (f x) tr
     | App'(tr,f) -> eval (f x) tr
 
+(** transforsms [Lrg] into [Arg] inside a continuation, to trigger [give_up]
+    soon enough, that is after net read *)
+let eval_lrgs : type a. a cont -> a cont = fun k ->
+  let rec fn : type a b. (a,b) trans -> (a,b) trans = fun t ->
+    match t with
+    | Lrg (tr,x) -> Arg(fn tr, Lazy.force x)
+    | Arg'(tr,x) -> Arg(fn tr,x)
+    | Pos'(tr,p) -> Pos(fn tr,p)
+    | App'(tr,x) -> App(fn tr,x)
+    | _          -> t
+  in
+  match k with
+  | C(k,tr)    -> C(k,fn tr)
+  | P(k,tr,rp) -> P(k,fn tr,rp)
+
 (** function calling a  continuation. It does not evaluate any  action. It is of
-    crucial importane that this function be in O(1). *)
+    crucial importane that this function be in O(1) before calling [k]. *)
 let call : type a.a cont -> env -> err -> a Lazy.t -> res =
   fun k env err x ->
     match k with
@@ -144,46 +180,39 @@ let call : type a.a cont -> env -> err -> a Lazy.t -> res =
        rp := Pos.get_pos env.buf_before_blanks env.pos_before_blanks;
        k env err (lazy (eval (Lazy.force x) tr))
 
-(** access to transformer constructor inside the continuation constructor *)
+(**  functions  to  add  [(_,_)  trans]  constructors  inside  the  continuation
+    constructor *)
 let arg : type a b. b cont -> a -> (a -> b) cont = fun k x ->
-    match k with
-    | C(k,tr)    -> C(k,if has_lrg tr then Arg'(tr,x) else Arg(tr,x))
-    | P(k,tr,rp) -> P(k,(if has_lrg tr then Arg'(tr,x) else Arg(tr,x)),rp)
+  let arg tr x = if has_lrg tr then Arg'(tr,x) else Arg(tr,x) in
+  match k with
+  | C(k,tr)    -> C(k,arg tr x)
+  | P(k,tr,rp) -> P(k,arg tr x,rp)
 
-let larg : type a b. b cont -> a Lazy.t -> (a -> b) cont = fun k x ->
-    match k with
-    | C(k,tr)    -> C(k,Lrg(tr,x))
-    | P(k,tr,rp) -> P(k,Lrg(tr,x),rp)
+let lrg : type a b. b cont -> a Lazy.t -> (a -> b) cont = fun k x ->
+  (* NOTE: no need for lrg if [x] is a value, but adding the following line
+     appears significantly slower:
+
+  [if Lazy.is_val x then arg k (Lazy.force x) else] *)
+  match k with
+  | C(k,tr)    -> C(k,Lrg(tr,x))
+  | P(k,tr,rp) -> P(k,Lrg(tr,x),rp)
 
 let app : type a b. b cont -> (a -> b) -> a cont = fun k f ->
+  let app tr f = if has_lrg tr then App'(tr,f) else App(tr,f) in
     match k with
-    | C(k,tr)    -> C(k,if has_lrg tr then App'(tr,f) else App(tr,f))
-    | P(k,tr,rp) -> P(k,(if has_lrg tr then App'(tr,f) else App(tr,f)),rp)
+    | C(k,tr)    -> C(k,app tr f)
+    | P(k,tr,rp) -> P(k,app tr f,rp)
 
 let posk : type a. a cont -> (Pos.pos -> a) cont = fun k ->
+  let pos tr rp = if has_lrg tr then Pos'(tr,rp) else Pos(tr,rp) in
   match k with
-  | C(k,tr)    -> let rp = ref Pos.phantom in
-                  P(k,(if has_lrg tr then Pos'(tr,rp) else Pos(tr,rp)),rp)
-  | P(k,tr,rp) -> P(k,(if has_lrg tr then Pos'(tr,rp) else Pos(tr,rp)),rp)
+  | C(k,tr)    -> let rp = ref Pos.phantom in P(k,pos tr rp,rp)
+  | P(k,tr,rp) -> P(k,pos tr rp,rp)
 
-(** transforsms [Lrg] into [Arg] inside a continuation, to give
-    a trigger give_up soon enough, that is after net read *)
-let eval_lrgs : type a. a cont -> a cont = fun k ->
-  let rec fn : type a b. (a,b) trans -> (a,b) trans = fun t ->
-    match t with
-    | Arg'(tr,x) -> Arg(fn tr,x)
-    | Lrg (tr,x) -> Arg(fn tr, Lazy.force x)
-    | Pos'(tr,p) -> Pos(fn tr,p)
-    | App'(tr,x) -> App(fn tr,x)
-    | _          -> t
-  in
-  match k with
-  | C(k,tr)    -> C(k,fn tr)
-  | P(k,tr,rp) -> P(k,fn tr,rp)
+(** {2 Error managment} *)
 
 (** [next env  err] updates the current maximum position  [env.max_pos] and then
     calls the [err] function. *)
-
 let record_pos env =
   let (pos_max, _, _, _) = !(env.max_pos) in
   let pos = Input.byte_pos env.current_buf env.current_pos in
@@ -201,6 +230,8 @@ let record_pos_msg msg env =                                                    
 let next_msg : string -> env -> err -> res  = fun msg env err ->
   record_pos_msg msg env; err ()
 
+(** {2 Scheduler code} *)
+
 (** the scheduler stores what remains to do in a list sorted by position in the
     buffer, and vptr key list (see cache below) here are the comparison function
     used for this sorting *)
@@ -209,16 +240,17 @@ let before r1 r2 =
   | (Cont(env1,_,_,_), Cont(env2,_,_,_)) ->
      let p1 = Input.byte_pos env1.current_buf env1.current_pos in
      let p2 = Input.byte_pos env2.current_buf env2.current_pos in
-     (p1 < p2) || (p1 = p2 && env1.merge_depth > env2.merge_depth)
+     (p1 < p2) || (p1 = p2 && env1.cache_order > env2.cache_order)
 
-(* Here we implement priority queus using a heap, to have a logarithmic
-   complexity to choose the next action in the scheduler *)
+(** We use priority queues using a heap, to have a logarithmic complexity to
+   choose the next action in the scheduler *)
 type heap =
   E | N of res * heap * heap * int
 
+(** Size of the heap, to choose where to insert *)
 let size = function E -> 0 | N(_,_,_,n) -> n
 
-(** insert in a list at the correct position *)
+(** insert in a heap at the correct position *)
 let rec insert : res -> heap -> heap = fun r h ->
   match h with
   | E -> N(r, E, E, 1)
@@ -229,6 +261,8 @@ let rec insert : res -> heap -> heap = fun r h ->
      else
        N(r, insert r' h1, h2, s+1)
 
+(** Extract  from the  heap. Does  not keep  balancing, but  the depth  may only
+   decrease to it remains logarithmic *)
 let extract : heap -> res * heap = fun h ->
   match h with
   | E -> raise Not_found
@@ -257,7 +291,7 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
        continue parsing if [all] is [true] *)
     let k env err x =
       (try
-         res := (x,env)::!res;
+         res := (x,env)::!res; (* evaluatin of x is done later *)
          err
        with Lex.NoParse   -> fun () -> next env err
           | Lex.Give_up m -> fun () -> next_msg m env err) ();
@@ -269,14 +303,14 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
       while true do
         let (Cont(env,k,err,x)),t = extract !tbl in
         tbl := t;
-        (* calling the error and the continuation, storing the result in
-              tbl1. *)
+        (* calling the error and the continuation, storing the result in tbl. *)
         (try
            let r = err () in
            tbl := insert r !tbl
          with Exit -> ());
+        (* calling the continuation *)
         (try
-           let k = eval_lrgs k in
+           let k = eval_lrgs k in (* now it is time to eval lazy arguments *)
            let r = call k env (fun _ -> raise Exit) x in
            tbl := insert r !tbl
          with
@@ -285,7 +319,11 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
          | Lex.Give_up m -> record_pos_msg m env)
       done;
       assert false
-    with Not_found | Exit -> List.map (fun (x,env) -> (Lazy.force x, env)) !res
+    with Not_found | Exit ->
+      (* parsing is finished: we evaluate the semantics *)
+      List.map (fun (x,env) -> (Lazy.force x, env)) !res
+
+(** {2 the combinators } *)
 
 (** Combinator that always fails. *)
 let fail : 'a t = fun env _ err -> next env err
@@ -293,7 +331,7 @@ let fail : 'a t = fun env _ err -> next env err
 (** Fails and report an error *)
 let error : string -> 'a t = fun msg env _ err -> next_msg msg env err
 
-(** Combinator used as default fied before compilation *)
+(** Combinator used as default field before compilation *)
 let assert_false : 'a t = fun _ _ _ -> assert false
 
 (** Combinator accepting the empty input only. *)
@@ -312,13 +350,14 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
         { env with buf_before_blanks ; pos_before_blanks
                    ; current_buf ; current_pos; lr = Assoc.empty }
       in
+      (* don't call the continuation, return to the scheduler *)
       Cont(env,k, err, lazy v)
     with Lex.NoParse -> next env err
        | Lex.Give_up m -> next_msg m env err
 
 (** Sequence combinator. *)
 let seq : 'a t -> ('a -> 'b) t -> 'b t = fun g1 g2 env k err ->
-    g1 env (ink (fun env err x -> g2 env (larg k x) err)) err
+    g1 env (ink (fun env err x -> g2 env (lrg k x) err)) err
 
 (** Dependant sequence combinator. *)
 let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
@@ -358,7 +397,7 @@ let alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t = fun cs1 g1 cs2 g2 ->
 let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k err ->
     g env (app k fn) err
 
-(** test combinator before a grammar *)
+(** Combinator to test the input before parsing with a grammar *)
 let test_before : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a t -> 'a t =
   fun test g env k err ->
@@ -367,7 +406,7 @@ let test_before : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
     with false -> next env err
        | true -> g env k err
 
-(** test combinator after a grammar *)
+(** Combinator to test the input after parsing with a grammar *)
 let test_after : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a t -> 'a t =
   fun test g env k err ->
@@ -388,7 +427,7 @@ let left_pos : (Pos.t -> 'a) t -> 'a t = fun g  env k err ->
     let pos = Pos.get_pos env.current_buf env.current_pos in
     g env (arg k pos) err
 
-(** Read lpos from the lr table. *)
+(** Read left pos from the lr table. *)
 let read_pos : Pos.t Assoc.key -> (Pos.t -> 'a) t -> 'a t =
   fun key g env k err ->
     let pos = try Assoc.find key env.lr with Not_found -> assert false in
@@ -400,7 +439,6 @@ type 'a key = 'a Lazy.t Assoc.key
 (** [lr g  gf] is the combinator used to  eliminate left recursion. Intuitively,
     it parses using  the "grammar" [g gf*].  An equivalent  combinator CANNOT be
     defined as [seq Charset.full g cs (let rec r = seq cs r cs gf in r)].
-    NOTE: left recusion forces evaluation and this is good!
 *)
 let lr : 'a t -> 'a key -> 'a t -> 'a t = fun g key gf env k err ->
     let rec klr env err v =
@@ -413,6 +451,8 @@ let lr : 'a t -> 'a key -> 'a t -> 'a t = fun g key gf env k err ->
     in
     g env (ink klr) err
 
+(** Same as above but incorporating the reading of the left position, stored
+    in the lr table too. *)
 let lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t =
   fun g key pkey gf env k err ->
     let pos = Pos.get_pos env.current_buf env.current_pos in
@@ -432,19 +472,18 @@ let read_tbl : 'a key -> 'a t = fun key env k err ->
     let v = try Assoc.find key env.lr with Not_found -> assert false in
     call k env err v
 
-
 (** Combinator under a refrerence used to implement recursive grammars. *)
 let deref : 'a t ref -> 'a t = fun gref env k err -> !gref env k err
 
 (** Combinator changing the "blank function". *)
 let change_layout : ?config:Lex.layout_config -> Lex.blank -> 'a t -> 'a t =
     fun ?(config=Lex.default_layout_config) blank_fun g env k err ->
-    let (s, n) as buf =
-      if config.old_blanks_before then (env.current_buf, env.current_pos)
-      else (env.buf_before_blanks, env.pos_before_blanks)
+    let (s, n, _) as buf=
+      if config.old_blanks_before then (env.current_buf, env.current_pos, false)
+      else (env.buf_before_blanks, env.pos_before_blanks, true)
     in
-    let (s, n) =
-      if config.new_blanks_before then blank_fun s n
+    let (s, n, moved) =
+      if config.new_blanks_before then let (s,n) = blank_fun s n in (s,n,true)
       else buf
     in
     let old_blank_fun = env.blank_fun in
@@ -462,24 +501,34 @@ let change_layout : ?config:Lex.layout_config -> Lex.blank -> 'a t -> 'a t =
         { env with blank_fun = old_blank_fun
         ; current_buf = s ; current_pos = n }
       in
-      Cont(env,k,err,v))) err
+      (* return to scheduler if we moved in the input *)
+      if moved then Cont(env,k,err,v) else call k env err v)) err
 
-(** Combinator for caching a grammar, to avoid exponential behavior.
-    very bad performance with a non ambiguous right recursive grammar. *)
+(** {2 The cache/merge combinator } *)
+
+(** Combinator for caching a grammar, to avoid exponential behavior. *)
 let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
+  (* creation of a table for the cache *)
   let cache = Input.Tbl.create () in
   fun env0 k err ->
   let {current_buf = buf0; current_pos = col0} = env0 in
   try
+    (* Did we start parsing the same grammar at the same position *)
     let (ptr, too_late) = Input.Tbl.find cache buf0 col0 in
+    (* If yes we store the continuation in the returned pointer.
+       !too_late is true if we already called the continuation stored
+       in !ptr *)
     assert (not !too_late);
-    ptr := (k, env0.merge_depth) :: !ptr;
+    ptr := (k, env0.cache_order) :: !ptr;
+    (* Nothing else to do nw, try the other branch of parsing *)
     err ()
   with Not_found ->
-    (* size of ptr: O(N) for each position,
+    (* This is the first time we parse with this grammar at this position,
+       we add an entry in the cache *)
+    (* NOTE: size of ptr: O(N) for each position,
          it comes from a rule using that grammar (nb of rule constant),
          and the start position of this rule (thks to cache, only one each)  *)
-    let ptr = ref [(k,env0.merge_depth)] in
+    let ptr = ref [(k,env0.cache_order)] in
     let too_late = ref false in
     Input.Tbl.add cache buf0 col0 (ptr, too_late);
     (* we create a merge table for all continuation to call merge on all
@@ -487,64 +536,62 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
          of this grammar at this position before calling the continuation.
          [vnum] will be used to ensure this, see below. *)
     let merge_tbl = Input.Tbl.create () in
-    let vnum = 2 * Input.byte_pos buf0 col0 in
-    assert(vnum >= fst env0.merge_depth);
-    let merge_depth = if fst env0.merge_depth = vnum then (vnum, snd env0.merge_depth + 1)
-                      else (vnum, 0)
+    (* NOTE: merge_tbl is not used if merge = None *)
+    let co = Input.byte_pos buf0 col0 in
+    assert(co >= fst env0.cache_order);
+    let cache_order = if fst env0.cache_order = co
+                      then (co, snd env0.cache_order + 1)
+                      else (co, 0)
     in
-    (* we push vnum in the merge_depth environment, ensuring the correct order
-         in the scheduler, a continuation k1 with a merge_depth which is a
-         strict prefix of the merge_depth of k2, must be called after (k1 after
-         k2) *)
-    let env = { env0 with merge_depth } in
+    (* we update cache_order in the environment, ensuring the correct order in
+         the scheduler. we must evaluate first grammar that were started later
+         in the input buffer, or later in time if at the same position *)
+    let env = { env0 with cache_order } in
     let k0 env err v =
+      (* the cache order must have been restored to its initial value *)
+      assert (cache_order = env.cache_order);
       let {current_buf = buf; current_pos = col} = env in
       try
+        (* we first try to merge ... if merge <> None *)
         if merge = None then raise Not_found;
-        (* The current environment is waiting for the value identified by
-          vnum *)
-        assert (merge_depth = env.merge_depth);
         (* We get the vptr to share this value, if any *)
         let (vptr,too_late_v) = Input.Tbl.find merge_tbl buf col in
-        (* and it is not too late to add a semantics for this action *)
+        (* and it is not too late to add a semantics for this action, that is
+           the action was not evaluated *)
         assert (not !too_late_v);
-        (* size of vptr: O(N) at each position: number of ways to
-             end parsing of this grammar. Beware, vptr are distinct
-             for distinct start position of parsing. So total number
-             of vptr is O(N^2). It can be more if you are not using
-             enough cache.  *)
+        (* NOTE: size of vptr: O(N) at each position: number of ways to end
+             parsing of this grammar. Beware, vptr are distinct for distinct
+             start position of parsing. So total number of vptr is O(N^2). It
+             can be more if you are not using enough cache.  *)
         vptr := v :: !vptr;
         (* No need to continue parsing, we try other branches *)
         err ()
       with Not_found ->
+        (* we merge all semantics if merge <> None *)
         let v = match merge with
           | None -> v (* No merge, no sharing *)
           | Some merge ->
              (* create vptr and register in merge_tbl *)
-             let vptr = ref [] in
+             let vptr = ref [v] in
              let too_late_v = ref false in
              Input.Tbl.add merge_tbl buf col (vptr,too_late_v);
-             (* the semantics merge together all value in vptr,
-                  Once force, too_late ensure an assertion failure if
-                  we try to extend vptr *)
+             (* the semantics merge together all value in vptr, Once forced,
+                  too_late_v ensure an assertion failure if we try to extend
+                  vptr after evaluation *)
              lazy (
                  too_late_v := true;
-                 let r = ref [] in
+                 let msg = ref None in (* NOTE: we keep only one give_up message *)
                  (* do not forget to deal with give_up *)
-                 let force x = try Some (Lazy.force x)
-                               with Lex.NoParse -> None
-                                  | Lex.Give_up m -> r := m :: !r; None
-                 in
                  let merge x v =
                    try let y = Lazy.force v in
                        match x with None -> Some y
                                   | Some x -> Some (merge x y)
                    with Lex.NoParse -> x
-                      | Lex.Give_up m -> r := m :: !r; x
+                      | Lex.Give_up m -> msg := Some m; x
                  in
-                 match List.fold_left merge (force v) !vptr with
-                 | None -> (match !r with [] -> raise Lex.NoParse
-                                        | m::_ -> Lex.give_up ~msg:m ())
+                 match List.fold_left merge None !vptr with
+                 | None -> (match !msg with None   -> raise Lex.NoParse
+                                          | Some m -> Lex.give_up ~msg:m ())
                  | Some x -> x)
         in
         (* Now we call all continuation stored in !ptr *)
@@ -553,48 +600,58 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
         let rec fn l =
           match l with
           | [] -> err ()
-          | (k,merge_depth) :: l ->
-             (* we pop vnum from merge_depth to ensure this continuation
+          | (k,cache_order) :: l ->
+             (* we pop cache_order to ensure this continuation
                   is called after all extensions of vptr *)
-             let env = { env with merge_depth } in
-             Cont(env,k,(fun () -> fn l),v)
+             Cont({ env with cache_order },k,(fun () -> fn l),v)
         in
         fn l0
     in
     g env (ink k0) err (* safe to call g, env had vnum pushed so it is a minimum *)
+
+(** {2 functions to do the actual parsing *)
 
 (** function doing the parsing *)
 let gen_parse_buffer
     : type a. a t -> Lex.blank -> ?blank_after:bool
                   -> Lex.buf -> Lex.pos -> (a * Lex.buf * Lex.pos) list =
   fun g blank_fun ?(blank_after=false) buf0 col0 ->
+    (* environment initialisation *)
     let p0 = Input.char_pos buf0 col0 in
     let max_pos = ref (p0, buf0, col0, ref []) in
     let (buf, col) = blank_fun buf0 col0 in
     let env =
       { buf_before_blanks = buf0 ; pos_before_blanks = col0
         ; current_buf = buf ; current_pos = col; lr = Assoc.empty
-        ; max_pos ; blank_fun ; merge_depth = (-1,0)}
+        ; max_pos ; blank_fun ; cache_order = (-1,0)}
     in
+    (* calling the scheduler to start parsing *)
     let r = scheduler env g in
     match r with
     | [] ->
+       (* error managment *)
        let (_, buf, col, msgs) = !max_pos in
        let msgs = List.sort_uniq compare !msgs in
        raise (Pos.Parse_error(buf, col, msgs))
-    | _ -> List.map (fun (v,env) ->
-               if blank_after then (v, env.current_buf, env.current_pos)
-               else (v, env.buf_before_blanks, env.pos_before_blanks)) r
+    | _ ->
+       (* finalisation *)
+       List.map (fun (v,env) ->
+           if blank_after then (v, env.current_buf, env.current_pos)
+           else (v, env.buf_before_blanks, env.pos_before_blanks)) r
 
-(** the two main variation of the above *)
+(** parse for non ambiguous grammars, allows for continue parsing *)
 let partial_parse_buffer : type a. a t -> Lex.blank -> ?blank_after:bool
                                 -> Lex.buf -> Lex.pos -> a * Lex.buf * Lex.pos =
   fun g blank_fun ?(blank_after=false) buf0 col0 ->
     let l = gen_parse_buffer g blank_fun ~blank_after buf0 col0 in
-    match l with [r]  -> r
-               | r::_ -> Printf.eprintf "Parsing ambiguity, use merge\n%!"; r
-               | []   -> assert false
+    match l with
+    | [r]  -> r
+    | r::_ -> Printf.eprintf "Parsing ambiguity, use cache with merge\n%!"; r
+    | []   -> assert false
 
+(** Parse for ambiguous grammar with no merge, return all values. If end of
+    input is not parsed in some ways, some value may correspond to only the
+    beginning of the input. You should rather use cache/merge anyway.*)
 let parse_all_buffer
     : type a. a t -> Lex.blank -> Lex.buf -> Lex.pos -> a list =
   fun g blank_fun buf0 col0 ->

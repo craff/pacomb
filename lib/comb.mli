@@ -16,7 +16,10 @@ val partial_parse_buffer : 'a t -> Lex.blank -> ?blank_after:bool ->
         Lex.buf -> Lex.pos -> 'a * Lex.buf * Lex.pos
 
 (** Returns all possible parse trees.  Usefull for natural languages but also to
-    debug ambiguity in a supposed non ambiguous grammar. *)
+    debug ambiguity in a supposed non ambiguous grammar. If end of input is not
+    parsed in some ways, some value may correspond to only the beginning of the
+    input. Except when debugging or testing, you should rather use cache/merge
+    anyway. *)
 val parse_all_buffer : 'a t -> Lex.blank -> Lex.buf -> Lex.pos -> 'a list
 
 (** {2 combinator constructors, normally not needed by the casual user } *)
