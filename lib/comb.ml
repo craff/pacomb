@@ -450,7 +450,8 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
   fun env0 k err ->
   let {current_buf = buf0; current_pos = col0} = env0 in
   try
-    let ptr = Input.Tbl.find cache buf0 col0 in
+    let (ptr, too_late) = Input.Tbl.find cache buf0 col0 in
+    assert (not !too_late);
     ptr := (k, env0.merge_depth) :: !ptr;
     err ()
   with Not_found ->
@@ -458,7 +459,8 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
          it comes from a rule using that grammar (nb of rule constant),
          and the start position of this rule (thks to cache, only one each)  *)
     let ptr = ref [(k,env0.merge_depth)] in
-    Input.Tbl.add cache buf0 col0 ptr;
+    let too_late = ref false in
+    Input.Tbl.add cache buf0 col0 (ptr, too_late);
     (* we create a merge table for all continuation to call merge on all
          semantics before proceding. To do so, we need to complete all parsing
          of this grammar at this position before calling the continuation.
@@ -482,9 +484,9 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
           vnum *)
         assert (merge_depth = env.merge_depth);
         (* We get the vptr to share this value, if any *)
-        let (vptr,too_late) = Input.Tbl.find merge_tbl buf col in
+        let (vptr,too_late_v) = Input.Tbl.find merge_tbl buf col in
         (* and it is not too late to add a semantics for this action *)
-        assert (not !too_late);
+        assert (not !too_late_v);
         (* size of vptr: O(N) at each position: number of ways to
              end parsing of this grammar. Beware, vptr are distinct
              for distinct start position of parsing. So total number
@@ -499,13 +501,13 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
           | Some merge ->
              (* create vptr and register in merge_tbl *)
              let vptr = ref [] in
-             let too_late = ref false in
-             Input.Tbl.add merge_tbl buf col (vptr,too_late);
+             let too_late_v = ref false in
+             Input.Tbl.add merge_tbl buf col (vptr,too_late_v);
              (* the semantics merge together all value in vptr,
                   Once force, too_late ensure an assertion failure if
                   we try to extend vptr *)
              lazy (
-                 too_late := true;
+                 too_late_v := true;
                  let r = ref [] in
                  (* do not forget to deal with give_up *)
                  let force x = try Some (Lazy.force x)
@@ -526,9 +528,10 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
         in
         (* Now we call all continuation stored in !ptr *)
         let l0 = !ptr in
+        too_late := true;
         let rec fn l =
           match l with
-          | [] -> assert (!ptr == l0); err ()
+          | [] -> err ()
           | (k,merge_depth) :: l ->
              (* we pop vnum from merge_depth to ensure this continuation
                   is called after all extensions of vptr *)
