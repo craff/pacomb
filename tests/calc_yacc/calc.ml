@@ -5,8 +5,7 @@ let _ =
   then
       try
         let lexbuf = Lexing.from_channel stdin in
-        let x = Parser.main Lexer.token lexbuf in
-        Printf.printf "=> %f\n" x
+        Parser.main Lexer.token lexbuf
       with
         Parse_error -> Printf.fprintf stderr "Parse error\n%!"
   else
@@ -14,10 +13,9 @@ let _ =
       while true do
         try
           Printf.printf ">> %!";
-          let line = input_line stdin in
-          let lexbuf = Lexing.from_string line in
-          let x = Parser.main Lexer.token lexbuf in
-          Printf.printf "=> %f\n%!" x
+          let lexbuf = Lexing.from_channel stdin in
+          Parser.main Lexer.token lexbuf;
+          raise End_of_file
         with
           Parse_error -> Printf.fprintf stderr "Parse error\n%!"
 

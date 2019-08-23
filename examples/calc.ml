@@ -40,7 +40,7 @@ and expr = (a::prod)               => a
    To solve this, we parse line with no blank, use [Grammar.layout] to accept
    blank inside expression.
 
-   A simpler solution (used in other examples) is to read the input line
+   A simpler solution (used in calc_ext.ml) is to read the input line
    by line and parse each line using [Grammar.parse_string].
 *)
 

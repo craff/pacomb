@@ -2,16 +2,19 @@
 %token <float> FLOAT
 %token PLUS MINUS TIMES DIV POW
 %token LPAREN RPAREN
-%token EOL
+%token EOL EOF
 %left PLUS MINUS        /* lowest precedence */
 %left TIMES DIV         /* medium precedence */
 %right POW
 %nonassoc UMINUS        /* highest precedence */
 %start main             /* the entry point */
-%type <float> main
+%type <unit> main
 %%
 main:
-  expr EOL                { $1 }
+                          { () }
+| main top                { () }
+;
+top: expr EOL             { Printf.printf "%f\n>> " $1 }
 ;
 expr:
   FLOAT                   { $1 }

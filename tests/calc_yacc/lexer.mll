@@ -3,8 +3,9 @@
   exception Eof
 }
 rule token = parse
-    [' ''\t''\n''\r']     { token lexbuf }     (* skip blanks *)
-  | eof            { EOL }
+    [' ''\t''\r']     { token lexbuf }     (* skip blanks *)
+  | '\n'            { EOL }
+  | eof          { EOF }
   | ['0'-'9']+(['.']['0'-'9']+)?(['e''E']['-']?['0'-'9']+)? as lxm
                    { FLOAT(float_of_string lxm) }
   | '+'            { PLUS }
