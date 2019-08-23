@@ -452,7 +452,7 @@ let change_layout : ?config:Lex.layout_config -> Lex.blank -> 'a t -> 'a t =
         { env with blank_fun = old_blank_fun
         ; current_buf = s ; current_pos = n }
       in
-      call k env err v)) err (* NOTE: here, ok to call call *)
+      Cont(env,k,err,v))) err
 
 (** Combinator for caching a grammar, to avoid exponential behavior.
     very bad performance with a non ambiguous right recursive grammar. *)
