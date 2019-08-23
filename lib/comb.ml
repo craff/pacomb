@@ -189,7 +189,7 @@ let arg : type a b. b cont -> a -> (a -> b) cont = fun k x ->
   | P(k,tr,rp) -> P(k,arg tr x,rp)
 
 let lrg : type a b. b cont -> a Lazy.t -> (a -> b) cont = fun k x ->
-  (* NOTE: no need for lrg if [x] is a value, but adding the following line
+  (** NOTE: no need for lrg if [x] is a value, but adding the following line
      appears significantly slower:
 
   [if Lazy.is_val x then arg k (Lazy.force x) else] *)
@@ -285,32 +285,32 @@ let extract : heap -> res * heap = fun h ->
     parsing,  but  trying the error case too,  this way all  parsing progress in
     parallel in the input. *)
 let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
-    (* a reference holding the final result *)
+    (** a reference holding the final result *)
     let res = ref [] in
-    (* the final continuation evaluating and storing the result,
+    (** the final continuation evaluating and storing the result,
        continue parsing if [all] is [true] *)
     let k env err x =
       (try
-         res := (x,env)::!res; (* evaluatin of x is done later *)
+         res := (x,env)::!res; (** evaluatin of x is done later *)
          err
        with Lex.NoParse   -> fun () -> next env err
           | Lex.Give_up m -> fun () -> next_msg m env err) ();
     in
     try
-      (* calls to the initial grammar and initialise the table *)
+      (** calls to the initial grammar and initialise the table *)
       let r = g env (ink k) (fun _ -> raise Exit) in
-      let tbl = ref (N(r, E, E, 1)) in  (* to do at further position *)
+      let tbl = ref (N(r, E, E, 1)) in  (** to do at further position *)
       while true do
         let (Cont(env,k,err,x)),t = extract !tbl in
         tbl := t;
-        (* calling the error and the continuation, storing the result in tbl. *)
+        (** calling the error and the continuation, storing the result in tbl. *)
         (try
            let r = err () in
            tbl := insert r !tbl
          with Exit -> ());
-        (* calling the continuation *)
+        (** calling the continuation *)
         (try
-           let k = eval_lrgs k in (* now it is time to eval lazy arguments *)
+           let k = eval_lrgs k in (** now it is time to eval lazy arguments *)
            let r = call k env (fun _ -> raise Exit) x in
            tbl := insert r !tbl
          with
@@ -320,7 +320,7 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
       done;
       assert false
     with Not_found | Exit ->
-      (* parsing is finished: we evaluate the semantics *)
+      (** parsing is finished: we evaluate the semantics *)
       List.map (fun (x,env) -> (Lazy.force x, env)) !res
 
 (** {2 the combinators } *)
@@ -350,7 +350,7 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
         { env with buf_before_blanks ; pos_before_blanks
                    ; current_buf ; current_pos; lr = Assoc.empty }
       in
-      (* don't call the continuation, return to the scheduler *)
+      (** don't call the continuation, return to the scheduler *)
       Cont(env,k, err, lazy v)
     with Lex.NoParse -> next env err
        | Lex.Give_up m -> next_msg m env err
@@ -365,7 +365,7 @@ let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
     g1 env (ink(fun env err vs ->
         (try
            let (v1,v2) = Lazy.force vs in
-           (* This forces the evaluation of v2 ... no consequence
+           (** This forces the evaluation of v2 ... no consequence
               on right recursion *)
            let g = g2 v1 in
            fun () -> g env (arg k v2) err
@@ -501,87 +501,87 @@ let change_layout : ?config:Lex.layout_config -> Lex.blank -> 'a t -> 'a t =
         { env with blank_fun = old_blank_fun
         ; current_buf = s ; current_pos = n }
       in
-      (* return to scheduler if we moved in the input *)
+      (** return to scheduler if we moved in the input *)
       if moved then Cont(env,k,err,v) else call k env err v)) err
 
 (** {2 The cache/merge combinator } *)
 
 (** Combinator for caching a grammar, to avoid exponential behavior. *)
 let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
-  (* creation of a table for the cache *)
+  (** creation of a table for the cache *)
   let cache = Input.Tbl.create () in
   fun env0 k err ->
   let {current_buf = buf0; current_pos = col0} = env0 in
   try
-    (* Did we start parsing the same grammar at the same position *)
+    (** Did we start parsing the same grammar at the same position *)
     let (ptr, too_late) = Input.Tbl.find cache buf0 col0 in
-    (* If yes we store the continuation in the returned pointer.
+    (** If yes we store the continuation in the returned pointer.
        !too_late is true if we already called the continuation stored
        in !ptr *)
     assert (not !too_late);
     ptr := (k, env0.cache_order) :: !ptr;
-    (* Nothing else to do nw, try the other branch of parsing *)
+    (** Nothing else to do nw, try the other branch of parsing *)
     err ()
   with Not_found ->
-    (* This is the first time we parse with this grammar at this position,
+    (** This is the first time we parse with this grammar at this position,
        we add an entry in the cache *)
-    (* NOTE: size of ptr: O(N) for each position,
+    (** NOTE: size of ptr: O(N) for each position,
          it comes from a rule using that grammar (nb of rule constant),
          and the start position of this rule (thks to cache, only one each)  *)
     let ptr = ref [(k,env0.cache_order)] in
     let too_late = ref false in
     Input.Tbl.add cache buf0 col0 (ptr, too_late);
-    (* we create a merge table for all continuation to call merge on all
+    (** we create a merge table for all continuation to call merge on all
          semantics before proceding. To do so, we need to complete all parsing
          of this grammar at this position before calling the continuation.
          [vnum] will be used to ensure this, see below. *)
     let merge_tbl = Input.Tbl.create () in
-    (* NOTE: merge_tbl is not used if merge = None *)
+    (** NOTE: merge_tbl is not used if merge = None *)
     let co = Input.byte_pos buf0 col0 in
     assert(co >= fst env0.cache_order);
     let cache_order = if fst env0.cache_order = co
                       then (co, snd env0.cache_order + 1)
                       else (co, 0)
     in
-    (* we update cache_order in the environment, ensuring the correct order in
+    (** we update cache_order in the environment, ensuring the correct order in
          the scheduler. we must evaluate first grammar that were started later
          in the input buffer, or later in time if at the same position *)
     let env = { env0 with cache_order } in
     let k0 env err v =
-      (* the cache order must have been restored to its initial value *)
+      (** the cache order must have been restored to its initial value *)
       assert (cache_order = env.cache_order);
       let {current_buf = buf; current_pos = col} = env in
       try
-        (* we first try to merge ... if merge <> None *)
+        (** we first try to merge ... if merge <> None *)
         if merge = None then raise Not_found;
-        (* We get the vptr to share this value, if any *)
+        (** We get the vptr to share this value, if any *)
         let (vptr,too_late_v) = Input.Tbl.find merge_tbl buf col in
-        (* and it is not too late to add a semantics for this action, that is
+        (** and it is not too late to add a semantics for this action, that is
            the action was not evaluated *)
         assert (not !too_late_v);
-        (* NOTE: size of vptr: O(N) at each position: number of ways to end
+        (** NOTE: size of vptr: O(N) at each position: number of ways to end
              parsing of this grammar. Beware, vptr are distinct for distinct
              start position of parsing. So total number of vptr is O(N^2). It
              can be more if you are not using enough cache.  *)
         vptr := v :: !vptr;
-        (* No need to continue parsing, we try other branches *)
+        (** No need to continue parsing, we try other branches *)
         err ()
       with Not_found ->
-        (* we merge all semantics if merge <> None *)
+        (** we merge all semantics if merge <> None *)
         let v = match merge with
-          | None -> v (* No merge, no sharing *)
+          | None -> v (** No merge, no sharing *)
           | Some merge ->
-             (* create vptr and register in merge_tbl *)
+             (** create vptr and register in merge_tbl *)
              let vptr = ref [v] in
              let too_late_v = ref false in
              Input.Tbl.add merge_tbl buf col (vptr,too_late_v);
-             (* the semantics merge together all value in vptr, Once forced,
+             (** the semantics merge together all value in vptr, Once forced,
                   too_late_v ensure an assertion failure if we try to extend
                   vptr after evaluation *)
              lazy (
                  too_late_v := true;
-                 let msg = ref None in (* NOTE: we keep only one give_up message *)
-                 (* do not forget to deal with give_up *)
+                 let msg = ref None in (** NOTE: we keep only one give_up message *)
+                 (** do not forget to deal with give_up *)
                  let merge x v =
                    try let y = Lazy.force v in
                        match x with None -> Some y
@@ -594,20 +594,20 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
                                           | Some m -> Lex.give_up ~msg:m ())
                  | Some x -> x)
         in
-        (* Now we call all continuation stored in !ptr *)
+        (** Now we call all continuation stored in !ptr *)
         let l0 = !ptr in
         too_late := true;
         let rec fn l =
           match l with
           | [] -> err ()
           | (k,cache_order) :: l ->
-             (* we pop cache_order to ensure this continuation
+             (** we pop cache_order to ensure this continuation
                   is called after all extensions of vptr *)
              Cont({ env with cache_order },k,(fun () -> fn l),v)
         in
         fn l0
     in
-    g env (ink k0) err (* safe to call g, env had vnum pushed so it is a minimum *)
+    g env (ink k0) err (** safe to call g, env had vnum pushed so it is a minimum *)
 
 (** {2 functions to do the actual parsing *)
 
@@ -616,7 +616,7 @@ let gen_parse_buffer
     : type a. a t -> Lex.blank -> ?blank_after:bool
                   -> Lex.buf -> Lex.pos -> (a * Lex.buf * Lex.pos) list =
   fun g blank_fun ?(blank_after=false) buf0 col0 ->
-    (* environment initialisation *)
+    (** environment initialisation *)
     let p0 = Input.char_pos buf0 col0 in
     let max_pos = ref (p0, buf0, col0, ref []) in
     let (buf, col) = blank_fun buf0 col0 in
@@ -625,16 +625,16 @@ let gen_parse_buffer
         ; current_buf = buf ; current_pos = col; lr = Assoc.empty
         ; max_pos ; blank_fun ; cache_order = (-1,0)}
     in
-    (* calling the scheduler to start parsing *)
+    (** calling the scheduler to start parsing *)
     let r = scheduler env g in
     match r with
     | [] ->
-       (* error managment *)
+       (** error managment *)
        let (_, buf, col, msgs) = !max_pos in
        let msgs = List.sort_uniq compare !msgs in
        raise (Pos.Parse_error(buf, col, msgs))
     | _ ->
-       (* finalisation *)
+       (** finalisation *)
        List.map (fun (v,env) ->
            if blank_after then (v, env.current_buf, env.current_pos)
            else (v, env.buf_before_blanks, env.pos_before_blanks)) r
