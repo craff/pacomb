@@ -162,9 +162,9 @@ let from_string : string -> regexp = fun s ->
   build_re [] (Acc []) ts
 
 (* Exception raised when a regexp cannot be parsed. *)
-exception Regexp_error of Input.buffer * int
+exception Regexp_error of Input.buffer * Input.pos
 
-let regexp_error : type a. Input.buffer -> int -> a = fun buf pos ->
+let regexp_error : type a. Input.buffer -> Input.pos -> a = fun buf pos ->
   raise (Regexp_error(buf, pos))
 
 let string_of_char_list : char list -> string = fun cs ->
@@ -173,7 +173,8 @@ let string_of_char_list : char list -> string = fun cs ->
   Buffer.contents b
 
 (* Input characters according to the given regexp. *)
-let read : regexp -> Input.buffer -> int -> string list * Input.buffer * int =
+let read : regexp -> Input.buffer -> Input.pos
+           -> string list * Input.buffer * Input.pos =
   fun re buf pos ->
     let grps = ref [] in
     let rec sread_regexp re buf pos cs =

@@ -75,6 +75,7 @@ let _ = tests g [("42+13 a b ",(0,(42,Add,13),5))
                ; ("a 42 * 4 b ",(2,(42,Mul,4),10))
                ; ("a b 42 / 2 ",(0,(42,Div,2),10))]
 
+
 (* test recursion *)
 let%parser rec g = (y::g) (x::INT) => x+y
                  ; (x::INT) => x
@@ -85,6 +86,7 @@ let _ = tests g [("42", 42); ("1 2 3",6)]
 let%parser rec g = (x::INT) '+' (y::g) => x+y
                  ; (x::g) '-' (y::INT) => x-y
                  ; (x::INT) => x
+(* This is ambiguous !!! *)
 let _ = tests g [("42", 42); ("1 + 2 - 3",0); ("1 - 2 - 3",-4)]
 let%parser rec g1 = (x::g3) 'a' 'b' => x+1
                   ; 'c' (x::g1) 'd' => x-1

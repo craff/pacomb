@@ -2,7 +2,7 @@ open Pacomb
 open Grammar
 open Arg
 
-let catalan_max = ref 10
+let catalan_max = ref 9
 let seq_max = ref 1000
 
 let spec = [ ("--catalan", Set_int catalan_max,
@@ -140,7 +140,9 @@ let test12 =
          ;seq ac (seq char_a char_c (fun _ _ -> ())) (fun _ _ -> ())]);
   ab
 
-let test13 = fixpoint (fun r -> alt [empty 0; seq r (seq char_a r (+)) (+)])
+let test13  = fixpoint (fun r -> alt [empty 0; seq r (seq char_a r (+)) (+)])
+let test13a = fixpoint (fun r -> alt [empty 0; seq char_a (seq r r (+)) (+)])
+let test13b = fixpoint (fun r -> alt [empty 0; seq (seq char_a r (+)) r (+)])
 
 type tree = Nil | Bin of tree * tree | Alt of tree * tree
 let rec nb_tree = function
@@ -171,6 +173,11 @@ let test14 = term (Lex.int ())
 let test15 = term (Lex.float ())
 let test16 = term (Lex.char_lit ())
 let test17 = term (Lex.string_lit ())
+
+let test18a = alt [empty (); term (Lex.char 'a' ())]
+let test18 = seq (term (Lex.char 'a' ()))
+               (seq test18a test18a (fun _ _ -> ()))
+               (fun _ _ -> ())
 
 let _ = assert (parse_string test0 "a" = 1)
 let _ = assert_fail (fun () -> parse_string test0 "")
@@ -318,10 +325,11 @@ let _ = assert (parse_string test17 "\"\\ttoto\\t\\
                                      coucou\"" = "\ttoto\tcoucou")
 let _ = assert_fail (fun () -> parse_string test17 "\"")
 
+let _ = assert (parse_string test18 "a" = ())
 
 let parse_all_string g s =
   let s = Input.from_string s in
-  parse_all_buffer g Lex.noblank s 0
+  parse_all_buffer g Lex.noblank s Input.init_pos
 
 let nas p =
   let rec fn p =
@@ -439,10 +447,12 @@ let _ =
   Printf.printf "checking the number of parsetrees on an ambiguous example\n%!";
   for i = 0 to !catalan_max do
     let s = String.make i 'a' in
-    let j = List.length (parse_all_string test13 s)
-    and k = catalan i in
+    let j = List.length (parse_all_string test13 s) in
+    let j' = List.length (parse_all_string test13a s) in
+    let j'' = List.length (parse_all_string test13b s) in
+    let k = catalan i in
     Printf.printf "catalan: %d => %d=%d\n%!" i j k ;
-    assert (j = k)
+    assert (j = k); assert(j' = k); assert(j'' = k);
   done
 
 let _ =
@@ -450,8 +460,9 @@ let _ =
                  using merge and cache\n%!";
   for i = 0 to !catalan_max + 2 do
     let s = String.make i 'a' in
+    let k = catalan i in
     let t = parse_string test13c s in
-    let j = nb_tree t and s = size t and k = catalan i in
+    let j = nb_tree t and s = size t in
     Printf.printf "catalan: %d => %d=%d (size %d %f)\n%!"
       i j k s (float s/.float j);
     assert (j = k)

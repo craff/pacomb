@@ -15,12 +15,13 @@
 
 (** {2 Types and exception} *)
 type buf = Input.buffer
+type pos = Input.pos
 
 (** A blank function is just a function progressing in a buffer *)
-type blank = buf -> int -> buf * int
+type blank = buf -> pos -> buf * pos
 
 (** Type of terminal function, similar to blank, but with a returned value *)
-type 'a lexeme = buf -> int -> 'a * buf * int
+type 'a lexeme = buf -> pos -> 'a * buf * pos
 
 (** The previous type encapsulated in a record *)
 type 'a terminal = { n : string    (** name *)
@@ -166,8 +167,8 @@ val blank_regexp : string -> blank
 val accept_empty : 'a t -> bool
 
 (** Test constructor for the test constructor in [Grammar] *)
-val test_from_lex : bool t -> buf -> int -> buf -> int -> bool
-val blank_test_from_lex : bool t -> buf -> int -> buf -> int -> bool
+val test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool
+val blank_test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool
 
 type layout_config =
   { old_blanks_before : bool

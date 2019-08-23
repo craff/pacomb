@@ -5,41 +5,51 @@
 (** The abstract type for an input buffer. *)
 type buffer
 
+(** The abstract type position in the buffer *)
+type pos
+
+(** position at the beginning of a buffer *)
+val init_pos : pos
+
 (** {2 Reading from a buffer} *)
 
 (** [read buf pos] returns the character at position [pos] in the buffer
     [buf], together with the new buffer and position. *)
-val read : buffer -> int -> char * buffer * int
+val read : buffer -> pos -> char * buffer * pos
 
 (** [sub b i len] returns [len] characters from position [pos]. If the
     end of buffer is reached, the string is filed with eof '\255' *)
-val sub : buffer -> int -> int -> string
+val sub : buffer -> pos -> int -> string
 
 (** [get buf pos] returns the character at position [pos] in the  buffer
     [buf]. *)
-val get : buffer -> int -> char
+val get : buffer -> pos -> char
 
 (** {2 Creating a buffer} *)
 
-(** [from_file fn] returns a buffer constructed using the file [fn]. *)
-val from_file : string -> buffer
+(** [from_file fn] returns a buffer constructed using the file [fn].
+    if [utf8] is [true] ([false] is the default), positions are reported
+    according to [utf8]. [read] is still reading bytes.  *)
+val from_file : ?utf8:bool -> string -> buffer
 
 (** [from_channel ~filename ch] returns a buffer constructed  using  the
     channel [ch]. The optional [filename] is only used as a reference to
     the channel in error messages. *)
-val from_channel : ?filename:string -> in_channel -> buffer
+val from_channel : ?utf8:bool -> ?filename:string -> in_channel -> buffer
 
 (** [from_string ~filename str] returns a buffer constructed  using  the
     string [str]. The optional [filename] is only used as a reference to
     the channel in error messages. *)
-val from_string : ?filename:string -> string -> buffer
+val from_string : ?utf8:bool -> ?filename:string -> string -> buffer
 
-(** [from_fun finalise name get data] returns a buffer constructed  from
-    the object [data] using the [get] function. The get function is used
-    to obtain one line of input from [data]. The [finalise] function  is
-    applied to [data] when the end of file is reached. The [name] string
-    is used to reference the origin of the data in error messages. *)
-val from_fun : ('a -> unit) -> string -> ('a -> string) -> 'a -> buffer
+(** [from_fun finalise utf8 name get data] returns a buffer  constructed
+    from the object [data] using the [get] function. The get function is
+    used  to  obtain  one  line  of input  from [data].  The  [finalise]
+    function is applied to [data]  when the end of file is reached.  The
+    [name] string is used to reference  the origin of the data in  error
+    messages. Position are reported according to [utf8]. *)
+val from_fun : ('a -> unit) -> bool -> string -> ('a -> string * bool)
+               -> 'a -> buffer
 
 (** Exception that can be raised by a preprocessor in case of error. The
     first string references the name of the buffer (e.g. the name of the
@@ -58,15 +68,15 @@ module type Preprocessor =
     (** Initial state of the preprocessor. *)
     val initial_state : state
 
-    (** [update st name lnum line] takes as input the state [st] of  the
-        preprocessor, the file name [name], the number of the next input
-        line [lnum] and the next input line [line] itself. It returns  a
-        tuple of the new state, the new file name, and [None] if the line
-        must be ignored or [Some(lnum,line)] which is the new line number
-        and ne new line. The new file name and line number can be used to
-        implement  line  number  directives.   The  function  may   aise
-        [Preprocessor_error] in case of error. *)
-    val update : state -> string -> int -> string
+    (** [update st name lnum data nl] takes as input the state [st] of the
+        preprocessor, the file name [name], the number of the next input data
+        [lnum] and the next input [data] itself. [nl] is true iff there is a
+        newline at the end of [data]. It returns a tuple of the new state, the
+        new file name, the new line number and [None] if the data must be
+        ignored or [Some(data)] which is the new data. The new file name and
+        line number can be used to implement line number directives.  The
+        function may aise [Preprocessor_error] in case of error. *)
+    val update : state -> string -> int -> string -> bool
                    -> state * string * int * string option
 
     (** [check_final st name] check that [st] indeed is a correct  state
@@ -80,17 +90,17 @@ module type Preprocessor =
 module WithPP : functor (PP : Preprocessor) ->
   sig
     (** Same as [Input.from_fun] but uses the preprocessor. *)
-    val from_fun : ('a -> unit) -> string -> ('a -> string)
+    val from_fun : ('a -> unit) -> bool -> string -> ('a -> string * bool)
                      -> 'a -> buffer
 
     (** Same as [Input.from_channel] but uses the preprocessor. *)
-    val from_channel : ?filename:string -> in_channel -> buffer
+    val from_channel : ?utf8:bool -> ?filename:string -> in_channel -> buffer
 
     (** Same as [Input.from_file] but uses the preprocessor. *)
-    val from_file : string -> buffer
+    val from_file : ?utf8:bool -> string -> buffer
 
     (** Same as [Input.from_string] but uses the preprocessor. *)
-    val from_string : ?filename:string -> string -> buffer
+    val from_string : ?utf8:bool -> ?filename:string -> string -> buffer
   end
 
 (** {2 Buffer manipulation functions} *)
@@ -101,9 +111,13 @@ val is_empty : buffer -> int -> bool
 (** [line_num buf] returns the current line number of [buf]. *)
 val line_num : buffer -> int
 
+val col_num : buffer -> pos -> int
+
 (** [line_beginning buf] returns the offset of the current line  in  the
     buffer [buf]. *)
 val line_offset : buffer -> int
+
+val char_pos : buffer -> pos -> int
 
 (** [line buf] returns the current line in the buffer [buf]. *)
 val line : buffer -> string
@@ -112,13 +126,9 @@ val line : buffer -> string
     buffer [buf]. *)
 val line_length : buffer -> int
 
-(** [utf8_col_num buf pos] returns the utf8 column number  corresponding
-    to the position [pos] in [buf]. *)
-val utf8_col_num : buffer -> int -> int
-
 (** [normalize buf pos] ensures that [pos] is less than  the  length  of
     the current line in [str]. *)
-val normalize : buffer -> int -> buffer * int
+val normalize : buffer -> pos -> buffer * pos
 
 (** [filename buf] returns the file name associated to the [buf]. *)
 val filename : buffer -> string
@@ -143,9 +153,9 @@ module Tbl : sig
 
   val create : unit -> 'a t
 
-  val add : 'a t -> buffer -> int -> 'a -> unit
+  val add : 'a t -> buffer -> pos -> 'a -> unit
 
-  val find : 'a t -> buffer -> int -> 'a
+  val find : 'a t -> buffer -> pos -> 'a
 
   val clear : 'a t -> unit
 

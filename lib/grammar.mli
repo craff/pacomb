@@ -73,10 +73,10 @@ val cache : ?merge:('a -> 'a -> 'a) -> 'a grammar -> 'a grammar
 
 (** allows to perform a test, the test function receive the position before
     and after the blanks *)
-val test_before : (Input.buffer -> int -> Input.buffer -> int -> bool)
+val test_before : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a grammar -> 'a grammar
 
-val test_after : (Input.buffer -> int -> Input.buffer -> int -> bool)
+val test_after : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a grammar -> 'a grammar
 
 val no_blank_before : 'a grammar -> 'a grammar
@@ -148,22 +148,24 @@ val give_name : string -> 'a grammar -> 'a grammar
 
 (** Parse a whole input buffer. the eof combinator is added at
     the end of the given combinator *)
-val parse_buffer : 'a grammar -> Lex.blank -> Input.buffer -> int -> 'a
-
-(** Parse a whole string *)
-val parse_string
-    : ?filename:string -> 'a grammar -> Lex.blank -> string -> 'a
-
-(** Parse a whole input channel *)
-val parse_channel
-    : ?filename:string -> 'a grammar -> Lex.blank -> in_channel -> 'a
+val parse_buffer : 'a grammar -> Lex.blank -> Lex.buf -> Lex.pos -> 'a
 
 (** Partial parsing.  Beware, the returned position is not  the maximum position
     that can be reached by the grammar. The charset is the character accepted at
     the end of input. Mainly useful with 'eof' when [blank_after] is [true]. *)
 val partial_parse_buffer : 'a grammar -> Lex.blank -> ?blank_after:bool ->
-        Input.buffer -> int -> 'a * Input.buffer * int
+                           Lex.buf -> Lex.pos -> 'a * Lex.buf * Lex.pos
 
 (** Returns all possible parse trees.  Usefull for natural languages but also to
     debug ambiguity in a supposed non ambiguous grammar. *)
-val parse_all_buffer : 'a grammar -> Lex.blank -> Input.buffer -> int -> 'a list
+val parse_all_buffer : 'a grammar -> Lex.blank -> Lex.buf -> Lex.pos -> 'a list
+
+(** Parse a whole string, reporting position according to utf8 if
+    optional argument [utf8] is given and true *)
+val parse_string
+    : ?utf8:bool -> ?filename:string -> 'a grammar -> Lex.blank -> string -> 'a
+
+(** Parse a whole input channel *)
+val parse_channel
+    : ?utf8:bool -> ?filename:string
+      -> 'a grammar -> Lex.blank -> in_channel -> 'a

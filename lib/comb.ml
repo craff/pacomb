@@ -34,19 +34,19 @@
 type env =
   { blank_fun         : Lex.blank
   (** Function used to ignore blanks. *)
-  ; max_pos           : (int * Input.buffer * int * string list ref) ref
+  ; max_pos           : (int * Lex.buf * Lex.pos * string list ref) ref
   (** Maximum position reached by the parser (for error reporting). *)
-  ; current_buf       : Input.buffer
+  ; current_buf       : Lex.buf
   (** Current input buffer (or input stream). *)
-  ; current_col       : int
+  ; current_pos       : Lex.pos
   (** Current column number in buffer [current_buf]. *)
-  ; buf_before_blanks : Input.buffer
+  ; buf_before_blanks : Lex.buf
   (** Input buffer before reading the blanks. *)
-  ; col_before_blanks : int
+  ; pos_before_blanks : Lex.pos
   (** Column number in [buf_before_blanks] before reading the blanks. *)
   ; lr                : Assoc.t
   (** Association table for the lr combinator *)
-  ; merge_depth       : int
+  ; merge_depth       : int list
   }
 
 (** Type of a function called in case of error. *)
@@ -121,10 +121,10 @@ let call : type a.a cont -> env -> err -> a Lazy.t -> res =
     | C(k,Idt)    -> k env err x
     | C(k,tr)     -> k env err (lazy (eval (Lazy.force x) tr))
     | P(k,Idt,rp) ->
-       rp := Pos.get_pos env.buf_before_blanks env.col_before_blanks;
+       rp := Pos.get_pos env.buf_before_blanks env.pos_before_blanks;
        k env err x
     | P(k,tr,rp)  ->
-       rp := Pos.get_pos env.buf_before_blanks env.col_before_blanks;
+       rp := Pos.get_pos env.buf_before_blanks env.pos_before_blanks;
        k env err (lazy (eval (Lazy.force x) tr))
 
 (** access to transformer constructor inside the continuation constructor *)
@@ -160,53 +160,80 @@ let eval_lrgs : type a. a cont -> a cont = fun k ->
     calls the [err] function. *)
 let next : env -> err -> res  = fun env err ->
   let (pos_max, _, _, _) = !(env.max_pos) in
-  let pos = Input.line_offset env.current_buf + env.current_col in
+  let pos = Input.char_pos env.current_buf env.current_pos in
   if pos > pos_max  then
-    env.max_pos := (pos, env.current_buf, env.current_col, ref []);
+    env.max_pos := (pos, env.current_buf, env.current_pos, ref []);
   err ()
 
 let next_msg : string -> env -> err -> res  = fun msg env err ->
   let (pos_max, _, _, msgs) = !(env.max_pos) in
-  let pos = Input.line_offset env.current_buf + env.current_col in
+  let pos = Input.char_pos env.current_buf env.current_pos in
   if pos > pos_max then
-    env.max_pos := (pos, env.current_buf, env.current_col, ref [msg])
+    env.max_pos := (pos, env.current_buf, env.current_pos, ref [msg])
   else if pos = pos_max then msgs := msg :: !msgs;
   err ()
 
-(** the scheduler stores what remains to do in a list sorted by position
-    in the buffer, here are the comparison function used for this sorting *)
+(** the scheduler stores what remains to do in a list sorted by position in the
+    buffer, and vptr key list (see cache below) here are the comparison function
+    used for this sorting *)
 let before r1 r2 =
+  let rec fn l1 l2 =
+    if l1 == l2 then 0 else
+      match (l1, l2) with
+      | ([], []) -> assert false
+      | ([], _) -> 1
+      | (_, []) -> -1
+      | (x::l1', y::l2') ->
+         if x = y then assert false else
+         if x > y then
+           match fn l1' l2 with
+           | 0 -> -1
+           | c -> c
+         else
+           match fn l1 l2' with
+           | 0 -> 1
+           | c -> c
+  in
   match (r1,r2) with
   | (Cont(env1,_,_,_), Cont(env2,_,_,_)) ->
-     let p1 = Input.line_offset env1.current_buf + env1.current_col in
-     let p2 = Input.line_offset env2.current_buf + env2.current_col in
-     (p1 < p2) || (p1 = p2 && env1.merge_depth >= env2.merge_depth)
+     let p1 = Input.char_pos env1.current_buf env1.current_pos in
+     let p2 = Input.char_pos env2.current_buf env2.current_pos in
+     (p1 < p2) || (p1 = p2 && fn env1.merge_depth env2.merge_depth <= 0)
 
-let same r1 r2 =
-  match (r1,r2) with
-  | (Cont(env1,_,_,_), Cont(env2,_,_,_)) ->
-    let p1 = Input.line_offset env1.current_buf + env1.current_col in
-    let p2 = Input.line_offset env2.current_buf + env2.current_col in
-    p1 = p2 && env1.merge_depth = env2.merge_depth
+(* Here we implement priority queus using a heap, to have a logarithmic
+   complexity to choose the next action in the scheduler *)
+type heap =
+  E | N of res * heap * heap * int
+
+let size = function E -> 0 | N(_,_,_,n) -> n
 
 (** insert in a list at the correct position *)
-let insert : res -> res list -> res list = fun r l ->
-  let rec fn acc = function
-      | [] -> List.rev (r::acc)
-      | r0::_ as l when before r r0 -> List.rev_append acc (r::l)
-      | r0::l -> fn (r0::acc) l
-  in
-  fn [] l
+let rec insert : res -> heap -> heap = fun r h ->
+  match h with
+  | E -> N(r, E, E, 1)
+  | N(r',h1,h2,s) ->
+     let (r,r') = if before r' r then (r',r) else (r,r') in
+     if size h1 > size h2 then
+       N(r, h1, insert r' h2, s+1)
+     else
+       N(r, insert r' h1, h2, s+1)
 
-(** extract all results at the first position *)
-let extract : res list -> res list * res list = function
-  | [] -> raise Exit
-  | r :: l ->
-     let rec fn acc = function
-       | [] -> acc, []
-       | r0::l when same r r0 -> fn (r0::acc) l
-       | l -> acc, l
-     in fn [r] l
+let extract : heap -> res * heap = fun h ->
+  match h with
+  | E -> raise Not_found
+  | N(r,h1,h2,s) ->
+     let rec fusion h1 h2 =
+       match h1, h2 with
+       | E, E -> E
+       | _, E -> h1
+       | E, _ -> h2
+       | N(r1,h11,h12,_), N(r2,h21,h22,_) ->
+          if before r1 r2 then
+            N(r1,fusion h11 h12,h2,s-1)
+          else
+            N(r2,h1,fusion h21 h22,s-1)
+     in
+     (r, fusion h1 h2)
 
 (** [scheduler  env g] drives  the parsing, it calls  the combinator [g]  in the
     given environment and when lexeme returns to the scheduler, it continues the
@@ -219,7 +246,7 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
        continue parsing if [all] is [true] *)
     let k env err x =
       (try
-         res := (Lazy.force x,env)::!res;
+         res := (x,env)::!res;
          err
        with Lex.NoParse   -> fun () -> next env err
           | Lex.Give_up m -> fun () -> next_msg m env err) ();
@@ -227,25 +254,23 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
     try
       (* calls to the initial grammar and initialise the table *)
       let r = g env (ink k) (fun _ -> raise Exit) in
-      let tbl = ref [r] in  (* to do at further position *)
+      let tbl = ref (N(r, E, E, 1)) in  (* to do at further position *)
       while true do
-        let t0,t1 = extract !tbl in
-        tbl := t1;
-        List.iter (function
-            | Cont(env,k,err,x) ->
-               (* calling the error and the continuation, storing the result in
+        let (Cont(env,k,err,x)),t = extract !tbl in
+        tbl := t;
+        (* calling the error and the continuation, storing the result in
               tbl1. *)
-               (try
-                  let r = err () in
-                  tbl := insert r !tbl
-                with Exit -> ());
-               (try
-                  let r = call k env (fun _ -> raise Exit) x in
-                  tbl := insert r !tbl
-                with Exit -> ())) t0
+        (try
+           let r = err () in
+           tbl := insert r !tbl
+         with Exit -> ());
+        (try
+           let r = call k env (fun _ -> raise Exit) x in
+           tbl := insert r !tbl
+         with Exit -> ());
       done;
       assert false
-    with Exit -> !res
+    with Not_found | Exit -> List.map (fun (x,env) -> (Lazy.force x, env)) !res
 
 (** Combinator that always fails. *)
 let fail : 'a t = fun env _ err -> next env err
@@ -262,24 +287,24 @@ let empty : 'a -> 'a t = fun x env kf err -> call kf env err (lazy x)
 (** Combinator accepting the given lexeme (or terminal). *)
 let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
     try
-      let (v, buf_before_blanks, col_before_blanks) =
-        lex env.current_buf env.current_col
+      let (v, buf_before_blanks, pos_before_blanks) =
+        lex env.current_buf env.current_pos
       in
-       let (current_buf, current_col) =
-         env.blank_fun buf_before_blanks col_before_blanks
-       in
-       let k = eval_lrgs k in
-       let env =
-         { env with buf_before_blanks ; col_before_blanks
-                    ; current_buf ; current_col; lr = Assoc.empty }
-       in
-       Cont(env,k, err, lazy v)
+      let (current_buf, current_pos) =
+        env.blank_fun buf_before_blanks pos_before_blanks
+      in
+      let env =
+        { env with buf_before_blanks ; pos_before_blanks
+                   ; current_buf ; current_pos; lr = Assoc.empty }
+      in
+      let k = eval_lrgs k in
+      Cont(env,k, err, lazy v)
     with Lex.NoParse -> next env err
        | Lex.Give_up m -> next_msg m env err
 
 (** Sequence combinator. *)
 let seq : 'a t -> ('a -> 'b) t -> 'b t = fun g1 g2 env k err ->
-  g1 env (ink (fun env err x -> g2 env (larg k x) err)) err
+    g1 env (ink (fun env err x -> g2 env (larg k x) err)) err
 
 (** Dependant sequence combinator. *)
 let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
@@ -296,14 +321,14 @@ let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
 
 (** [test cs env] returns [true] if and only if the next character to parse in
     the environment [env] is in the character set [cs]. *)
-let test cs e = Charset.mem cs (Input.get e.current_buf e.current_col)
+let test cs e = Charset.mem cs (Input.get e.current_buf e.current_pos)
 
 (** option combinator,  contrary to [alt] apply to [empty],  it uses the charset
     of the  continuation for prediction. Therefore  it is preferable not  to use
     empty in [alt] and use [option] instead.*)
 let option: 'a -> Charset.t -> 'a t -> 'a t = fun x cs1 g1 ->
   fun env k err ->
-    if test cs1 env then g1 env k (fun () -> call k env err (lazy x))
+    if test cs1 env then call k env (fun () -> g1 env k err) (lazy x)
     else call k env err (lazy x)
 
 (** Alternatives combinator. *)
@@ -313,26 +338,28 @@ let alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t = fun cs1 g1 cs2 g2 ->
     | (false, false) -> next env err
     | (true , false) -> g1 env k err
     | (false, true ) -> g2 env k err
-    | (true , true ) -> g1 env k (fun () -> g2 env k err)
+    | (true , true ) -> g2 env k (fun () -> g1 env k err)
 
 (** Application of a semantic function to alter a combinator. *)
 let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k err ->
     g env (app k fn) err
 
-let test_before : (Input.buffer -> int -> Input.buffer -> int -> bool)
+(** test combinator before a grammar *)
+let test_before : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a t -> 'a t =
   fun test g env k err ->
-    match test env.buf_before_blanks env.col_before_blanks
-            env.current_buf env.current_col
+    match test env.buf_before_blanks env.pos_before_blanks
+            env.current_buf env.current_pos
     with false -> next env err
        | true -> g env k err
 
-let test_after : (Input.buffer -> int -> Input.buffer -> int -> bool)
+(** test combinator after a grammar *)
+let test_after : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a t -> 'a t =
   fun test g env k err ->
     let k = ink (fun env err x ->
-      match test env.buf_before_blanks env.col_before_blanks
-             env.current_buf env.current_col
+      match test env.buf_before_blanks env.pos_before_blanks
+             env.current_buf env.current_pos
       with false -> err ()
          | true -> call k env err x)
     in
@@ -348,7 +375,7 @@ let right_pos : type a.(Pos.t -> a) t -> a t = fun g env k err ->
 
 (** Read the position before parsing. *)
 let left_pos : (Pos.t -> 'a) t -> 'a t = fun g  env k err ->
-    let pos = Pos.get_pos env.current_buf env.current_col in
+    let pos = Pos.get_pos env.current_buf env.current_pos in
     g env (arg k pos) err
 
 (** Read lpos from the lr table. *)
@@ -365,7 +392,7 @@ type 'a key = 'a Lazy.t Assoc.key
     defined as [seq Charset.full g cs (let rec r = seq cs r cs gf in r)].
     NOTE: left recusion forces evaluation and this is good!
 *)
-let lrr : 'a t -> 'a key -> 'a t -> 'a t = fun g key gf env k err ->
+let lr : 'a t -> 'a key -> 'a t -> 'a t = fun g key gf env k err ->
     let rec klr env err v =
       let err () =
         let lr = Assoc.add key v env.lr in
@@ -376,9 +403,9 @@ let lrr : 'a t -> 'a key -> 'a t -> 'a t = fun g key gf env k err ->
     in
     g env (ink klr) err
 
-let lrr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t =
+let lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t =
   fun g key pkey gf env k err ->
-    let pos = Pos.get_pos env.current_buf env.current_col in
+    let pos = Pos.get_pos env.current_buf env.current_pos in
     let rec klr env err v =
       let err () =
         let lr = Assoc.add key v env.lr in
@@ -403,19 +430,19 @@ let deref : 'a t ref -> 'a t = fun gref env k err -> !gref env k err
 let change_layout : ?config:Lex.layout_config -> Lex.blank -> 'a t -> 'a t =
     fun ?(config=Lex.default_layout_config) blank_fun g env k err ->
     let (s, n) as buf =
-      if config.old_blanks_before then (env.current_buf, env.current_col)
-      else (env.buf_before_blanks, env.col_before_blanks)
+      if config.old_blanks_before then (env.current_buf, env.current_pos)
+      else (env.buf_before_blanks, env.pos_before_blanks)
     in
     let (s, n) =
       if config.new_blanks_before then blank_fun s n
       else buf
     in
     let old_blank_fun = env.blank_fun in
-    let env = { env with blank_fun ; current_buf = s ; current_col = n } in
+    let env = { env with blank_fun ; current_buf = s ; current_pos = n } in
     g env (ink (fun env err v ->
       let (s, n) as buf =
-        if config.new_blanks_after then (env.current_buf, env.current_col)
-        else (env.buf_before_blanks, env.col_before_blanks)
+        if config.new_blanks_after then (env.current_buf, env.current_pos)
+        else (env.buf_before_blanks, env.pos_before_blanks)
       in
       let (s, n) =
         if config.old_blanks_after then old_blank_fun s n
@@ -423,100 +450,118 @@ let change_layout : ?config:Lex.layout_config -> Lex.blank -> 'a t -> 'a t =
       in
       let env =
         { env with blank_fun = old_blank_fun
-        ; current_buf = s ; current_col = n }
+        ; current_buf = s ; current_pos = n }
       in
       call k env err v)) err (* NOTE: here, ok to call call *)
 
 (** Combinator for caching a grammar, to avoid exponential behavior.
     very bad performance with a non ambiguous right recursive grammar. *)
+let get_vnum =
+  let count = ref 0 in
+  (fun () -> incr count; !count)
 
 let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
   let cache = Input.Tbl.create () in
   fun env0 k err ->
-    let {current_buf = buf0; current_col = col0} = env0 in
-    try
-      let (ptr,d) = Input.Tbl.find cache buf0 col0 in
-      ptr := (k,env0.merge_depth - d) :: !ptr;
-      err ()
-    with Not_found ->
-      let ptr = ref [(k,0)] in
-      Input.Tbl.add cache buf0 col0 (ptr,env0.merge_depth);
-      let merge_tbl = Input.Tbl.create () in
-      let k0 env err v =
-        assert (env.merge_depth = env0.merge_depth + 1);
-        let {current_buf = buf; current_col = col} = env in
-        try
-          if merge = None then raise Not_found;
-          let (vptr,too_late) = Input.Tbl.find merge_tbl buf col in
-          assert (not !too_late);
-          vptr := v :: !vptr;
-          err ()
-        with Not_found ->
-          let v = match merge with
-            | None -> v
-            | Some merge ->
-               let vptr = ref [] in
-               let too_late = ref false in
-               Input.Tbl.add merge_tbl buf col (vptr,too_late);
-               let merge x y =
-                 match (x,y) with
-                 | None, None -> None
-                 | Some x, None -> Some x
-                 | None, Some x -> Some x
-                 | Some x, Some y -> Some (merge x y)
-               in
-               lazy (
+  let {current_buf = buf0; current_pos = col0} = env0 in
+  try
+    let ptr = Input.Tbl.find cache buf0 col0 in
+    ptr := (k, env0) :: !ptr;
+    err ()
+  with Not_found ->
+    (* size of ptr: O(N) for each position,
+         it comes from a rule using that grammar (nb of rule constant),
+         and the start position of this rule (thks to cache, only one each)  *)
+    let ptr = ref [(k,env0)] in
+    Input.Tbl.add cache buf0 col0 ptr;
+    (* we create a merge table for all continuation to call merge on all
+         semantics before proceding. To do so, we need to complete all parsing
+         of this grammar at this position before calling the continuation.
+         [vnum] will be used to ensure this, see below. *)
+    let merge_tbl = Input.Tbl.create () in
+    let vnum = get_vnum () in
+    (* we push vnum in the merge_depth environment, ensuring the correct order
+         in the scheduler, a continuation k1 with a merge_depth which is a
+         strict prefix of the merge_depth of k2, must be called after (k1 after
+         k2) *)
+    let env = { env0 with merge_depth = vnum :: env0.merge_depth } in
+    let k0 env err v =
+      let {current_buf = buf; current_pos = col} = env in
+      try
+        if merge = None then raise Not_found;
+        (* The current environment is waiting for the value identified by
+          vnum *)
+        assert (vnum = List.hd env.merge_depth);
+        (* We get the vptr to share this value, if any *)
+        let (vptr,too_late) = Input.Tbl.find merge_tbl buf col in
+        (* and it is not too late to add a semantics for this action *)
+        assert (not !too_late);
+        (* size of vptr: O(N) at each position: number of ways to
+             end parsing of this grammar. Beware, vptr are distinct
+             for distinct start position of parsing. So total number
+             of vptr is O(N^2). It can be more if you are not using
+             enough cache.  *)
+        vptr := v :: !vptr;
+        (* No need to continue parsing, we try other branches *)
+        err ()
+      with Not_found ->
+        let v = match merge with
+          | None -> v (* No merge, no sharing *)
+          | Some merge ->
+             (* create vptr and register in merge_tbl *)
+             let vptr = ref [] in
+             let too_late = ref false in
+             Input.Tbl.add merge_tbl buf col (vptr,too_late);
+             (* the semantics merge together all value in vptr,
+                  Once force, too_late ensure an assertion failure if
+                  we try to extend vptr *)
+             lazy (
                  too_late := true;
                  let r = ref [] in
+                 (* do not forget to deal with give_up *)
                  let force x = try Some (Lazy.force x)
-                                 with Lex.NoParse -> None
-                                    | Lex.Give_up m -> r := m :: !r; None
+                               with Lex.NoParse -> None
+                                  | Lex.Give_up m -> r := m :: !r; None
                  in
-                 let gn x =
-                   List.fold_left (fun x v -> merge x (force v)) x !vptr
+                 let merge x v =
+                   try let y = Lazy.force v in
+                       match x with None -> Some y
+                                  | Some x -> Some (merge x y)
+                   with Lex.NoParse -> x
+                      | Lex.Give_up m -> r := m :: !r; x
                  in
-                 match gn (force v) with
+                 match List.fold_left merge (force v) !vptr with
                  | None -> (match !r with [] -> raise Lex.NoParse
                                         | m::_ -> Lex.give_up ~msg:m ())
                  | Some x -> x)
-          in
-          let l0 = !ptr in
-          ptr := [];
-          let rec fn l =
-            match l with
-            | [] -> assert (!ptr = []); err ()
-            | (k,d) :: l ->
-               let env = {env with merge_depth = env.merge_depth + d - 1 } in
-               Cont(env, k, (fun () -> fn l), v)
-          in
-          Printf.printf "l0: %d\n%!" (List.length l0);
-          fn l0
-      in
-      let env = { env0 with merge_depth = env0.merge_depth + 1 } in
-      g env (ink k0) err
-
-let lr : type a. ?merge:(a -> a -> a) -> a t -> (a -> a) t -> a t  = fun ?merge g gf ->
-  let _merge = match merge with
-    | None -> Printf.printf "kuku 0\n%!"; None
-    | Some m -> Printf.printf "kuku 1\n%!"; Some(fun f1 f2 a -> m (f1 a) (f2 a))
-  in
-  let glr : (a -> a) t ref = ref assert_false in
-  glr := option (fun x -> x)
-           Charset.full ((*cache ?merge*) (seq gf (app (deref glr) (fun f g a -> f (g a)))));
-  seq g !glr
+        in
+        (* Now we call all continuation stored in !ptr *)
+        let l0 = !ptr in
+        let rec fn l =
+          match l with
+          | [] -> assert (!ptr == l0); err ()
+          | (k,env0) :: l ->
+             (* we pop vnum from merge_depth to ensure this continuation
+                  is called after all extensions of vptr *)
+             let env = { env with merge_depth = env0.merge_depth } in
+             Cont(env,k,(fun () -> fn l),v)
+        in
+        fn l0
+    in
+    g env (ink k0) err
 
 (** function doing the parsing *)
 let gen_parse_buffer
     : type a. a t -> Lex.blank -> ?blank_after:bool
-                  -> Lex.buf -> int -> (a * Lex.buf * int) list =
+                  -> Lex.buf -> Lex.pos -> (a * Lex.buf * Lex.pos) list =
   fun g blank_fun ?(blank_after=false) buf0 col0 ->
-    let p0 = Input.line_offset buf0 + col0 in
+    let p0 = Input.char_pos buf0 col0 in
     let max_pos = ref (p0, buf0, col0, ref []) in
     let (buf, col) = blank_fun buf0 col0 in
     let env =
-      { buf_before_blanks = buf0 ; col_before_blanks = col0
-        ; current_buf = buf ; current_col = col; lr = Assoc.empty
-        ; max_pos ; blank_fun ; merge_depth = 0}
+      { buf_before_blanks = buf0 ; pos_before_blanks = col0
+        ; current_buf = buf ; current_pos = col; lr = Assoc.empty
+        ; max_pos ; blank_fun ; merge_depth = []}
     in
     let r = scheduler env g in
     match r with
@@ -525,19 +570,20 @@ let gen_parse_buffer
        let msgs = List.sort_uniq compare !msgs in
        raise (Pos.Parse_error(buf, col, msgs))
     | _ -> List.map (fun (v,env) ->
-               if blank_after then (v, env.current_buf, env.current_col)
-               else (v, env.buf_before_blanks, env.col_before_blanks)) r
+               if blank_after then (v, env.current_buf, env.current_pos)
+               else (v, env.buf_before_blanks, env.pos_before_blanks)) r
 
 (** the two main variation of the above *)
 let partial_parse_buffer : type a. a t -> Lex.blank -> ?blank_after:bool
-                                -> Lex.buf -> int -> a * Lex.buf * int =
+                                -> Lex.buf -> Lex.pos -> a * Lex.buf * Lex.pos =
   fun g blank_fun ?(blank_after=false) buf0 col0 ->
     let l = gen_parse_buffer g blank_fun ~blank_after buf0 col0 in
     match l with [r]  -> r
                | r::_ -> Printf.eprintf "Parsing ambiguity, use merge\n%!"; r
                | []   -> assert false
 
-let parse_all_buffer : type a. a t -> Lex.blank -> Lex.buf -> int -> a list =
+let parse_all_buffer
+    : type a. a t -> Lex.blank -> Lex.buf -> Lex.pos -> a list =
   fun g blank_fun buf0 col0 ->
     let l = gen_parse_buffer g blank_fun buf0 col0 in
     List.map (fun (r,_,_) -> r) l

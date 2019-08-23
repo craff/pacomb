@@ -13,11 +13,11 @@ type 'a t
 (** Partial parsing.  Beware, the returned position is not  the maximum position
     that can be reached by the grammar.  *)
 val partial_parse_buffer : 'a t -> Lex.blank -> ?blank_after:bool ->
-        Input.buffer -> int -> 'a * Input.buffer * int
+        Lex.buf -> Lex.pos -> 'a * Lex.buf * Lex.pos
 
 (** Returns all possible parse trees.  Usefull for natural languages but also to
     debug ambiguity in a supposed non ambiguous grammar. *)
-val parse_all_buffer : 'a t -> Lex.blank -> Input.buffer -> int -> 'a list
+val parse_all_buffer : 'a t -> Lex.blank -> Lex.buf -> Lex.pos -> 'a list
 
 (** {2 combinator constructors, normally not needed by the casual user } *)
 
@@ -86,11 +86,10 @@ type 'a key = 'a Lazy.t Assoc.key
     which is  illegal as it  is left recursive  and loops. The  optional charset
     indicates the characteres accepted by [c2] at the beginning of input. [v] is
     like variable bound in [c2], see [read_tbl] below *)
-val lr : ?merge:('a -> 'a -> 'a) -> 'a t -> ('a -> 'a) t -> 'a t
-val lrr : 'a t -> 'a key -> 'a t -> 'a t
+val lr : 'a t -> 'a key -> 'a t -> 'a t
 
 (** Same as above, but also store the position *)
-val lrr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t
+val lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t
 
 (** combinator to  access the value stored by  lr. It must be uses  as prefix of
     [c2] in [lr c1 c2].  For instance, the coding  of [let rec r = seq c1 (seq r
@@ -101,11 +100,11 @@ val lrr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t
 val read_tbl : 'a key -> 'a t
 
 (** Allow to test the blank characteres before a grammar and more *)
-val test_before : (Input.buffer -> int -> Input.buffer -> int -> bool)
+val test_before : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a t -> 'a t
 
 (** Allow to test the blank characteres after a grammar and more *)
-val test_after : (Input.buffer -> int -> Input.buffer -> int -> bool)
+val test_after : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a t -> 'a t
 
 (** Access to a reference to a combinator, used by Grammar.compile for recursive

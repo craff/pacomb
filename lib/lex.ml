@@ -4,9 +4,10 @@ let default : 'a -> 'a option -> 'a = fun d o ->
   | Some e -> e
 
 type buf = Input.buffer
+type pos = Input.pos
 
 (** A blank function is just a function progressing in a buffer *)
-type blank = buf -> int -> buf * int
+type blank = buf -> pos -> buf * pos
 
 (** Exception to be raised when the input is rejected *)
 exception NoParse
@@ -19,7 +20,7 @@ let give_up : ?msg:string -> unit -> 'a = fun ?msg () ->
                | Some s -> raise (Give_up s)
 
 (** Terminal: same as blank with a value returned *)
-type 'a lexeme = buf -> int -> 'a * buf * int
+type 'a lexeme = buf -> pos -> 'a * buf * pos
 type 'a terminal = { n : string    (** name *)
                    ; f : 'a lexeme (** the terminal itself *)
                    ; c : Charset.t (** the set of characters accepted
@@ -29,17 +30,18 @@ type 'a t = 'a terminal
 let s0 = Input.from_string ""
 let s1 = Input.from_string "\255 "(* for eof to passe the test *)
 let accept_empty : type a. a t -> bool = fun t ->
-  try ignore(t.f s0 0);
-      try let (_,_,col) = t.f s1 0 in col <> 1
+  try ignore(t.f s0 Input.init_pos);
+      try let (_,b,pos) = t.f s1 Input.init_pos in
+          Input.col_num b pos <> 1
       with NoParse -> true
   with NoParse -> false
 
-let test_from_lex : bool t -> buf -> int -> buf -> int -> bool =
+let test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool =
   fun t _ _ buf pos ->
       try let (r,_,_) = t.f buf pos in r
       with NoParse | Give_up _ -> false
 
-let blank_test_from_lex : bool t -> buf -> int -> buf -> int -> bool =
+let blank_test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool =
   fun t buf pos _ _ ->
       try let (r,_,_) = t.f buf pos in r
       with NoParse | Give_up _ -> false
@@ -194,8 +196,8 @@ let save : ?name:string -> 'a t -> (string -> 'a -> 'b) -> 'b t =
   ; c = t1.c
   ; f = fun s n ->
         let (l,s1,n1) = t1.f s n in
-        let len = Input.line_offset s1 + n1
-                  - Input.line_offset s - n
+        let len = Input.char_pos s1 n1
+                  - Input.char_pos s n
         in
         let str = Input.sub s n len in
         (f str l, s1, n1) }
