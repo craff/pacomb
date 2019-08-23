@@ -46,7 +46,7 @@ type env =
   (** Column number in [buf_before_blanks] before reading the blanks. *)
   ; lr                : Assoc.t
   (** Association table for the lr combinator *)
-  ; merge_depth       : int list
+  ; merge_depth       : int * int
   }
 
 (** Type of a function called in case of error. *)
@@ -177,28 +177,11 @@ let next_msg : string -> env -> err -> res  = fun msg env err ->
     buffer, and vptr key list (see cache below) here are the comparison function
     used for this sorting *)
 let before r1 r2 =
-  let rec fn l1 l2 =
-    if l1 == l2 then 0 else
-      match (l1, l2) with
-      | ([], []) -> assert false
-      | ([], _) -> 1
-      | (_, []) -> -1
-      | (x::l1', y::l2') ->
-         if x = y then assert false else
-         if x > y then
-           match fn l1' l2 with
-           | 0 -> -1
-           | c -> c
-         else
-           match fn l1 l2' with
-           | 0 -> 1
-           | c -> c
-  in
   match (r1,r2) with
   | (Cont(env1,_,_,_), Cont(env2,_,_,_)) ->
      let p1 = Input.byte_pos env1.current_buf env1.current_pos in
      let p2 = Input.byte_pos env2.current_buf env2.current_pos in
-     (p1 < p2) || (p1 = p2 && fn env1.merge_depth env2.merge_depth < 0)
+     (p1 < p2) || (p1 = p2 && env1.merge_depth > env2.merge_depth)
 
 (* Here we implement priority queus using a heap, to have a logarithmic
    complexity to choose the next action in the scheduler *)
@@ -257,6 +240,7 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
       let tbl = ref (N(r, E, E, 1)) in  (* to do at further position *)
       while true do
         let (Cont(env,k,err,x)),t = extract !tbl in
+        let k = eval_lrgs k in
         tbl := t;
         (* calling the error and the continuation, storing the result in
               tbl1. *)
@@ -297,7 +281,6 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k err ->
         { env with buf_before_blanks ; pos_before_blanks
                    ; current_buf ; current_pos; lr = Assoc.empty }
       in
-      let k = eval_lrgs k in
       Cont(env,k, err, lazy v)
     with Lex.NoParse -> next env err
        | Lex.Give_up m -> next_msg m env err
@@ -328,7 +311,7 @@ let test cs e = Charset.mem cs (Input.get e.current_buf e.current_pos)
     empty in [alt] and use [option] instead.*)
 let option: 'a -> Charset.t -> 'a t -> 'a t = fun x cs1 g1 ->
   fun env k err ->
-    if test cs1 env then Cont(env,k,(fun () -> g1 env k err),lazy x)
+    if test cs1 env then call k env (fun () -> g1 env k err) (lazy x)
     else call k env err (lazy x)
 
 (** Alternatives combinator. *)
@@ -456,42 +439,42 @@ let change_layout : ?config:Lex.layout_config -> Lex.blank -> 'a t -> 'a t =
 
 (** Combinator for caching a grammar, to avoid exponential behavior.
     very bad performance with a non ambiguous right recursive grammar. *)
-let get_vnum =
-  let count = ref 0 in
-  (fun () -> incr count; !count)
-
 let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
   let cache = Input.Tbl.create () in
   fun env0 k err ->
   let {current_buf = buf0; current_pos = col0} = env0 in
   try
     let ptr = Input.Tbl.find cache buf0 col0 in
-    ptr := (k, env0) :: !ptr;
+    ptr := (k, env0.merge_depth) :: !ptr;
     err ()
   with Not_found ->
     (* size of ptr: O(N) for each position,
          it comes from a rule using that grammar (nb of rule constant),
          and the start position of this rule (thks to cache, only one each)  *)
-    let ptr = ref [(k,env0)] in
+    let ptr = ref [(k,env0.merge_depth)] in
     Input.Tbl.add cache buf0 col0 ptr;
     (* we create a merge table for all continuation to call merge on all
          semantics before proceding. To do so, we need to complete all parsing
          of this grammar at this position before calling the continuation.
          [vnum] will be used to ensure this, see below. *)
     let merge_tbl = Input.Tbl.create () in
-    let vnum = get_vnum () in
+    let vnum = 2 * Input.byte_pos buf0 col0 in
+    assert(vnum >= fst env0.merge_depth);
+    let merge_depth = if fst env0.merge_depth = vnum then (vnum, snd env0.merge_depth + 1)
+                      else (vnum, 0)
+    in
     (* we push vnum in the merge_depth environment, ensuring the correct order
          in the scheduler, a continuation k1 with a merge_depth which is a
          strict prefix of the merge_depth of k2, must be called after (k1 after
          k2) *)
-    let env = { env0 with merge_depth = vnum :: env0.merge_depth } in
+    let env = { env0 with merge_depth } in
     let k0 env err v =
       let {current_buf = buf; current_pos = col} = env in
       try
         if merge = None then raise Not_found;
         (* The current environment is waiting for the value identified by
           vnum *)
-        assert (vnum = List.hd env.merge_depth);
+        assert (merge_depth = env.merge_depth);
         (* We get the vptr to share this value, if any *)
         let (vptr,too_late) = Input.Tbl.find merge_tbl buf col in
         (* and it is not too late to add a semantics for this action *)
@@ -540,15 +523,15 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
         let rec fn l =
           match l with
           | [] -> assert (!ptr == l0); err ()
-          | (k,env0) :: l ->
+          | (k,merge_depth) :: l ->
              (* we pop vnum from merge_depth to ensure this continuation
                   is called after all extensions of vptr *)
-             let env = { env with merge_depth = env0.merge_depth } in
+             let env = { env with merge_depth } in
              Cont(env,k,(fun () -> fn l),v)
         in
         fn l0
     in
-    g env (ink k0) err
+    g env (ink k0) err (* safe to call g, env had vnum pushed so it is a minimum *)
 
 (** function doing the parsing *)
 let gen_parse_buffer
@@ -561,7 +544,7 @@ let gen_parse_buffer
     let env =
       { buf_before_blanks = buf0 ; pos_before_blanks = col0
         ; current_buf = buf ; current_pos = col; lr = Assoc.empty
-        ; max_pos ; blank_fun ; merge_depth = []}
+        ; max_pos ; blank_fun ; merge_depth = (-1,0)}
     in
     let r = scheduler env g in
     match r with

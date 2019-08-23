@@ -508,6 +508,13 @@ let factor_empty g =
   loop ();
   hn g
 
+type cs = NoLr | HasCache | NoCache
+
+let (|||) cs1 cs2 = match cs1, cs2 with
+  | NoLr, x    | x, NoLr    -> x
+  | NoCache, _ | _, NoCache -> NoCache
+  | HasCache   , HasCache   -> HasCache
+
 (** Elimination of left recursion which is not supported by combinators *)
 let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
 
@@ -520,78 +527,74 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
     | _    -> !pk
   in
 
-  let rec fn : type b. ety list -> b grne -> b grne * b grammar =
+  let rec fn : type b. ety list -> b grne -> b grne * b grammar * cs =
     fun above g ->
       match g with
-      | EFail | ETerm _ | EErr _ -> (g, fail ())
+      | EFail | ETerm _ | EErr _ -> (g, fail (), NoLr)
       | ESeq(g1,g2) ->
-         let (g1, s1) = fn above g1 in
-         (ne_seq g1 g2, seq s1 g2)
+         let (g1, s1, cs) = fn above g1 in
+         (ne_seq g1 g2, seq s1 g2, cs)
       | EDSeq(g1,cs,g2) ->
-         let (g1, s1) = fn above g1 in
-         (ne_dseq g1 cs g2, dseq s1 ~cs g2)
+         let (g1, s1, sc) = fn above g1 in
+         (ne_dseq g1 cs g2, dseq s1 ~cs g2, sc)
       | EAlt(gs) ->
-         let has_cache = ref false in
-         let fn g = try fn above g
-                    with Exit -> has_cache := true; (g, fail())
+         let (gs,ss,cs) = List.fold_left (fun (gs,ss,cs) g ->
+                              let (g,s,cs') = fn above g in
+                              ((g::gs), (s::ss), (cs|||cs')))
+                            ([],[],NoLr) gs
          in
-         let (gs,ss) = List.split (List.map fn gs) in
-         if !has_cache && List.exists (fun g -> g.d <> Fail) ss then
-           failwith "inhomogeneous cache with left recursion";
-         if !has_cache then raise Exit;
-         (ne_alt gs, alt ss)
+         (ne_alt gs, alt ss, cs)
       | ELr(g1,k,pk,s)   ->
-         let (g1,s1) = fn above g1 in
-         (ne_lr g1 k ?pk s, lr s1 k ?pk s)
+         let (g1,s1,cs) = fn above g1 in
+         (ne_lr g1 k ?pk s, lr s1 k ?pk s,cs)
       | ERkey _ ->
          assert false; (* handled in gn *)
       | EAppl(g1,f) ->
-         let (g1,s) = fn above g1 in
-         (ne_appl g1 f, appl s f)
+         let (g1,s,cs) = fn above g1 in
+         (ne_appl g1 f, appl s f,cs)
       | ERef(g) -> gn above g
       | ECache(_,g1) as g ->
-         let (_, s1) = fn above g1 in
-         if s1.d <> Fail then raise Exit;
+         let (_, _, cs) = fn above g1 in
          (* grammar with cache can be recursive *)
-         (g, fail ())
+         (g, fail (), if cs = NoLr then NoLr else HasCache)
       | ERPos(g1) ->
-         let (g1, s1) = fn above g1 in
-         (ne_rpos g1, rpos s1)
+         let (g1, s1, cs) = fn above g1 in
+         (ne_rpos g1, rpos s1, cs)
       | ELPos(Some _ as pk, g1) ->
-         let (g1, s1) = fn above g1 in
-         (ne_lpos ?pk g1, lpos ?pk s1)
+         let (g1, s1, cs) = fn above g1 in
+         (ne_lpos ?pk g1, lpos ?pk s1, cs)
       | ELPos(None, g1) ->
          let pk = get_pk () in
-         let (g1, s1) = fn above g1 in
-         (ne_lpos ?pk:None g1, lpos ?pk s1)
+         let (g1, s1, cs) = fn above g1 in
+         (ne_lpos ?pk:None g1, lpos ?pk s1, cs)
       | ETest(f, b, g1) ->
-         let (g1, s1) = fn above g1 in
-         (ne_test f b g1, if b then s1 else test f b s1)
+         let (g1, s1, cs) = fn above g1 in
+         (ne_test f b g1, (if b then s1 else test f b s1), cs)
       | ELayout(_,g1,_) ->
-         let (_, s1) = fn above g1 in
+         let (_, s1, cs) = fn above g1 in
          if s1.d <> Fail then
            invalid_arg "fixpoint: left recursion under layout change";
-         (g, fail())
+         (g, fail(), cs)
       | ETmp -> assert false
 
-   and gn : type b. ety list -> b grammar -> b grne * b grammar =
+   and gn : type b. ety list -> b grammar -> b grne * b grammar * cs =
      fun above g ->
        match g.k.eq u with
        | Assoc.Eq  ->
-          (EFail, mkg (Rkey g.k))
+          (EFail, mkg (Rkey g.k), NoCache)
        | Assoc.NEq ->
           if List.mem (E g.k.k) above then
             begin
-              (ERef g, fail ())
+              (ERef g, fail (), NoLr)
             end
           else
             begin
               elim_left_rec (E u :: above) g;
-              let (g',s) = fn (E g.k.k :: above) g.ne in
+              let (g',s,cs) = fn (E g.k.k :: above) g.ne in
               factor_empty s;
               assert(s.e = []);
               s.phase <- LeftRecEliminated;
-              if s.ne = EFail then (ERef g, fail()) else (g', s)
+              if s.ne = EFail then (ERef g, fail(),cs) else (g', s,cs)
             end
 
    in
@@ -599,16 +602,16 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
    if g.phase = EmptyRemoved then
      begin
        g.phase <- LeftRecEliminated;
-       try
-         let (g1,s) = fn above g.ne in
-         factor_empty s;
-         s.e <- [];
-         s.phase <- LeftRecEliminated;
-         let pk = !pk in
-         if s.ne <> EFail then g.ne <- ne_lr g1 g.k ?pk s;
-       with Exit ->
-         ()
-
+       let (g1,s,cs) = fn above g.ne in
+       if cs = NoCache then
+         begin
+           assert (s.ne <> EFail);
+           factor_empty s;
+           s.e <- [];
+           s.phase <- LeftRecEliminated;
+           let pk = !pk in
+           g.ne <- ne_lr g1 g.k ?pk s;
+         end
      end
 
 (** compute the characters set accepted at the beginning of the input *)

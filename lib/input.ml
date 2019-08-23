@@ -195,7 +195,8 @@ include GenericInput(
             let nlnum, ncoff = if nl then (lnum+1, 0) else (lnum, coff + len) in
             fun () ->
               { is_eof = false ; lnum ; loff ; boff; coff; llen ; data ; name
-              ; next = lazy (fn name nlnum (loff + len) (boff + llen) ncoff cont)
+              ; next = lazy (fn name nlnum (loff + len)
+                                           (boff + llen) ncoff cont)
               ; utf8 ; uid = new_uid () ; ctnr = [||] }
           with End_of_file ->
             finalise file;
