@@ -196,9 +196,9 @@ let before r1 r2 =
   in
   match (r1,r2) with
   | (Cont(env1,_,_,_), Cont(env2,_,_,_)) ->
-     let p1 = Input.char_pos env1.current_buf env1.current_pos in
-     let p2 = Input.char_pos env2.current_buf env2.current_pos in
-     (p1 < p2) || (p1 = p2 && fn env1.merge_depth env2.merge_depth <= 0)
+     let p1 = Input.byte_pos env1.current_buf env1.current_pos in
+     let p2 = Input.byte_pos env2.current_buf env2.current_pos in
+     (p1 < p2) || (p1 = p2 && fn env1.merge_depth env2.merge_depth < 0)
 
 (* Here we implement priority queus using a heap, to have a logarithmic
    complexity to choose the next action in the scheduler *)
@@ -328,7 +328,7 @@ let test cs e = Charset.mem cs (Input.get e.current_buf e.current_pos)
     empty in [alt] and use [option] instead.*)
 let option: 'a -> Charset.t -> 'a t -> 'a t = fun x cs1 g1 ->
   fun env k err ->
-    if test cs1 env then call k env (fun () -> g1 env k err) (lazy x)
+    if test cs1 env then g1 env k (fun () -> call k env err (lazy x))
     else call k env err (lazy x)
 
 (** Alternatives combinator. *)
