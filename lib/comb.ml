@@ -160,14 +160,14 @@ let eval_lrgs : type a. a cont -> a cont = fun k ->
     calls the [err] function. *)
 let next : env -> err -> res  = fun env err ->
   let (pos_max, _, _, _) = !(env.max_pos) in
-  let pos = Input.char_pos env.current_buf env.current_pos in
+  let pos = Input.byte_pos env.current_buf env.current_pos in
   if pos > pos_max  then
     env.max_pos := (pos, env.current_buf, env.current_pos, ref []);
   err ()
 
 let next_msg : string -> env -> err -> res  = fun msg env err ->
   let (pos_max, _, _, msgs) = !(env.max_pos) in
-  let pos = Input.char_pos env.current_buf env.current_pos in
+  let pos = Input.byte_pos env.current_buf env.current_pos in
   if pos > pos_max then
     env.max_pos := (pos, env.current_buf, env.current_pos, ref [msg])
   else if pos = pos_max then msgs := msg :: !msgs;
