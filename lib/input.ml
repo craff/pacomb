@@ -1,7 +1,8 @@
 type line =
   { is_eof       : bool   (* Has the end of the buffer been reached? *)
   ; lnum         : int    (* Line number (startig at 1)              *)
-  ; loff         : int    (* Offset to the line                      *)
+  ; loff         : int    (* Offset to the line ( utf8 of bytes )    *)
+  ; boff         : int    (* Offset to the line ( bytes )            *)
   ; coff         : int    (* Offset to the column                    *)
   ; llen         : int    (* Length of the buffer                    *)
   ; data         : string (* Contents of the buffer                  *)
@@ -23,9 +24,9 @@ let new_uid =
   fun () -> let uid = !c in incr c; uid
 
 (* Emtpy buffer. *)
-let empty_buffer name lnum loff =
+let empty_buffer name lnum loff boff =
   let rec line = lazy
-    { is_eof = true ; name ; lnum ; loff ; llen = 0; coff = 0
+    { is_eof = true ; name ; lnum ; loff ; boff; llen = 0; coff = 0
     ; data = "" ; next = line ; uid = new_uid (); utf8 = false
     ; ctnr = [||] }
   in line
@@ -70,7 +71,7 @@ let line_num (lazy b) = b.lnum
 (* Get the offset of the current line in the full buffer. *)
 let line_offset (lazy b) = b.loff
 
-let char_pos (lazy b) p = b.loff + p
+let byte_pos (lazy b) p = b.boff + p
 
 (* Get the current line as a string. *)
 let line (lazy b) = b.data
@@ -96,6 +97,10 @@ let utf8_len data = utf8_col_num data (String.length data)
 let col_num (lazy b) p =
   if b.utf8 then b.coff + utf8_col_num b.data p
     else b.coff + p
+
+let char_pos (lazy b) p =
+  if b.utf8 then b.loff + utf8_col_num b.data p
+    else b.loff + p
 
 (* Ensure that the given position is in the current line. *)
 let rec normalize (lazy b as str) pos =
@@ -134,13 +139,17 @@ let input_line ch =
   if n = 0 then (* n = 0: we are at EOF *)
     raise End_of_file
   else if n > 0 then (* n > 0: newline found in buffer *)
-    let res = Bytes.create n in
-    let _ = unsafe_input ch res 0 n in
-    (Bytes.unsafe_to_string res, true)
+    begin
+      let res = Bytes.create n in
+      let _ = unsafe_input ch res 0 n in
+      (Bytes.unsafe_to_string res, true)
+    end
   else (* n < 0: newline not found *)
-    let res = Bytes.create (-n) in
-    ignore(unsafe_input ch res 0 (-n));
-    (Bytes.unsafe_to_string res, false)
+    begin
+      let res = Bytes.create (-n) in
+      ignore(unsafe_input ch res 0 (-n));
+      (Bytes.unsafe_to_string res, false)
+    end
 
 module GenericInput(M : MinimalInput) =
   struct
@@ -176,7 +185,7 @@ module GenericInput(M : MinimalInput) =
 include GenericInput(
   struct
     let from_fun finalise utf8 name get_line file =
-      let rec fn name lnum loff coff cont =
+      let rec fn name lnum loff boff coff cont =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
@@ -185,20 +194,20 @@ include GenericInput(
             let len = if utf8 then utf8_len data else llen in
             let nlnum, ncoff = if nl then (lnum+1, 0) else (lnum, coff + len) in
             fun () ->
-              { is_eof = false ; lnum ; loff ; coff; llen ; data ; name
-              ; next = lazy (fn name nlnum (loff + len) ncoff cont) ; utf8
+              { is_eof = false ; lnum ; loff ; boff; coff; llen ; data ; name
+              ; next = lazy (fn name nlnum (loff + len) (boff + llen) ncoff cont) ; utf8
               ; uid = new_uid () ; ctnr = [||] }
           with End_of_file ->
             finalise file;
-            fun () -> cont name (lnum+1) loff
+            fun () -> cont name (lnum+1) loff boff
         end ()
       in
       lazy
         begin
-          let cont name lnum loff =
-            Lazy.force (empty_buffer name lnum loff)
+          let cont name lnum loff boff =
+            Lazy.force (empty_buffer name lnum loff boff)
           in
-          fn name 1 0 0 cont
+          fn name 1 0 0 0 cont
         end
   end)
 
@@ -219,7 +228,7 @@ module type Preprocessor =
 module Make(PP : Preprocessor) =
   struct
     let from_fun finalise utf8 name get_line file =
-      let rec fn name lnum loff coff st cont =
+      let rec fn name lnum loff boff coff st cont =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
@@ -233,23 +242,23 @@ module Make(PP : Preprocessor) =
                  if nl then (lnum+1, 0) else (lnum, coff+len)
                in
               fun () ->
-                { is_eof = false ; lnum ; loff ; coff; llen ; data ; name
-                ; next = lazy (fn name nlnum (loff + len) ncoff st cont); utf8
+                { is_eof = false ; lnum ; loff ; boff; coff; llen ; data ; name
+                ; next = lazy (fn name nlnum (loff + len) (boff + llen) ncoff st cont); utf8
                 ; uid = new_uid () ; ctnr = [||] }
             | None ->
-              fun () -> fn name lnum loff coff st cont
+              fun () -> fn name lnum loff boff coff st cont
           with End_of_file ->
             finalise file;
-            fun () -> cont name (lnum+1) loff st
+            fun () -> cont name (lnum+1) loff boff st
         end ()
       in
       lazy
         begin
-          let cont name lnum loff st =
+          let cont name lnum loff boff st =
             PP.check_final st name;
-            Lazy.force (empty_buffer name lnum loff)
+            Lazy.force (empty_buffer name lnum loff boff)
           in
-          fn name 1 0 0 PP.initial_state cont
+          fn name 1 0 0 0 PP.initial_state cont
         end
   end
 

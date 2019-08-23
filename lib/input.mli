@@ -117,7 +117,11 @@ val col_num : buffer -> pos -> int
     buffer [buf]. *)
 val line_offset : buffer -> int
 
+(** position in the file *)
 val char_pos : buffer -> pos -> int
+
+(** position in bytes, regarding to utf8 *)
+val byte_pos : buffer -> pos -> int
 
 (** [line buf] returns the current line in the buffer [buf]. *)
 val line : buffer -> string

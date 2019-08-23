@@ -196,9 +196,7 @@ let save : ?name:string -> 'a t -> (string -> 'a -> 'b) -> 'b t =
   ; c = t1.c
   ; f = fun s n ->
         let (l,s1,n1) = t1.f s n in
-        let len = Input.char_pos s1 n1
-                  - Input.char_pos s n
-        in
+        let len = Input.byte_pos s1 n1 - Input.byte_pos s n in
         let str = Input.sub s n len in
         (f str l, s1, n1) }
 
