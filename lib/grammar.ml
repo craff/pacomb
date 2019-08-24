@@ -41,14 +41,18 @@ type 'a grammar =
    | DSeq : ('a * 'b) t * Charset.t * ('a -> ('b -> 'c) t) -> 'c grdf
                                            (** dependant sequence *)
    | Lr   : 'a t * 'a Comb.key * Pos.t Assoc.key option * 'a t -> 'a grdf
-                                          (** Lr(g1,g2) represents g1 g2* and
+                                           (** Lr(g1,g2) represents g1 g2* and
                                                is used to eliminate left
                                                recursion.  It can not be exposed
                                                as left recursion under Lr is not
-                                               supported *)
+                                               supported. The key is used to
+                                               index the semantic of the partial
+                                               parse in the lr table. *)
    | Rkey : 'a Comb.key -> 'a grdf
    | LPos : Pos.t Assoc.key option * (Pos.t -> 'a) t -> 'a grdf
-                                           (** read the postion before parsing*)
+                                           (** read the postion before parsing,
+                                               the key is present, the position
+                                               is stored in the lr table *)
    | RPos : (Pos.t -> 'a) t -> 'a grdf     (** read the postion after parsing *)
    | Layout : blank * 'a t * layout_config -> 'a grdf
                                            (** changes the blank function *)
@@ -59,9 +63,9 @@ type 'a grammar =
    | Tmp  : 'a grdf                        (** used as initial value for
                                                recursive grammar. *)
 
- (** type after elimination of empty  and for later phase.  same constructors as
-     above prefixed by E, except EPush.  The left branch does  not go trough the
-    'a grammar record except for recursion.  *)
+ (** Type after elimination of empty  and for later phase.  same constructors as
+     above prefixed  by E,  The left branch  does not go  trough the  'a grammar
+     record except for recursion.  *)
  and 'a grne =
    | EFail : 'a grne
    | EErr  : string -> 'a grne
@@ -95,9 +99,8 @@ let mkg : ?name:string -> ?recursive:bool -> 'a grdf -> 'a grammar =
 (** A type to store list of grammar keys *)
 type ety = E : 'a Assoc.ty -> ety [@@unboxed]
 
-(** printing functions *)
-
-
+(** printing functions, usable for debugging, not yet for documentation
+    of your code. *)
 let prl pr sep ch l =
   let rec fn ch = function
     | [] -> ()
@@ -117,11 +120,11 @@ let print_grammar ?(def=true) ch s =
     | EFail         -> pr "0"
     | EErr m        -> pr "0(%s)" m
     | ETerm t       -> pr "%s" t.n
-    | EAlt(gs)      -> pr "(%a)" (prl pg "|") gs
-    | EAppl(g,_)    -> pr "App(%a)" pg g
-    | ESeq(g1,g2)   -> pr "%a%a" pg g1 pv g2
-    | EDSeq(g1,_,_) -> pr "%a???" pg g1
-    | ELr(g,_,_,s)  -> pr "%a(%a)*" pg g pv s
+    | EAlt(gs)      -> pr "(%a)" (prl pg " | ") gs
+    | EAppl(g,_)    -> pr "%a" pg g
+    | ESeq(g1,g2)   -> pr "%a %a" pg g1 pv g2
+    | EDSeq(g1,_,_) -> pr "%a ..." pg g1
+    | ELr(g,_,_,s)  -> pr "%a %a*" pg g pv s
     | ERkey _       -> ()
     | ERef(g)       -> pr "%a" pv g
     | ERPos(g)      -> pr "%a" pg g
@@ -138,13 +141,13 @@ let print_grammar ?(def=true) ch s =
     match g with
     | Fail         -> pr "0"
     | Err m        -> pr "0(%s)" m
-    | Empty _      -> pr "1"
+    | Empty _      -> pr "()"
     | Term t       -> pr "%s" t.n
-    | Alt(gs)      -> pr "(%a)" (prl pg "|") gs
-    | Appl(g,_)    -> pr "App(%a)" pg g
-    | Seq(g1,g2)   -> pr "%a%a" pg g1 pg g2
-    | DSeq(g1,_,_) -> pr "%a???" pg g1
-    | Lr(g,_,_,s)  -> pr "%a(%a)*" pg g pg s
+    | Alt(gs)      -> pr "(%a)" (prl pg " | ") gs
+    | Appl(g,_)    -> pr "%a" pg g
+    | Seq(g1,g2)   -> pr "%a %a" pg g1 pg g2
+    | DSeq(g1,_,_) -> pr "%a ..." pg g1
+    | Lr(g,_,_,s)  -> pr "%a %a*" pg g pg s
     | Rkey _       -> ()
     | RPos(g)      -> pr "%a" pg g
     | LPos(_,g)    -> pr "%a" pg g

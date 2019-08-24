@@ -50,6 +50,7 @@ val give_up : ?msg:string -> unit -> 'a
 
 (** {2 Combinators to create terminals} *)
 
+(** accept any character, except eof*)
 val any : ?name:string -> unit -> char t
 
 (**  Terminal  accepting  then  end  of   a  buffer  only.   remark:  [eof]  is
@@ -82,11 +83,13 @@ val not_charset : ?name:string -> Charset.t -> 'a -> 'a t
 (** Compose  two terminals in sequence.  [name] default is the  concatenation of
     the two names. *)
 val seq : ?name:string -> 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t
+
+(** variation on the above *)
 val seq1 : ?name:string -> 'a t -> 'b t -> 'a t
 val seq2 : ?name:string -> 'a t -> 'b t -> 'b t
-
 val seqs : 'a t list -> ('a -> 'a -> 'a) -> 'a t
 
+(** save the part of the input parsed by the terminal *)
 val save : ?name:string -> 'a t -> (string -> 'a -> 'b) -> 'b t
 
 (** [alt  t1 t2]  parses the  input with  [t1] or  [t2].  Contrary  to grammars,
@@ -183,4 +186,5 @@ type layout_config =
     [old_blanks_after] is also [true]). The other two fields are [false]. *)
 val default_layout_config : layout_config
 
+(** where to put it ... *)
 val default : 'a -> 'a option -> 'a

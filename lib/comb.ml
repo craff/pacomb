@@ -514,11 +514,10 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
   let {current_buf = buf0; current_pos = col0} = env0 in
   try
     (** Did we start parsing the same grammar at the same position *)
-    let (ptr, too_late) = Input.Tbl.find cache buf0 col0 in
+    let ptr = Input.Tbl.find cache buf0 col0 in
     (** If yes we store the continuation in the returned pointer.
        !too_late is true if we already called the continuation stored
        in !ptr *)
-    assert (not !too_late);
     ptr := (k, env0.cache_order) :: !ptr;
     (** Nothing else to do nw, try the other branch of parsing *)
     err ()
@@ -529,8 +528,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
          it comes from a rule using that grammar (nb of rule constant),
          and the start position of this rule (thks to cache, only one each)  *)
     let ptr = ref [(k,env0.cache_order)] in
-    let too_late = ref false in
-    Input.Tbl.add cache buf0 col0 (ptr, too_late);
+    Input.Tbl.add cache buf0 col0 ptr;
     (** we create a merge table for all continuation to call merge on all
          semantics before proceding. To do so, we need to complete all parsing
          of this grammar at this position before calling the continuation.
@@ -596,7 +594,6 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
         in
         (** Now we call all continuation stored in !ptr *)
         let l0 = !ptr in
-        too_late := true;
         let rec fn l =
           match l with
           | [] -> err ()
