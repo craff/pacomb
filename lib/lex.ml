@@ -90,6 +90,7 @@ let utf8 : ?name:string -> unit -> Uchar.t t = fun ?name () ->
   ; c = Charset.full
   ; f = fun s n ->
         let (c1,s,n) = Input.read s n in
+        if c1 = '\255' then raise NoParse;
         let n1 = Char.code c1 in
         let (n0,s,n) =
           if n1 land 0b1000_0000 = 0 then (n1 land 0b0111_1111, s, n)
