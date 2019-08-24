@@ -10,24 +10,32 @@ val create : unit -> ('a,'b) t
 (**returns the number of bindings in the table *)
 val size : ('a,'b) t -> int
 
-(** [add_string tbl s v] adds a binding from [s] to [v] in [tbl],
+(** [add_ascii tbl s v] adds a binding from [s] to [v] in [tbl],
     keep all previous bindings.
 
     a [map] function transforming character before addition (typically
     a case transformer) can be prvided (defaut to identity). *)
-val add_string : ?map:(char -> char)
+val add_ascii : ?map:(char -> char)
                  -> (char,'b) t -> string -> 'b -> unit
 
-(** [add_string tbl s v] adds a binding from [s] to [v] in [tbl],
+(** [replace_ascii tbl s v] adds a binding from [s] to [v] in [tbl],
     remove all previous bindings *)
-val replace_string : ?map:(char -> char)
+val replace_ascii : ?map:(char -> char)
                      -> (char,'b) t -> string -> 'b -> unit
+
+(** [mem_ascii tbl s] tells if [s] if present in [tbl]. Typically used
+    to reject identifiers that are keywords *)
+val mem_ascii : ?map:(char -> char) -> (char,'b) t -> string -> bool
 
 (** same as above for an unicode string *)
 val add_utf8 : ?map:(Uchar.t -> Uchar.t)
                -> (Uchar.t, 'b) t -> string -> 'b -> unit
 val replace_utf8 : ?map:(Uchar.t -> Uchar.t)
                    -> (Uchar.t,'b) t -> string -> 'b -> unit
+
+(** [mem_utf8 tbl s] tells if [s] if present in [tbl]. Typically used
+    to reject identifiers that are keywords *)
+val mem_utf8 : ?map:(Uchar.t -> Uchar.t) -> (Uchar.t,'b) t -> string -> bool
 
 (** parses word from a dictionnary returning as action all
     the assiociated values (it is an ambiguous grammar if

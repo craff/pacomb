@@ -35,7 +35,29 @@ let add : bool -> ('a -> 'a) -> ('a,'b) t -> (('a,'b) t, 'a) fold -> 'b -> unit 
     let tbl = fold f tbl in
     tbl.leafs <- if repl then [v] else v :: tbl.leafs
 
-let add_string : bool -> (char -> char) -> (char,'b) t -> string -> 'b -> unit =
+let mem : ('a -> 'a) -> ('a,'b) t -> (('a,'b) t, 'a) fold -> bool =
+  fun map tbl fold ->
+    let f tbl c =
+      Hashtbl.find tbl.next (map c)
+    in
+    try
+      let tbl = fold f tbl in
+      tbl.leafs <> []
+    with
+      Not_found -> false
+
+let idt x = x
+
+let mem_ascii : ?map:(char -> char) -> (char,'b) t -> string -> bool =
+  fun ?(map=idt) tbl s ->
+    let fold f a =
+      let res = ref a in
+      String.iter (fun c -> res := f !res c) s;
+      !res
+    in
+    mem map tbl fold
+
+let add_ascii : bool -> (char -> char) -> (char,'b) t -> string -> 'b -> unit =
   fun repl map tbl s v ->
     let fold f a =
       let res = ref a in
@@ -44,10 +66,20 @@ let add_string : bool -> (char -> char) -> (char,'b) t -> string -> 'b -> unit =
     in
     add repl map tbl fold v
 
-let idt x = x
+let replace_ascii ?(map=idt) tbl s v = add_ascii true map tbl s v
+let add_ascii     ?(map=idt) tbl s v = add_ascii false map tbl s v
 
-let replace_string ?(map=idt) tbl s v = add_string true map tbl s v
-let add_string     ?(map=idt) tbl s v = add_string false map tbl s v
+let mem_utf8 : ?map:(Uchar.t -> Uchar.t)
+               -> (Uchar.t, 'b) t -> string -> bool =
+  fun ?(map=idt) tbl s ->
+    let fold f a =
+      let%parser rec utf8_fold =
+        () => a
+      ; (a::utf8_fold) (c::UTF8) => f a c
+      in
+      Grammar.parse_string utf8_fold Lex.noblank s
+    in
+    mem map tbl fold
 
 let add_utf8 : bool -> (Uchar.t -> Uchar.t)
                -> (Uchar.t, 'b) t -> string -> 'b -> unit =
