@@ -50,6 +50,8 @@ val give_up : ?msg:string -> unit -> 'a
 
 (** {2 Combinators to create terminals} *)
 
+val any : ?name:string -> unit -> char t
+
 (**  Terminal  accepting  then  end  of   a  buffer  only.   remark:  [eof]  is
     automatically added  at the end  of a grammar  by [Combinator.parse_buffer].
     [name] default is ["EOF"] *)
@@ -83,6 +85,10 @@ val seq : ?name:string -> 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t
 val seq1 : ?name:string -> 'a t -> 'b t -> 'a t
 val seq2 : ?name:string -> 'a t -> 'b t -> 'b t
 
+val seqs : 'a t list -> ('a -> 'a -> 'a) -> 'a t
+
+val save : ?name:string -> 'a t -> (string -> 'a -> 'b) -> 'b t
+
 (** [alt  t1 t2]  parses the  input with  [t1] or  [t2].  Contrary  to grammars,
     terminals does not use continuations, if  [t1] succeds, no backtrack will be
     performed to try [t2].  For instance,
@@ -93,6 +99,7 @@ val seq2 : ?name:string -> 'a t -> 'b t -> 'b t
     If both [t1] and [t2] accept the input, longuest match is selected.
     [name] default to [sprintf "(%s)|(%s)" t1.n t2.n]. *)
 val alt : ?name:string -> 'a t -> 'a t -> 'a t
+val alts : 'a t list -> 'a t
 
 (** [option x  t] parses the given terminal  0 or 1 time. [x] is  returned if 0.
     [name] defaults to [sprintf "(%s)?" t.n]. *)
@@ -142,13 +149,6 @@ val utf8 : ?name:string -> unit -> Uchar.t t
      char *)
 val keyword : ?name:string -> string -> (char -> bool) -> 'a -> 'a t
 
-(** create a terminal from a regexp. Returns the whole matched string *)
-val regexp : ?name:string -> Regexp.t -> string t
-
-(** create a terminal from a regexp.  Returns the groups list, last to finish to
-    be parsed is first in the result *)
-val regexp_grps : ?name:string -> Regexp.t -> string list t
-
 (** {2 Functions managing blanks} *)
 
 (** Use when you have no blank chars *)
@@ -159,8 +159,6 @@ val blank_charset : Charset.t -> blank
 
 (** Blank from a terminal *)
 val blank_terminal : 'a t -> blank
-
-val blank_regexp : string -> blank
 
 (** Test wether a terminal accept the  empty string. Such a terminal are illegal
    in a grammar, but may be used in combinator below to create terminals *)
@@ -184,3 +182,5 @@ type layout_config =
     [old_blanks_before] is  [true]), and the  new blanks after (i.e.,  the field
     [old_blanks_after] is also [true]). The other two fields are [false]. *)
 val default_layout_config : layout_config
+
+val default : 'a -> 'a option -> 'a

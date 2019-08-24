@@ -5,10 +5,10 @@ let%parser word =
   ; (p::RE"[.;,:!?]") => p
 
 (* blank with at most one newline for paragraphs *)
-let blank1 = Lex.blank_regexp "[ \t\r]*\n?[ \t\r]*"
+let blank1 = Regexp.blank_regexp "[ \t\r]*\n?[ \t\r]*"
 
 (* general blank, no newline, we parse them as separator. *)
-let blank2 = Lex.blank_regexp "[ \t\r]*"
+let blank2 = Regexp.blank_regexp "[ \t\r]*"
 
 (* for paragraph, we use [Grammar.layout] to change the blank from [blank2] to
    [blank1] and we parse with blank1 after the paragraph to read the last

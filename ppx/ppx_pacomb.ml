@@ -107,6 +107,8 @@ let rec exp_to_term exp =
   match exp with
   | {pexp_desc = Pexp_constant (Pconst_char _)} ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.char [%e exp] ())]
+  | [%expr CHAR] ->
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.any ())]
   | [%expr CHAR([%e? s])] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.char [%e s] ())]
   | {pexp_desc = Pexp_constant (Pconst_string _)} ->
@@ -122,7 +124,7 @@ let rec exp_to_term exp =
   | [%expr EOF] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.eof ())]
   | [%expr RE([%e? s])] ->
-     [%expr Pacomb.Grammar.term (Pacomb.Lex.regexp
+     [%expr Pacomb.Grammar.term (Pacomb.Regexp.regexp
                                   (Pacomb.Regexp.from_string [%e s]))]
   | [%expr ~? [ [%e? default] ] [%e? exp] ] ->
      [%expr Pacomb.Grammar.default_option [%e default] [%e exp_to_term exp]]

@@ -28,14 +28,17 @@ val accepted_first_chars : regexp -> Charset.t
     and position correspond to the first character that cannot be matched. *)
 exception Regexp_error of Input.buffer * Input.pos
 
-(** [read re  buf pos] attempts to  match the regular expression  [re] in buffer
-    [buf], at position  [pos]. The returned value [(matched,  buf', pos')] gives
-    the new buffer  [buf'] and position [pos'] after the  longest possible match
-    using [re]. It also contains a list of matched strings, all corresponding to
-    a {!constructor:Sav} constructor. If the  regexp [re] cannot be matched then
-    exception {!exception:Regexp_error} is raised. *)
-val read : regexp -> Input.buffer -> Input.pos
-           -> string list * Input.buffer * Input.pos
-
 (** [from_string s] convert a string into a regexp following [Str] syntax. *)
 val from_string : string -> regexp
+
+(** create a terminal from a regexp. Returns the whole matched string *)
+val regexp : ?name:string -> regexp -> string Lex.t
+
+(** create a terminal from a regexp.  Returns the groups list, last to finish to
+    be  parsed  is first  in  the  result.  The  optional argument  grps  allows
+    selection of the produced groups. As usual, 0 means the whole regexp and n >
+    0 the sub string corresponding to the nth opening parenthesis.  *)
+val regexp_grps : ?name:string -> ?grps:int list -> regexp -> string list Lex.t
+
+(** create a blank function from a string representing a regexp *)
+val blank_regexp : string -> Lex.blank

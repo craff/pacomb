@@ -49,6 +49,12 @@ let blank_test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool =
 
 (** Combinators to create terminals *)
 
+let any : ?name:string -> unit -> char t = fun ?(name="ANY") () ->
+  { n = name
+  ; c = Charset.full
+  ; f = fun s n -> let (c,_,_ as res) = Input.read s n
+                   in if c = '\255' then raise NoParse else res}
+
 (** Terminal accepting then end of a buffer only.
     remark: [eof] is automatically added at the end of a grammar by
     [Combinator.parse_buffer]. *)
@@ -463,48 +469,11 @@ let seqs : 'a t list -> ('a -> 'a -> 'a) -> 'a t = fun l f ->
   | r::l -> seq r (fn l) f
   in fn l
 
-let from_regexp : Regexp.t -> string t = fun r ->
-  let open Regexp in
-  let rec fn = function
-  | Chr c -> char c ()
-  | Set s -> appl (fun _ -> ()) (charset s)
-  | Alt l -> alts (List.map fn l)
-  | Seq l -> seqs (List.map fn l) (fun () () -> ())
-  | Opt r -> option () (fn r)
-  | Str r -> star (fn r) (fun () -> ()) (fun () () -> ())
-  | Pls r -> plus (fn r) (fun () -> ()) (fun () () -> ())
-  | Sav r -> fn r
-  in
-  save (fn r) (fun s () -> s)
-
-let from_regexp_grps : Regexp.t -> string list t = fun r ->
-  let open Regexp in
-  let rec fn = function
-  | Chr c -> char c []
-  | Set s -> appl (fun _ -> []) (charset s)
-  | Alt l -> alts (List.map fn l)
-  | Seq l -> seqs (List.map fn l) (@)
-  | Opt r -> option [] (fn r)
-  | Str r -> star (fn r) (fun () -> []) (@)
-  | Pls r -> plus (fn r) (fun () -> []) (@)
-  | Sav r -> save (fn r) (fun s l -> s :: l)
-  in
-  fn r
 
 (** keyword *)
 let keyword : ?name:string -> string -> (char -> bool) -> 'a -> 'a t =
   fun ?name k f x ->
     seq ?name (string k ()) (test f) (fun _ _ -> x)
-
-(** create a terminal from a regexp. Returns the groups list, last to finish
-    to be parsed is first in the result *)
-let regexp_grps : ?name:string -> Regexp.t -> string list t = fun ?name r ->
-  let r = from_regexp_grps r in
-  { r with n = default r.n name }
-
-let regexp : ?name:string -> Regexp.t -> string t = fun ?name r ->
-  let r = from_regexp r in
-  { r with n = default r.n name }
 
 (** Functions managing blanks *)
 
@@ -527,8 +496,6 @@ let blank_terminal : 'a t -> blank =
       let (_,s,n) = t.f s n in
       (s,n)
     with NoParse -> (s,n)
-
-let blank_regexp s = blank_terminal (regexp (Regexp.from_string s))
 
 type layout_config =
   { old_blanks_before : bool

@@ -58,209 +58,108 @@ let rec accepted_first_chars : regexp -> Charset.t = fun re ->
   | Pls(r) -> accepted_first_chars r
   | Sav(r) -> accepted_first_chars r
 
-type construction =
-  | Acc of regexp list
-  | Par of regexp list * regexp list
+module Pacomb = struct
+  module Lex = Lex
+  module Grammar = Grammar
+end
 
-let push x = function
-  | Acc l -> Acc (x::l)
-  | Par (l1, l2) -> Acc(Alt(x :: l1)::l2)
+let%parser atom_charset first =
+    (c1::CHAR) '-' (c2::CHAR) => (if c1 = '-' || (not first && c1 = ']') ||
+                                       (first && c1 = '^') ||
+                                         c2 = '-' then Lex.give_up ();
+                                  Charset.range c1 c2)
+  ; (c1::CHAR)                => (if (not first && (c1 = '-' || c1 = ']')) ||
+                                       (first && c1 = '^') then Lex.give_up ();
+                                  Charset.singleton c1)
 
-let pop = function
-  | Acc l -> l
-  | Par _ -> invalid_arg "Regexp: final bar."
+let%parser p_charset =
+  (cs1::atom_charset true) (cs2:: ~* (atom_charset false)) =>
+    List.fold_left Charset.union cs1 cs2
 
-let from_string : string -> regexp = fun s ->
-  let cs =
-    let cs = ref [] in
-    for i = String.length s - 1 downto 0 do
-      cs := s.[i] :: !cs
-    done; !cs
-  in
+let is_spe c = List.mem c ['\\';'.';'*';'+';'?';'[';']']
 
-  let read_range cs =
-    let rec read_range acc = function
-      | []              -> invalid_arg "Regexp: open charset."
-      | ']'::cs         -> (acc, cs)
-      | c1::'-'::c2::cs -> let r = Charset.range c1 c2 in
-                           read_range (Charset.union acc r) cs
-      | c::cs           -> read_range (Charset.add acc c) cs
-    in read_range Charset.empty cs
-  in
-  let rec tokens cs =
-    let is_spe c = List.mem c ['\\';'.';'*';'+';'?';'[';']'] in
-    match cs with
-    | '.' ::cs            -> `Set(Charset.full) :: tokens cs
-    | '*' ::cs            -> `Str :: tokens cs
-    | '+' ::cs            -> `Pls :: tokens cs
-    | '?' ::cs            -> `Opt :: tokens cs
-    | '\\'::'('::cs       -> `Opn :: tokens cs
-    | '\\'::')'::cs       -> `Cls :: tokens cs
-    | '\\'::'|'::cs       -> `Alt :: tokens cs
-    | '\\'::c  ::cs       -> if is_spe c then `Chr(c) :: tokens cs
-                             else invalid_arg "Regexp: invalid escape."
-    | '\\'::[]            -> invalid_arg "Regexp: nothing to escape."
-    | '[' ::'^':: ']'::cs -> let (rng, cs) = read_range cs in
-                             let rng = Charset.add rng ']' in
-                             let rng = Charset.add rng '\255' in
-                             `Set(Charset.complement rng) :: tokens cs
-    | '[' ::']':: cs      -> let (rng, cs) = read_range cs in
-                             `Set(Charset.add rng ']') :: tokens cs
-    | '[' ::'^'::cs       -> let (rng, cs) = read_range cs in
-                             let rng = Charset.add rng '\255' in
-                             `Set(Charset.complement rng) :: tokens cs
-    | '[' ::cs            -> let (rng, cs) = read_range cs in
-                             `Set(rng) :: tokens cs
-    | c   ::cs            -> `Chr(c) :: tokens cs
-    | []                  -> []
-  in
-  let ts = tokens cs in
-
-  let rec build_re stk acc ts =
-    match (stk, acc, ts) with
-    | (stk   , acc    , `Chr(c)::ts) -> build_re stk (push (Chr c) acc) ts
-    | (stk   , acc    , `Set(s)::ts) -> build_re stk (push (Set s) acc) ts
-    | (stk   , Acc(Alt (re::l)::acc), `Str   ::ts) ->
-        build_re stk (Acc(Alt(Str re::l) :: acc)) ts
-    | (stk   , Acc(Alt (re::l)::acc), `Pls   ::ts) ->
-        build_re stk (Acc(Alt(Pls re::l) :: acc)) ts
-    | (stk   , Acc(Alt (re::l)::acc), `Opt   ::ts) ->
-        build_re stk (Acc(Alt(Opt re::l) :: acc)) ts
-    | (stk   , Acc(re::acc), `Str   ::ts) ->
-        build_re stk (Acc(Str re :: acc)) ts
-    | (stk   , Acc(re::acc), `Pls   ::ts) ->
-        build_re stk (Acc(Pls re :: acc)) ts
-    | (stk   , Acc(re::acc), `Opt   ::ts) ->
-        build_re stk (Acc(Opt re :: acc)) ts
-    | (_     , _     , `Str   ::_ )
-    | (_     , _     , `Pls   ::_ )
-    | (_     , _     , `Opt   ::_ ) ->
-        invalid_arg "Regexp: modifier error."
-    | (stk   , acc    , `Opn   ::ts) -> build_re (pop acc::stk) (Acc []) ts
-    | ([]    , _      , `Cls   ::_ ) ->
-        invalid_arg "Regexp: group not opened."
-    | (s::stk, acc    , `Cls   ::ts) ->
-        let re =
-          match List.rev (pop acc) with
-          | [re] -> re
-          | l    -> Seq(l)
+let%parser rec atom_regexp =
+    '[' (cpl:: ~? '^') (cs::p_charset) ']' =>
+      begin
+        let cs = if cpl <> None then Charset.complement (Charset.add cs '\255')
+                 else cs
         in
-        build_re stk (Acc(Sav(re)::s)) ts
-    | (stk   , Acc(re::acc), `Alt   ::ts) -> build_re stk (Par([re],acc)) ts
-    | (_     , Acc []      , `Alt   ::_ ) ->
-        invalid_arg "Regexp: initial bar."
-    | (_     , Par _       , `Alt   ::_ ) ->
-        invalid_arg "Regexp: consecutive bar."
-    | ([]    , acc         , []         ) ->
-        begin
-          match List.rev (pop acc) with
-          | [re] -> re
-          | l    -> Seq(l)
-        end
-    | (_     , _      , []         ) -> invalid_arg "Regexp: group error."
-  in
-  build_re [] (Acc []) ts
+        Set cs
+      end
+  ; (c::CHAR) =>
+      begin
+        if is_spe c then Lex.give_up () else Chr c
+      end
+  ; '\\' (c::CHAR) =>
+      begin
+        if is_spe c then Chr c else Lex.give_up ()
+      end
+  ; '.' => Set (Charset.del Charset.full '\255')
+  ; "\\(" (r::regexp) "\\)" => Sav r
+  ; (r::atom_regexp) '?' => Opt r
+  ; (r::atom_regexp) '*' => Str r
+  ; (r::atom_regexp) '+' => Pls r
+
+and seq_regexp =
+  (rs :: ~+ atom_regexp) => Seq rs
+
+and regexp =
+  (rs :: ~+ ["\\|"] seq_regexp) => Alt rs
 
 (* Exception raised when a regexp cannot be parsed. *)
 exception Regexp_error of Input.buffer * Input.pos
 
-let regexp_error : type a. Input.buffer -> Input.pos -> a = fun buf pos ->
-  raise (Regexp_error(buf, pos))
+let from_string : string -> regexp = fun s ->
+  try Grammar.parse_string regexp Lex.noblank s
+  with Pos.Parse_error(b,s,_) -> raise (Regexp_error(b,s))
 
-let string_of_char_list : char list -> string = fun cs ->
-  let b = Buffer.create 10 in
-  List.iter (Buffer.add_char b) cs;
-  Buffer.contents b
+open Lex
 
-(* Input characters according to the given regexp. *)
-let read : regexp -> Input.buffer -> Input.pos
-           -> string list * Input.buffer * Input.pos =
-  fun re buf pos ->
-    let grps = ref [] in
-    let rec sread_regexp re buf pos cs =
-      match re with
-      | Chr(ch)    ->
-          let (c, buf, pos) = Input.read buf pos in
-          if c = ch then (c::cs, buf, pos)
-          else regexp_error buf pos
-      | Set(chs)   ->
-          let (c, buf, pos) = Input.read buf pos in
-          if Charset.mem chs c then (c::cs, buf, pos)
-          else regexp_error buf pos
-      | Seq(r::rs) ->
-          let (cs, buf, pos) = sread_regexp r buf pos cs in
-          sread_regexp (Seq(rs)) buf pos cs
-      | Seq([])    -> (cs, buf, pos)
-      | Alt(r::rs) ->
-          begin
-            try sread_regexp r buf pos cs
-            with Regexp_error(_,_) -> sread_regexp (Alt(rs)) buf pos cs
-          end
-      | Alt([])    -> regexp_error buf pos
-      | Opt(r)     ->
-          begin
-            try sread_regexp r buf pos cs
-            with Regexp_error(_,_) -> (cs, buf, pos)
-          end
-      | Str(r)     ->
-          begin
-            try
-              let (cs, buf, pos) = sread_regexp r buf pos cs in
-              sread_regexp re buf pos cs
-            with Regexp_error(_,_) -> (cs, buf, pos)
-          end
-      | Pls(r)     ->
-          let (cs, buf, pos) = sread_regexp r buf pos cs in
-          sread_regexp (Str(r)) buf pos cs
-      | Sav(r) ->
-          let cs0 = cs in
-          let rec fn acc = function
-            | cs when cs == cs0 -> string_of_char_list acc
-            | c::cs -> fn (c::acc) cs
-            | [] -> assert false
-          in
-          let (cs, _, _ as res) = sread_regexp r buf pos cs in
-          grps := fn [] cs :: !grps; res
-    in
-    let rec read_regexp re buf pos =
-      match re with
-      | Chr(ch)    ->
-          let (c, buf, pos) = Input.read buf pos in
-          if c = ch then (buf, pos)
-          else regexp_error buf pos
-      | Set(chs)   ->
-          let (c, buf, pos) = Input.read buf pos in
-          if Charset.mem chs c then (buf, pos)
-          else regexp_error buf pos
-      | Seq(r::rs) ->
-          let (buf, pos) = read_regexp r buf pos in
-          read_regexp (Seq(rs)) buf pos
-      | Seq([])    -> (buf, pos)
-      | Alt(r::rs) ->
-          begin
-            try read_regexp r buf pos
-            with Regexp_error(_,_) -> read_regexp (Alt(rs)) buf pos
-          end
-      | Alt([])    -> regexp_error buf pos
-      | Opt(r)     ->
-          begin
-            try read_regexp r buf pos
-            with Regexp_error(_,_) -> (buf, pos)
-          end
-      | Str(r)     ->
-          begin
-            try
-              let (buf, pos) = read_regexp r buf pos in
-              read_regexp re buf pos
-            with Regexp_error(_,_) -> (buf, pos)
-          end
-      | Pls(r)     ->
-          let (buf, pos) = read_regexp r buf pos in
-          read_regexp (Str(r)) buf pos
-      | Sav(r) ->
-         let (cs, buf, pos) = sread_regexp r buf pos [] in
-         grps := string_of_char_list (List.rev cs) :: !grps;
-         (buf, pos)
-    in
-    let (b,n) = read_regexp re buf pos in
-    (!grps,b,n)
+let from_regexp_grps : ?grps:int list -> regexp -> string list Lex.t = fun ?grps r ->
+  let n = ref 0 in
+  let do_save fn r =
+    let n0 = !n in
+    incr n;
+    let r = fn r in
+    match grps with
+    | None -> save r (fun s l -> s :: l)
+    | Some l ->
+       if List.mem n0 l then save r (fun s l -> s :: l)
+       else r
+  in
+  let rec fn = function
+  | Chr c -> char c []
+  | Set s -> appl (fun _ -> []) (charset s)
+  | Alt l -> alts (List.map fn l)
+  | Seq l -> seqs (List.map fn l) (@)
+  | Opt r -> option [] (fn r)
+  | Str r -> star (fn r) (fun () -> []) (@)
+  | Pls r -> plus (fn r) (fun () -> []) (@)
+  | Sav r -> do_save fn r
+  in
+  let r = do_save fn r in
+  begin
+    match grps with
+    | None -> ()
+    | Some l -> if List.exists (fun g -> g < 0 || g >= !n) l
+                then invalid_arg "from_regexp_grps"
+  end;
+  r
+
+let from_regexp : regexp -> string Lex.t = fun r ->
+  Lex.appl
+    (function [s] -> s | _ -> assert false)
+    (from_regexp_grps ~grps:[0] r)
+
+(** create a terminal from a regexp. Returns the groups list, last to finish
+    to be parsed is first in the result *)
+let regexp_grps : ?name:string -> ?grps:int list -> regexp -> string list t =
+  fun ?name ?grps r ->
+    let r = from_regexp_grps ?grps r in
+    { r with n = default r.n name }
+
+let regexp : ?name:string -> regexp -> string t = fun ?name r ->
+  let r = from_regexp r in
+  { r with n = default r.n name }
+
+let blank_regexp s = blank_terminal (regexp (from_string s))
