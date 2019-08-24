@@ -97,7 +97,7 @@ let mkg : ?name:string -> ?recursive:bool -> 'a grdf -> 'a grammar =
     ; charset = None; phase = Defined; ne = ETmp }
 
 (** A type to store list of grammar keys *)
-type ety = E : 'a Assoc.ty -> ety [@@unboxed]
+type ety = E : 'a Assoc.token -> ety [@@unboxed]
 
 (** printing functions, usable for debugging, not yet for documentation
     of your code. *)
@@ -159,10 +159,10 @@ let print_grammar ?(def=true) ch s =
   and print_negr : type a. out_channel -> a grammar -> unit =
   fun ch g ->
     let pr x = Printf.fprintf ch x in
-    if List.mem (E g.k.k) !adone then Printf.fprintf ch "%s" g.n
+    if List.mem (E g.k.tok) !adone then Printf.fprintf ch "%s" g.n
     else if g.recursive then
       begin
-        adone := E g.k.k :: !adone;
+        adone := E g.k.tok :: !adone;
         let pg x = print_grne x in
         match g.e with
         | _::_ -> pr "%s=(%a)" g.n pg g.ne
@@ -179,10 +179,10 @@ let print_grammar ?(def=true) ch s =
   and print_dfgr : type a. out_channel -> a grammar -> unit =
   fun ch g ->
     let pr x = Printf.fprintf ch x in
-    if List.mem (E g.k.k) !adone then Printf.fprintf ch "%s" g.n
+    if List.mem (E g.k.tok) !adone then Printf.fprintf ch "%s" g.n
     else if g.recursive then
       begin
-        adone := E g.k.k :: !adone;
+        adone := E g.k.tok :: !adone;
         let pg x = print_grdf x in
         pr "%s=(%a)" g.n pg g.d
       end
@@ -520,8 +520,7 @@ let (|||) cs1 cs2 = match cs1, cs2 with
 
 (** Elimination of left recursion which is not supported by combinators *)
 let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
-
-  let u = g.k.k in
+  let u = g.k.tok in
   let pk = ref None in
   let get_pk () = match !pk with
     | None -> let k = Assoc.new_key () in
@@ -586,14 +585,14 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
        | Assoc.Eq  ->
           (EFail, mkg (Rkey g.k), NoCache)
        | Assoc.NEq ->
-          if List.mem (E g.k.k) above then
+          if List.mem (E g.k.tok) above then
             begin
               (ERef g, fail (), NoLr)
             end
           else
             begin
               elim_left_rec (E u :: above) g;
-              let (g',s,cs) = fn (E g.k.k :: above) g.ne in
+              let (g',s,cs) = fn (E g.k.tok :: above) g.ne in
               factor_empty s;
               assert(s.e = []);
               s.phase <- LeftRecEliminated;

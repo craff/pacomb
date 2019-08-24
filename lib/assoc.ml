@@ -1,78 +1,47 @@
-(** Dependant association list *)
+type _ token =  ..
 
-(* extensible type of key used for elimination of left recursion,
-   see elim_left_rec below *)
-type _ ty =  ..
-type ('a,'b) eq = NEq : ('a, 'b) eq | Eq : ('a, 'a) eq
-type 'a key = { k : 'a ty; eq : 'b.'b ty -> ('a,'b) eq }
+type ('a, 'b) eq =
+  | Eq  : ('a, 'a) eq
+  | NEq : ('a, 'b) eq
+
+type 'a key = { tok : 'a token ; eq : 'b. 'b token -> ('a, 'b) eq }
 
 let new_key : type a. unit -> a key = fun () ->
-  let module M = struct type _ ty += T : a ty end in
-  let open M in
-  let eq : type b. b ty -> (a, b) eq = function T -> Eq | _ -> NEq in
-  { k = T; eq }
+  let module M = struct type _ token += T : a token end in let open M in
+  let eq : type b. b token -> (a, b) eq = function T -> Eq | _ -> NEq in
+  { tok = T ; eq }
 
-module type Ty = sig type 'a t end
+type t =
+  | Nil  :                    t
+  | Cns : 'a key * 'a * t -> t
 
-module type S = sig
-  type _ elt
-  type t = Nil : t | Cons : 'a key * 'a elt * t -> t
-  val empty : t
-  val add : 'a key -> 'a elt -> t -> t
-  val add_key : 'a elt -> t -> ('a key * t)
-  val find : 'a key -> t -> 'a elt
-  val remove : 'a key -> t -> t
-  val mem : 'a key -> t -> bool
-  val length : t -> int
-end
+let empty : t = Nil
 
-module Make(Ty:Ty) = struct
-  type 'a elt = 'a Ty.t
+let length : t -> int =
+  let rec length acc l =
+    match l with
+    | Nil        -> acc
+    | Cns(_,_,l) -> length (acc+1) l
+  in
+  length 0
 
-  type t = Nil : t | Cons : 'a key * 'a elt * t -> t
+let add : type a. a key -> a -> t -> t = fun k x l ->
+  Cns(k,x,l)
 
-  let empty = Nil
+let add_key : type a. a -> t -> a key * t = fun x l ->
+  let k = new_key () in (k, Cns(k,x,l))
 
-  let length l =
-    let rec fn acc = function
-      | Nil -> acc
-      | Cons(_,_,l) -> fn (acc+1) l
-    in fn 0 l
+let rec find : type a. a key -> t -> a = fun k l ->
+  match l with
+  | Nil        -> raise Not_found
+  | Cns(j,x,l) -> match j.eq k.tok with Eq -> x | NEq -> find k l
 
-  let add : 'a key -> 'a elt -> t -> t = fun k x l -> Cons(k,x,l)
+let rec mem : type a. a key -> t -> bool = fun k l ->
+  match l with
+  | Nil        -> false
+  | Cns(j,_,l) -> match k.eq j.tok with Eq -> true | NEq -> mem k l
 
-  let add_key : 'a elt -> t -> ('a key * t) = fun x l ->
-    let k = new_key () in (k, Cons(k,x,l))
-
-  let find : type a.a key -> t -> a elt = fun k l ->
-    let rec fn : t -> a elt = function
-      | Nil -> raise Not_found
-      | Cons(k',x,l) ->
-         match k'.eq k.k with
-         | Eq -> x
-         | NEq -> fn l
-    in fn l
-
-  let mem : type a.a key -> t -> bool = fun k l ->
-    let rec fn : t -> bool = function
-      | Nil -> false
-      | Cons(k',_,l) ->
-         match k'.eq k.k with
-         | Eq -> true
-         | NEq -> fn l
-    in fn l
-
-  let remove : type a.a key -> t -> t = fun k l ->
-    let rec fn : t -> t = function
-      | Nil -> raise Not_found
-      | Cons(k',v,l) ->
-         match k'.eq k.k with
-         | Eq -> l
-         | NEq -> Cons(k',v,fn l)
-    in fn l
-
-end
-
-module Idt = struct type 'a t = 'a end
-
-include Make(Idt)
+let rec remove : type a. a key -> t -> t = fun k l ->
+  match l with
+  | Nil        -> raise Not_found
+  | Cns(j,v,l) -> match k.eq j.tok with Eq  -> l | NEq -> Cns(j,v,remove k l)
