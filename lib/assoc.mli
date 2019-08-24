@@ -1,41 +1,43 @@
-(** Dependant association list *)
+(** Dependant association lists. *)
 
-(* extensible type of key used for elimination of left recursion,
-   see elim_left_rec below *)
-type _ ty =  ..
-type ('a,'b) eq = NEq : ('a, 'b) eq | Eq : ('a, 'a) eq
-type 'a key = { k : 'a ty; eq : 'b.'b ty -> ('a,'b) eq }
+(** Standard equality type using a GADT. *)
+type ('a, 'b) eq =
+  | Eq  : ('a, 'a) eq
+  | NEq : ('a, 'b) eq
 
-type t = Nil : t | Cons : 'a key * 'a * t -> t
+(** Type of tokens used to make keys unique, and carrying a type. This type is
+    not intended to be extended by the used, hence it is private. *)
+type _ token = private ..
 
+(** Type of a key for a value of type ['a]. It contains a unique token and the
+    corresponding (very efficient) equality test. *)
+type 'a key = { tok : 'a token ; eq : 'b. 'b token -> ('a, 'b) eq }
+
+(** [new_key ()] generates a new unique key for a value of type ['a]. *)
 val new_key : unit -> 'a key
 
+(** Type of an association list. *)
+type t
+
+(** [empty] is the empty association list. *)
 val empty : t
 
+(** [add k v l] inserts a new binding of [k] to [v] at the head of [l]. *)
 val add : 'a key -> 'a -> t -> t
 
-val add_key : 'a -> t -> ('a key * t)
-
-val find : 'a key -> t -> 'a
-
-val mem : 'a key -> t -> bool
-
-val remove : 'a key -> t -> t
-
+(** [length l] returns the size of the association list [l]. *)
 val length : t -> int
 
-module type Ty = sig type 'a t end
+(** [add_key v l] is equivalent to [let k = new_key () in (k, add k v l)]. *)
+val add_key : 'a -> t -> 'a key * t
 
-module type S = sig
-  type _ elt
-  type t = Nil : t | Cons : 'a key * 'a elt * t -> t
-  val empty : t
-  val add : 'a key -> 'a elt -> t -> t
-  val add_key : 'a elt -> t -> ('a key * t)
-  val find : 'a key -> t -> 'a elt
-  val remove : 'a key -> t -> t
-  val mem : 'a key -> t -> bool
-  val length : t -> int
-end
+(** [find k l] returns the latest inserted value with key [k] in list [l]. The
+    exception {!exception:Not_found} is raised if there is none. *)
+val find : 'a key -> t -> 'a
 
-module Make(Ty:Ty) : S with type 'a elt = 'a Ty.t
+(** [mem k l] tells whether an element is mapped to [k] in the list [l]. *)
+val mem : 'a key -> t -> bool
+
+(** [remove k l] removes the latest inserted binding of the key [k] in [l]. If
+    there is no such binding, then {!exception:Not_found} is raised. *)
+val remove : 'a key -> t -> t
