@@ -420,6 +420,8 @@ let vb_to_parser rec_ vb =
     (loc,changed,name,vb.pvb_pat,name_param,rules)
   in
   let ls = List.map gn vb in
+  if not (List.exists (fun (_,changed,_,_,_,_) -> changed) ls)
+  then raise Exit;
   let (gr,orig) = List.partition
                     (fun (_,changed,_,_,_,_) -> changed && rec_ = Recursive)
                     ls
@@ -491,6 +493,7 @@ let str_to_parser items =
       [Str.include_ { pincl_mod = Mod.structure items
                    ; pincl_loc = Location.none
                    ; pincl_attributes = [w] }]
+       | Exit -> items
   in
   flatten_str (List.flatten (List.map fn items))
 
