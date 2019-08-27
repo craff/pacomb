@@ -107,22 +107,22 @@ let parse_char : (char -> char) -> (char, 'a) t -> 'a Grammar.t =
     in
     p tbl
 
-let word : ?final_test:(Input.buffer -> Input.pos -> bool)
+let word : ?name:string -> ?final_test:(Input.buffer -> Input.pos -> bool)
            -> ?map:(char -> char) -> (char, 'a) t -> 'a Grammar.t =
-  fun ?(final_test=fun _ _ -> true) ?(map=fun c -> c) tbl ->
-  Grammar.(layout Lex.noblank
+  fun ?name ?(final_test=fun _ _ -> true) ?(map=fun c -> c) tbl ->
+  Grammar.(layout ?name Lex.noblank
              (test_after (fun _ _ -> final_test) (parse_char map tbl)))
 
 let parse_utf8 : (Uchar.t -> Uchar.t) -> (Uchar.t, 'a) t -> 'a Grammar.t =
   fun map tbl ->
-    let%parser rec p tbl =
+    let%parser rec utf8_word tbl =
       (x::Grammar.alt (List.map Grammar.empty tbl.leafs))      => x
-      ; ((c,__)>:((c::UTF8) => (map c,()))) (x::p (next tbl c)) => x
+      ; ((c,__)>:((c::UTF8) => (map c,()))) (x::utf8_word (next tbl c)) => x
     in
-    p tbl
+    utf8_word tbl
 
-let utf8_word : ?final_test:(Input.buffer -> Input.pos -> bool)
+let utf8_word : ?name:string -> ?final_test:(Input.buffer -> Input.pos -> bool)
            -> ?map:(Uchar.t -> Uchar.t) -> (Uchar.t, 'a) t -> 'a Grammar.t =
-  fun ?(final_test=fun _ _ -> true) ?(map=fun c -> c) tbl ->
-  Grammar.(layout Lex.noblank
+  fun ?name ?(final_test=fun _ _ -> true) ?(map=fun c -> c) tbl ->
+  Grammar.(layout ?name Lex.noblank
              (test_after (fun _ _ -> final_test) (parse_utf8 map tbl)))

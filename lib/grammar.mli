@@ -16,17 +16,17 @@ type 'a t = 'a grammar
 val print_grammar : ?def:bool -> out_channel -> 'a grammar -> unit
 
 (** [fail ()] is a grammar that parses nothing (always fails) *)
-val fail : unit -> 'a grammar
+val fail : ?name:string -> unit -> 'a grammar
 
 (** fails reporting an error *)
-val error : string -> 'a grammar
+val error : ?name:string -> string -> 'a grammar
 
 (** [empty a] accepts the empty input and returns [a] *)
-val empty : 'a -> 'a grammar
+val empty : ?name:string -> 'a -> 'a grammar
 
 (** [test  b] is  [if b then  empty ()  else fail ()].  Very usefull  in grammar
     family at the beginning of a rule *)
-val cond : bool -> unit grammar
+val cond : ?name:string -> bool -> unit grammar
 
 (** [term  t] accepts the  terminal [t] and  returns its semantics.   See module
     [Lex] *)
@@ -40,43 +40,48 @@ val alt : ?name:string -> 'a grammar list -> 'a grammar
 
 (** [seq g1 g2 f] parse with g1 and then with g2 for the rest of the input, uses
     [f] to combine both semantics *)
-val seq : 'a grammar -> ('a -> 'b) grammar -> 'b grammar
+val seq : ?name:string -> 'a grammar -> ('a -> 'b) grammar -> 'b grammar
 
-val seq1 : 'a grammar -> 'b grammar -> 'a grammar
-val seq2 : 'a grammar -> 'b grammar -> 'b grammar
+val seq1 : ?name:string -> 'a grammar -> 'b grammar -> 'a grammar
+val seq2 : ?name:string -> 'a grammar -> 'b grammar -> 'b grammar
 
 (** [dseq g1 ~cs g2)] is a  dependant sequence, the grammar [g2] used after [g1]
     may depend  upon the semantics  of [g1]. This is  not very efficient  as the
     grammar [g2] must be compiled at  parsing time.  [g2] is memoized by default
     to partially overcome this fact. *)
-val dseq : ('a * 'b) grammar -> ?cs:Charset.t -> ('a -> ('b -> 'c) grammar)
-           -> 'c grammar
+val dseq : ?name:string -> ('a * 'b) grammar -> ?cs:Charset.t
+           -> ('a -> ('b -> 'c) grammar) -> 'c grammar
 
 (** [lpos  g] is identical  to [g] but passes  the position just  before parsing
     with [g] to the semantical action of [g] *)
-val lpos : (Pos.t -> 'a) grammar -> 'a grammar
+val lpos : ?name:string -> (Pos.t -> 'a) grammar -> 'a grammar
 
 (** [rpos g] is identical to [g] but passes the position just after parsing with
     [g] to the semantical action of [g] *)
-val rpos : (Pos.t -> 'a) grammar -> 'a grammar
+val rpos : ?name:string -> (Pos.t -> 'a) grammar -> 'a grammar
 
 (** variants of seq with the position of the first iterm *)
-val seq_pos : 'a grammar -> (Pos.t * 'a * Pos.t -> 'b) grammar -> 'b grammar
-val seq_lpos : 'a grammar -> (Pos.t * 'a -> 'b) grammar -> 'b grammar
-val seq_rpos : 'a grammar -> ('a * Pos.t -> 'b) grammar -> 'b grammar
+val seq_pos : ?name:string -> 'a grammar -> (Pos.t * 'a * Pos.t -> 'b) grammar
+              -> 'b grammar
+val seq_lpos : ?name:string -> 'a grammar -> (Pos.t * 'a -> 'b) grammar
+               -> 'b grammar
+val seq_rpos : ?name:string -> 'a grammar -> ('a * Pos.t -> 'b) grammar
+               -> 'b grammar
 
 (** [cache  g] avoid to  parse twice  the same input  with [g] by  memoizing the
     result of  the first parsing. Using  [cache] allows to recover  a polynomial
     time complexity (cubic at  worst) and a quadratic space (in  the size of the
     input) *)
-val cache : ?merge:('a -> 'a -> 'a) -> 'a grammar -> 'a grammar
+val cache : ?name:string -> ?merge:('a -> 'a -> 'a) -> 'a grammar -> 'a grammar
 
 (** allows to perform a test, the test function receive the position before
     and after the blanks *)
-val test_before : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+val test_before : ?name:string
+                  -> (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a grammar -> 'a grammar
 
-val test_after : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+val test_after : ?name:string
+                 -> (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a grammar -> 'a grammar
 
 val no_blank_before : 'a grammar -> 'a grammar
@@ -85,7 +90,8 @@ val no_blank_before : 'a grammar -> 'a grammar
     [g].  The optional parameters allow to  control which blanks are used at the
     bounndary. Both  can be used  in which case the  new blanks are  used second
     before parsing with [g] and first after. *)
-val layout : ?config:Lex.layout_config -> Lex.blank -> 'a grammar -> 'a grammar
+val layout : ?name:string -> ?config:Lex.layout_config
+             -> Lex.blank -> 'a grammar -> 'a grammar
 
 (** {2 Definition of recursive grammars } *)
 
@@ -104,12 +110,12 @@ val set_grammar : 'a grammar -> 'a grammar -> unit
 val fixpoint : ?name:string -> ('a grammar -> 'a grammar) -> 'a grammar
 
 (** usual option combinator *)
-val option : 'a grammar -> 'a option grammar
-val default_option : 'a -> 'a grammar -> 'a grammar
-val star : 'a grammar -> 'a list grammar
-val plus : 'a grammar -> 'a list grammar
-val star_sep : 'b grammar -> 'a grammar -> 'a list grammar
-val plus_sep : 'b grammar -> 'a grammar -> 'a list grammar
+val option : ?name:string -> 'a grammar -> 'a option grammar
+val default_option : ?name:string -> 'a -> 'a grammar -> 'a grammar
+val star : ?name:string -> 'a grammar -> 'a list grammar
+val plus : ?name:string -> 'a grammar -> 'a list grammar
+val star_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar
+val plus_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar
 
 (** [grammar_family to_str name] returns a  pair [(gs, set_gs)], where [gs] is a
     finite  family of  grammars parametrized  by a  value of  type ['a].  A name

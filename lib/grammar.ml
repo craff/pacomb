@@ -109,98 +109,158 @@ let prl pr sep ch l =
   in
   fn ch l
 
+type prio = Atom | Seq | Alt
+type any_grammar = G : 'a grammar -> any_grammar
+
 let print_grammar ?(def=true) ch s =
   let adone = ref [] in
-  let rec print_grne : type a. out_channel -> a grne -> unit =
-  fun ch g ->
+  let todo = ref [] in
+  let do_def g =
+    g.recursive ||
+      (g.n <> "..." && match g.d with Term _ -> false | _ -> true)
+  in
+  let rec print_grne : type a. prio -> out_channel -> a grne -> unit =
+  fun prio ch g ->
     let pr x = Printf.fprintf ch x in
     let pg x = print_grne x in
     let pv x = print_negr x in
+    let rec is_empty : type a.a grne -> bool = function
+      | ERkey _        -> true
+      | EAppl(g,_)     -> is_empty g
+      | ERPos(g)       -> is_empty g
+      | ELPos(_,g)     -> is_empty g
+      | ECache(_,g)    -> is_empty g
+      | ETest(_,_,g)   -> is_empty g
+      | ELayout(_,g,_) -> is_empty g
+      | _              -> false
+    in
     match g with
     | EFail         -> pr "0"
     | EErr m        -> pr "0(%s)" m
     | ETerm t       -> pr "%s" t.n
-    | EAlt(gs)      -> pr "(%a)" (prl pg " | ") gs
-    | EAppl(g,_)    -> pr "%a" pg g
-    | ESeq(g1,g2)   -> pr "%a %a" pg g1 pv g2
-    | EDSeq(g1,_,_) -> pr "%a ..." pg g1
-    | ELr(g,_,_,s)  -> pr "%a %a*" pg g pv s
+    | EAlt(gs)      -> pr (if prio < Alt then "(%a)" else "%a")
+                          (prl (pg Seq) " | ") gs
+    | ESeq(ERkey _, g) -> pv prio ch g
+    | ESeq(g1,g2)   -> if is_empty g1 then
+                         pg prio ch g1
+                       else if is_empty g2.ne then
+                         pv prio ch g2
+                       else
+                         pr (if prio < Seq then "(%a %a)" else "%a %a")
+                           (pg Atom) g1 (pv Seq) g2
+    | EDSeq(g1,_,_) -> pr (if prio < Seq then "(%a ...)" else "%a ...")
+                         (pg Atom) g1
+    | ELr(g,_,_,s)  -> pr (if prio < Seq then "(%a %a*)" else "%a %a*")
+                         (pg Atom) g (pv Atom) s
     | ERkey _       -> ()
-    | ERef(g)       -> pr "%a" pv g
-    | ERPos(g)      -> pr "%a" pg g
-    | ELPos(_,g)    -> pr "%a" pg g
-    | ECache(_,g)   -> pr "%a" pg g
-    | ETest(_,_,g)  -> pr "%a" pg g
-    | ELayout(_,g,_) -> pr "%a" pg g
+    | EAppl(g,_)    -> pg prio ch g
+    | ERef(g)       -> pv prio ch g
+    | ERPos(g)      -> pg prio ch g
+    | ELPos(_,g)    -> pg prio ch g
+    | ECache(_,g)   -> pg prio ch g
+    | ETest(_,_,g)  -> pg prio ch g
+    | ELayout(_,g,_) -> pg prio ch g
     | ETmp          -> pr "TMP"
 
-  and print_grdf : type a. out_channel -> a grdf -> unit =
-  fun ch g ->
+  and print_grdf : type a. prio -> out_channel -> a grdf -> unit =
+  fun prio ch g ->
     let pr x = Printf.fprintf ch x in
     let pg x = print_dfgr x in
+    let rec is_empty : type a. a grdf -> bool = function
+      | Rkey _ | Empty _ -> true
+      | Appl(g,_)        -> is_empty g.d
+      | RPos(g)          -> is_empty g.d
+      | LPos(_,g)        -> is_empty g.d
+      | Cache(_,g)       -> is_empty g.d
+      | Test(_,_,g)      -> is_empty g.d
+      | Layout(_,g,_)    -> is_empty g.d
+      | _                -> false
+    in
     match g with
     | Fail         -> pr "0"
     | Err m        -> pr "0(%s)" m
     | Empty _      -> pr "()"
     | Term t       -> pr "%s" t.n
-    | Alt(gs)      -> pr "(%a)" (prl pg " | ") gs
-    | Appl(g,_)    -> pr "%a" pg g
-    | Seq(g1,g2)   -> pr "%a %a" pg g1 pg g2
-    | DSeq(g1,_,_) -> pr "%a ..." pg g1
-    | Lr(g,_,_,s)  -> pr "%a %a*" pg g pg s
+    | Alt(gs)      -> pr (if prio < Alt then "(%a)" else "%a")
+                        (prl (pg Seq) " | ") gs
+    | Seq(g1,g2)   -> if is_empty g1.d then
+                        pg prio ch g2
+                      else if is_empty g2.d then
+                        pg prio ch g1
+                      else
+                        pr (if prio < Seq then "(%a %a)" else "%a %a")
+                          (pg Atom) g1 (pg Seq) g2
+    | DSeq(g1,_,_) -> pr (if prio < Seq then "(%a ...)" else "%a ...")
+                         (pg Atom) g1
+    | Lr(g,_,_,s)  -> pr (if prio < Seq then "(%a %a*)" else "%a %a*")
+                         (pg Atom) g (pg Atom) s
     | Rkey _       -> ()
-    | RPos(g)      -> pr "%a" pg g
-    | LPos(_,g)    -> pr "%a" pg g
-    | Cache(_,g)   -> pr "%a" pg g
-    | Test(_,_,g)  -> pr "%a" pg g
-    | Layout(_,g,_)-> pr "%a" pg g
+    | Appl(g,_)    -> pg prio ch g
+    | RPos(g)      -> pg prio ch g
+    | LPos(_,g)    -> pg prio ch g
+    | Cache(_,g)   -> pg prio ch g
+    | Test(_,_,g)  -> pg prio ch g
+    | Layout(_,g,_)-> pg prio ch g
     | Tmp          -> pr "TMP"
 
-  and print_negr : type a. out_channel -> a grammar -> unit =
-  fun ch g ->
+  and print_negr : type a. prio -> out_channel -> a grammar -> unit =
+  fun prio ch g ->
     let pr x = Printf.fprintf ch x in
     if List.mem (E g.k.tok) !adone then Printf.fprintf ch "%s" g.n
-    else if g.recursive then
+    else if do_def g then
       begin
         adone := E g.k.tok :: !adone;
-        let pg x = print_grne x in
-        match g.e with
-        | _::_ -> pr "%s=(%a)" g.n pg g.ne
-        | _    -> pr "%s=(1|%a)" g.n pg g.ne
+        todo := G g :: !todo;
+        pr "%s" g.n
       end
     else
       begin
         let pg x = print_grne x in
         match g.e with
-        | _::_ -> pr "%a" pg g.ne
-        | _    -> pr "(1|%a)" pg g.ne
+        | [] -> pr "%a" (pg prio) g.ne
+        | _  -> pr "(() | %a)" (pg Alt) g.ne
       end
 
-  and print_dfgr : type a. out_channel -> a grammar -> unit =
-  fun ch g ->
+  and print_dfgr : type a. prio -> out_channel -> a grammar -> unit =
+  fun prio ch g ->
     let pr x = Printf.fprintf ch x in
     if List.mem (E g.k.tok) !adone then Printf.fprintf ch "%s" g.n
-    else if g.recursive then
+    else if do_def g then
       begin
         adone := E g.k.tok :: !adone;
-        let pg x = print_grdf x in
-        pr "%s=(%a)" g.n pg g.d
+        todo := G g :: !todo;
+        pr "%s" g.n
       end
     else
       begin
         let pg x = print_grdf x in
-        pr "%a" pg g.d
+        pr "%a" (pg prio) g.d
       end
 
-  in if def then print_dfgr ch s else print_negr ch s
+  in
+  todo := G s :: !todo;
+  while !todo != [] do
+    match !todo with
+      [] -> assert false
+    | G s::l ->
+       todo := l;
+       let pr f x = Printf.fprintf ch "%s ::= %a\n" s.n f x in
+       let pne ch s =
+         match s.e with
+         | [] -> print_grne Alt ch s.ne
+         | _  -> Printf.printf "(() | %a)" (print_grne Alt) s.ne
+       in
+       if def then pr (print_grdf Alt) s.d else pr pne s
+
+  done
 
 (** Interface to constructors.  propagate Fail because it is tested by
    elim_left_rec for the Lr suffix *)
-let fail () = mkg Fail
+let fail ?name () = mkg ?name Fail
 
-let empty x = mkg (Empty x)
+let empty ?name x = mkg ?name (Empty x)
 
-let cond b = if b then empty () else fail ()
+let cond ?name b = if b then empty ?name () else fail ?name ()
 
 let term ?name (x) =
   if accept_empty x then invalid_arg "term: empty terminals";
@@ -218,7 +278,7 @@ let alt ?name l =
 
 let appl ?name g f = mkg ?name (if g.d = Fail then Fail else Appl(g,f))
 
-let seq g1 g2 = mkg (
+let seq ?name g1 g2 = mkg ?name (
   match g1.d,g2.d with
   | Fail, _ -> Fail
   | _, Fail -> Fail
@@ -226,47 +286,47 @@ let seq g1 g2 = mkg (
   | _, Empty y -> Appl(g1, y)
   | _ -> Seq(g1,g2))
 
-let dseq g1 ?(cs=Charset.full) g2 =
-  mkg (if g1.d = Fail then Fail else DSeq(g1,cs,g2))
+let dseq ?name g1 ?(cs=Charset.full) g2 =
+  mkg ?name (if g1.d = Fail then Fail else DSeq(g1,cs,g2))
 
-let lr g1 k ?(pk) g2 =
+let lr ?name g1 k ?(pk) g2 =
   if g2.d = Fail then g1
-  else mkg (if g1.d = Fail then Fail else Lr(g1,k,pk,g2))
+  else mkg ?name (if g1.d = Fail then Fail else Lr(g1,k,pk,g2))
 
-let lpos ?pk g = mkg (if g.d = Fail then Fail else LPos(pk,g))
+let lpos ?name ?pk g = mkg ?name (if g.d = Fail then Fail else LPos(pk,g))
 
-let rpos g = mkg (if g.d = Fail then Fail else RPos(g))
+let rpos ?name g = mkg ?name (if g.d = Fail then Fail else RPos(g))
 
-let seq1 g1 g2 = seq g1 (appl g2 (fun _ x -> x))
+let seq1 ?name g1 g2 = seq ?name g1 (appl g2 (fun _ x -> x))
 
-let seq2 g1 g2 = seq g1 (appl g2 (fun x _ -> x))
+let seq2 ?name g1 g2 = seq ?name g1 (appl g2 (fun x _ -> x))
 
-let seq_rpos g1 g2 =
-  seq (rpos (appl g1 (fun x rpos -> (x, rpos)))) g2
+let seq_rpos ?name g1 g2 =
+  seq ?name (rpos (appl g1 (fun x rpos -> (x, rpos)))) g2
 
-let seq_lpos g1 g2 =
-  seq (lpos (appl g1 (fun x lpos -> (lpos, x)))) g2
+let seq_lpos ?name g1 g2 =
+  seq ?name (lpos (appl g1 (fun x lpos -> (lpos, x)))) g2
 
-let seq_pos g1 g2 =
-  seq (lpos (rpos (appl g1 (fun x rpos lpos -> (lpos, x, rpos)))))
+let seq_pos ?name g1 g2 =
+  seq ?name (lpos (rpos (appl g1 (fun x rpos lpos -> (lpos, x, rpos)))))
     g2
 
-let error m = mkg (Err m)
+let error ?name m = mkg ?name (Err m)
 
-let cache ?merge g = mkg (if g.d = Fail then Fail else Cache(merge,g))
+let cache ?name ?merge g = mkg ?name (if g.d = Fail then Fail else Cache(merge,g))
 
-let test f b g = mkg (if g.d = Fail then Fail else Test(f,b,g))
+let test ?name f b g = mkg ?name (if g.d = Fail then Fail else Test(f,b,g))
 
-let test_before f g = test f true g
+let test_before ?name f g = test ?name f true g
 
-let test_after f g = test f false g
+let test_after ?name f g = test ?name f false g
 
 let no_blank_before g =
   let fn b1 c1 b2 c2 = Input.buffer_equal b1 b2 && c1 = c2 in
-  test_before fn g
+  test_before ~name:"no_blank"  fn g
 
-let layout ?(config=default_layout_config) b g =
-  mkg (if g.d = Fail then Fail else Layout(b,g,config))
+let layout ?name ?(config=default_layout_config) b g =
+  mkg ?name (if g.d = Fail then Fail else Layout(b,g,config))
 
 (** function to define mutually recursive grammar:
     - first one declares the grammars
@@ -293,31 +353,32 @@ let memo g =
     with Not_found ->
       let r = g x in Hashtbl_eq.add tbl x r; r)
 
-let dseq g1 ?cs g2 = dseq g1 ?cs (memo g2)
+let dseq ?name g1 ?cs g2 = dseq ?name g1 ?cs (memo g2)
 
-let option : 'a grammar -> 'a option grammar = fun g ->
-  alt [appl g (fun x -> Some x); empty None]
+let option : ?name:string -> 'a grammar -> 'a option grammar = fun ?name g ->
+  alt ?name [appl g (fun x -> Some x); empty None]
 
-let default_option : 'a -> 'a grammar -> 'a grammar = fun d g ->
-  alt [g; empty d]
+let default_option : ?name:string -> 'a -> 'a grammar -> 'a grammar =
+  fun ?name d g -> alt ?name [g; empty d]
 
-let star : 'a grammar -> 'a list grammar = fun g ->
-  appl (fixpoint (fun r ->
+let star : ?name:string -> 'a grammar -> 'a list grammar = fun ?name g ->
+  appl ?name (fixpoint (fun r ->
             alt [empty [];
                  seq r (appl g (fun x l -> x::l))])) List.rev
 
-let plus : 'a grammar -> 'a list grammar = fun g ->
-  appl (fixpoint (fun r ->
+let plus : ?name:string -> 'a grammar -> 'a list grammar = fun ?name g ->
+  appl ?name (fixpoint (fun r ->
             alt [appl g (fun x -> [x]);
                  seq r (appl g (fun x l -> x::l))])) List.rev
 
-let plus_sep : 'b grammar -> 'a grammar -> 'a list grammar = fun sep g ->
-  appl (fixpoint (fun r ->
+let plus_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar =
+  fun ?name sep g ->
+    appl ?name (fixpoint (fun r ->
             alt [appl g (fun x -> [x]);
                  seq r (seq sep (appl g (fun x _ l -> x::l)))])) List.rev
 
-let star_sep : 'b grammar -> 'a grammar -> 'a list grammar = fun sep g ->
-  alt [empty []; plus_sep sep g]
+let star_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar =
+  fun ?name sep g -> alt ?name [empty []; plus_sep sep g]
 
 (** a function to defined indexed grammars *)
 let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
@@ -782,4 +843,4 @@ let parse_channel
   fun ?(utf8=false) ?filename g b ic ->
     parse_buffer g b (Input.from_channel ~utf8 ?filename ic) Input.init_pos
 
-let lpos g = lpos ?pk:None g
+let lpos ?name g = lpos ?name ?pk:None g
