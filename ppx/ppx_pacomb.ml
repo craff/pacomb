@@ -5,10 +5,6 @@ open Ast_helper
 open Longident
 open Location
 
-(*helper to build expressions *)
-let grmod s =
-  Exp.ident (mknoloc (Ldot(Ldot(Lident "Pacomb","Grammar"),s)))
-
 let cache_att =
   let open Ppxlib in
   Attribute.(declare "cache"
@@ -27,13 +23,6 @@ let layout_att =
   let open Ppxlib in
   Attribute.(declare "layout"
                Context.Value_binding
-               Ast_pattern.(single_expr_payload __)
-               (fun x -> x))
-
-let cs_att =
-  let open Ppxlib in
-  Attribute.(declare "cs"
-               Context.Expression
                Ast_pattern.(single_expr_payload __)
                (fun x -> x))
 
@@ -148,10 +137,9 @@ let exp_to_rule_item (e, loc_e) =  match e with
      let (name, pat) = exp_to_pattern epat in
      (Some (name, pat), None, exp_to_term exp, loc_e)
   | [%expr ([%e? dpat], [%e? epat]) >: [%e? exp]] ->
-     let cs = Ppxlib.Attribute.get cs_att exp in
      let (name, pat) = exp_to_pattern epat in
      let (_, dpat) = exp_to_pattern dpat in
-     (Some (name, pat), Some (dpat,cs), exp_to_term exp, loc_e)
+     (Some (name, pat), Some dpat, exp_to_term exp, loc_e)
   | _ ->
      (None, None, exp_to_term e, loc_e)
 
@@ -267,28 +255,20 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
 
      in
      let fn (lpos,rpos,dep,item,loc_e) exp =
-       let app_cs f cs =
-         let args = match cs with
-           | None -> []
-           | Some e -> [Labelled "cs", e]
-         in
-         if args = [] then grmod f
-         else Exp.apply (grmod f) args
-       in
        let loc = merge_loc loc_e exp.pexp_loc in
        let f = match (lpos,rpos,dep) with
          | false, false, None -> [%expr Pacomb.Grammar.seq]
          | true , false, None -> [%expr Pacomb.Grammar.seq_lpos]
          | false, true , None -> [%expr Pacomb.Grammar.seq_rpos]
          | true , true , None -> [%expr Pacomb.Grammar.seq_pos]
-         | false, false, Some(_,cs) -> app_cs "dseq"      cs
-         | true , false, Some(_,cs) -> app_cs "dseq_lpos" cs
-         | false, true , Some(_,cs) -> app_cs "dseq_rpos" cs
-         | true , true , Some(_,cs) -> app_cs "dseq_pos"  cs
+         | false, false, Some(_) -> [%expr Pacomb.Grammar.dseq]
+         | true , false, Some(_) -> [%expr Pacomb.Grammar.dseq_lpos]
+         | false, true , Some(_) -> [%expr Pacomb.Grammar.dseq_rpos]
+         | true , true , Some(_) -> [%expr Pacomb.Grammar.dseq_pos]
        in
        let exp = match dep with
-         | None -> exp
-         | Some (pat,_) -> [%expr fun [%p pat] -> [%e exp]]
+         | None     -> exp
+         | Some pat -> [%expr fun [%p pat] -> [%e exp]]
        in
        [%expr [%e f] [%e item] [%e exp]]
      in
