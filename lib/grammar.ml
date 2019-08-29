@@ -313,7 +313,8 @@ let seq_pos ?name g1 g2 =
 
 let error ?name m = mkg ?name (Err m)
 
-let cache ?name ?merge g = mkg ?name (if g.d = Fail then Fail else Cache(merge,g))
+let cache ?name ?merge g =
+  mkg ?name (if g.d = Fail then Fail else Cache(merge,g))
 
 let test ?name f b g = mkg ?name (if g.d = Fail then Fail else Test(f,b,g))
 

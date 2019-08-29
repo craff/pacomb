@@ -62,9 +62,10 @@ and heap =
   E | N of res * heap * heap * int
 
 (**  type  of result  used  by  the scheduler  to  progress  in the  parsing  in
-    parallel. It has only one constructor representing a continuation. It must
-    be used instead of calling immediatly the continuation is the scheduler needs
-    to order parsing. This is in two cases:
+    parallel. It has  only one constructor representing a  continuation. It must
+    be  used instead  of calling  immediatly the  continuation is  the scheduler
+    needs to order parsing. This is in two cases:
+
     - we progress in the input (solely in the lexeme and layout combinator)
     - we have constraints to respect for ordering cache (solely in cache) *)
  and res =
@@ -312,8 +313,9 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
           let r =
             match todo with
             | Cont(env,k,x) ->
+               (** it is time to eval lazy arguments *)
+               let k = eval_lrgs k in
                (** calling the continuation *)
-               let k = eval_lrgs k in (** now it is time to eval lazy arguments *)
                call k env x
             | Gram(env,g,k) ->
                g env k
@@ -378,7 +380,7 @@ let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
          with Lex.NoParse -> fun () -> next env
             | Lex.Give_up m -> fun () -> next_msg m env) ()))
 
-(** [test cs env] returns [true] if and only if the next character to parse in
+(** [test cs env]  returns [true] if and only if the next  character to parse in
     the environment [env] is in the character set [cs]. *)
 let test cs e = Charset.mem cs (Input.get e.current_buf e.current_pos)
 
@@ -582,7 +584,8 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
                   vptr after evaluation *)
              lazy (
                  too_late_v := true;
-                 let msg = ref None in (** NOTE: we keep only one give_up message *)
+                 (** NOTE: we keep only one give_up message *)
+                 let msg = ref None in
                  (** do not forget to deal with give_up *)
                  let merge x v =
                    try let y = Lazy.force v in
@@ -606,7 +609,8 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
               (Cont({ env with cache_order },k,v))) l0;
         raise Exit
     in
-    g env (ink k0) (** safe to call g, env had cache pushed so it is a minimum *)
+    (** safe to call g, env had cache pushed so it is a minimum *)
+    g env (ink k0)
 
 (** {2 functions to do the actual parsing *)
 

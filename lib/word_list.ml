@@ -21,7 +21,8 @@ let size {leafs; next} =
 
 type ('a,'b) fold = ('a -> 'b -> 'a) -> 'a -> 'a
 
-let add : bool -> ('a -> 'a) -> ('a,'b) t -> (('a,'b) t, 'a) fold -> 'b -> unit =
+let add : bool -> ('a -> 'a) -> ('a,'b) t
+          -> (('a,'b) t, 'a) fold -> 'b -> unit =
   fun repl map tbl fold v ->
     let f tbl c =
       let c = map c in

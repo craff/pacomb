@@ -115,36 +115,37 @@ let from_string : string -> regexp = fun s ->
 
 open Lex
 
-let from_regexp_grps : ?grps:int list -> regexp -> string list Lex.t = fun ?grps r ->
-  let n = ref 0 in
-  let do_save fn r =
-    let n0 = !n in
-    incr n;
-    let r = fn r in
-    match grps with
-    | None -> save r (fun s l -> s :: l)
-    | Some l ->
-       if List.mem n0 l then save r (fun s l -> s :: l)
-       else r
-  in
-  let rec fn = function
-  | Chr c -> char c []
-  | Set s -> appl (fun _ -> []) (charset s)
-  | Alt l -> alts (List.map fn l)
-  | Seq l -> seqs (List.map fn l) (@)
-  | Opt r -> option [] (fn r)
-  | Str r -> star (fn r) (fun () -> []) (@)
-  | Pls r -> plus (fn r) (fun () -> []) (@)
-  | Sav r -> do_save fn r
-  in
-  let r = do_save fn r in
-  begin
-    match grps with
-    | None -> ()
-    | Some l -> if List.exists (fun g -> g < 0 || g >= !n) l
-                then invalid_arg "from_regexp_grps"
-  end;
-  r
+let from_regexp_grps : ?grps:int list -> regexp -> string list Lex.t =
+  fun ?grps r ->
+    let n = ref 0 in
+    let do_save fn r =
+      let n0 = !n in
+      incr n;
+      let r = fn r in
+      match grps with
+      | None -> save r (fun s l -> s :: l)
+      | Some l ->
+         if List.mem n0 l then save r (fun s l -> s :: l)
+         else r
+    in
+    let rec fn = function
+      | Chr c -> char c []
+      | Set s -> appl (fun _ -> []) (charset s)
+      | Alt l -> alts (List.map fn l)
+      | Seq l -> seqs (List.map fn l) (@)
+      | Opt r -> option [] (fn r)
+      | Str r -> star (fn r) (fun () -> []) (@)
+      | Pls r -> plus (fn r) (fun () -> []) (@)
+      | Sav r -> do_save fn r
+    in
+    let r = do_save fn r in
+    begin
+      match grps with
+      | None -> ()
+      | Some l -> if List.exists (fun g -> g < 0 || g >= !n) l
+                  then invalid_arg "from_regexp_grps"
+    end;
+    r
 
 let from_regexp : regexp -> string Lex.t = fun r ->
   Lex.appl
