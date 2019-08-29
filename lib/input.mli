@@ -123,13 +123,6 @@ val char_pos : buffer -> pos -> int
 (** position in bytes, regardless to utf8 *)
 val byte_pos : buffer -> pos -> int
 
-(** [line buf] returns the current line in the buffer [buf]. *)
-val line : buffer -> string
-
-(** [line_length buf] returns the length of  the  current  line  in  the
-    buffer [buf]. *)
-val line_length : buffer -> int
-
 (** [normalize buf pos] ensures that [pos] is less than  the  length  of
     the current line in [str]. *)
 val normalize : buffer -> pos -> buffer * pos
