@@ -326,6 +326,10 @@ let no_blank_before g =
   let fn b1 c1 b2 c2 = Input.buffer_equal b1 b2 && c1 = c2 in
   test_before ~name:"no_blank"  fn g
 
+let no_blank_after g =
+  let fn b1 c1 b2 c2 = Input.buffer_equal b1 b2 && c1 = c2 in
+  test_after ~name:"no_blank"  fn g
+
 let layout ?name ?(config=default_layout_config) b g =
   mkg ?name (if g.d = Fail then Fail else Layout(b,g,config))
 

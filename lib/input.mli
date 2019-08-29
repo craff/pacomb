@@ -120,7 +120,7 @@ val line_offset : buffer -> int
 (** position in the file *)
 val char_pos : buffer -> pos -> int
 
-(** position in bytes, regarding to utf8 *)
+(** position in bytes, regardless to utf8 *)
 val byte_pos : buffer -> pos -> int
 
 (** [line buf] returns the current line in the buffer [buf]. *)
@@ -146,12 +146,13 @@ val buffer_equal : buffer -> buffer -> bool
 (** [buffer_compare b1 b2] compares [b1] and [b2]. *)
 val buffer_compare : buffer -> buffer -> int
 
-(** [leq_bug b1 i1 b2 i2] returns true if the position [b1, i1] is before
-    [b2, i2]. Gives meaningless result if [b1] and [b2] do not refer to the
-    same file. *)
+(** [buffer_before b1 i1 b2 i2] returns true if the position [b1, i1] is before
+    [b2, i2]. Gives meaningless result if [b1] and [b2] do not refer to the same
+    file. *)
 val buffer_before : buffer -> int -> buffer -> int -> bool
 
-(** Table to associate value to positions in input buffers *)
+(** Table to associate value to positions in input buffers. The complexity
+    of access in the table is O(ln(N)) where N is the number of tables. *)
 module Tbl : sig
   type 'a t
 

@@ -139,10 +139,10 @@ let%parser comma   = ',' => (); ERROR "comma"
 
    Like infix and prefix, expression are parametrized with a priority (here a
    maximum and we use the priorities returned by the parsing of expressions,
-   infix and prefix to deal with priority of whats coming next.  *)
+   infix and prefix to deal with priority of whats coming next.
+ *)
 let%parser rec
- expr pmax = ((pe,e1)>:expr pmax)
-               ((pop,b)>:infix pe pmax)
+ expr pmax = ((pe,e1)>:expr pmax) ((pop,b)>:infix pe pmax)
                ((__,e2)::expr pop)            =>  (pop, Idt(b,[|e1;e2|]))
             ; ((pop,b)>:prefix pmax)
                ((__,e1)::expr pop)            =>  (pop, Idt(b,[|e1|]))

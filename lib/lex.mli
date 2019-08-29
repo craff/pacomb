@@ -1,8 +1,8 @@
 (** {1 Lexing: grouping characters before parsing}
 
     It is traditionnal to do parsing  in two phases (scanning/parsing).  This is
-    not necessary  with combinators in  general this  is still true  with Pacomb
-    (scannerless). However, this makes the grammar more readable to use a lexing
+    not necessary with combinators in  general (scannerless). This is still true
+    with Pacomb.  However, this makes the  grammar more readable to use a lexing
     phase.
 
     Moreover,  lexing is  often done  with  a longuest  match rule  that is  not
@@ -14,6 +14,9 @@
     It also provide functions to eliminate "blank" characteres. *)
 
 (** {2 Types and exception} *)
+
+(**  Position  in   a  buffer  is  a  [Input.buffer]  together   with  an  index
+    [Input.pos]. *)
 type buf = Input.buffer
 type pos = Input.pos
 
@@ -36,16 +39,16 @@ type 'a t = 'a terminal
     - can be raised (but not captured) by terminal
     - can  be raised  (but not  captured)  by action  code in  the grammar,  see
       [Combinator.give_up]
-    - will be raise and captured by [Combinator.parse_buffer] that will give the
-      most advanced position
- *)
+    - will be  raised and captured  by [Combinator.parse_buffer] that  will give
+      the most advanced position *)
 exception NoParse
 
 (** from action ony may give an error message when rejecting a rule *)
 exception Give_up of string
 
-(** [give_up ()] rejects parsing from a corresponding semantic action.
-    Can be used both in the semantics of terminals and parsing rules. *)
+(** [give_up ()] rejects parsing from  a corresponding semantic action. An error
+    message can be provided.  Can be used both in the semantics of terminals and
+    parsing rules. *)
 val give_up : ?msg:string -> unit -> 'a
 
 (** {2 Combinators to create terminals} *)
@@ -53,8 +56,8 @@ val give_up : ?msg:string -> unit -> 'a
 (** accept any character, except eof*)
 val any : ?name:string -> unit -> char t
 
-(**  Terminal  accepting  then  end  of   a  buffer  only.   remark:  [eof]  is
-    automatically added  at the end  of a grammar  by [Combinator.parse_buffer].
+(** Terminal accepting the end of a buffer only.  remark: [eof] is automatically
+    added at the end of  a grammar by [Combinator.parse_buffer].
     [name] default is ["EOF"] *)
 val eof : ?name:string -> 'a -> 'a t
 
@@ -89,7 +92,8 @@ val seq1 : ?name:string -> 'a t -> 'b t -> 'a t
 val seq2 : ?name:string -> 'a t -> 'b t -> 'b t
 val seqs : 'a t list -> ('a -> 'a -> 'a) -> 'a t
 
-(** save the part of the input parsed by the terminal *)
+(** [save t f] save the part of the input parsed by the terminal [t] and combine
+    it with its semantics using [f] *)
 val save : ?name:string -> 'a t -> (string -> 'a -> 'b) -> 'b t
 
 (** [alt  t1 t2]  parses the  input with  [t1] or  [t2].  Contrary  to grammars,
@@ -119,7 +123,7 @@ val appl : ?name:string -> ('a -> 'b) -> 'a t -> 'b t
     [name] defaults to  [sprintf "(%s)*" t.n] *)
 val star : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t
 
-(** Same as above but parses at least once .*)
+(** Same as above but parses at least once.*)
 val plus : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t
 
 (** [string s] Accepts only the given string.

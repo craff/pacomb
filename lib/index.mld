@@ -46,7 +46,7 @@ it is written to a file [calc.ml]).
 ]}
 
 This works using the extensions [[%%parser ...]] for structures and [[%parser
-...]] for expression. They are also accessible by suffxing keywords with
+...]] for expression. These are also accessible by suffixing keywords with
 [%parser] as in the above example. These ppx extensions extends ocaml
 expressions with a syntax for grammars of type ['a Grammar.t] and modifies the
 behaviour of let-bindings especially recursive ones to use [declare_grammar],
@@ -74,6 +74,7 @@ qitem ::= item                                                     itself
        | (epat :: item)                 give a name if used in the action
        | ((epat,epat) >: item)                     as above, but for dseq
 item ::= '...'                                  Grammar.term(Lex.char ())
+       | CHAR                                    Grammar.term(Lex.any ())
        | CHAR(c)                                 Grammar.term(Lex.char c)
        | "..."                                Grammar.term(Lex.string ())
        | STRING(s)                             Grammar.term(Lex.string s)
@@ -101,10 +102,10 @@ operator: "="|"<"|">"|"<="|">="|"<>"|"=="|"!="|"not"|"&&"|"||".
 In action code (expression right of [=>]), a [lid_lpos] or [lid_rpos] will
 denote respectively the left and right position of the item named [lid].  a
 [lid_pos] will group both [lid_lpos] and [lid_rpos] in a record of type
-[Pos.interval]. If the item is matched by a tuple and you want to use its positon
+[Pos.interval]. If the item is matched by a tuple and you want to use its position
 you must use [pat = lid] syntax to give a name to the whole item.
 
-Action code needs parenthesis or [begin ... end] if it uses [if .. then] or
+Action code needs parenthesis or [begin ... end] if it uses [if .. then],
 pattern matching or sequence.
 
 Beware that inside the scope of the extension, you can use the syntax for
@@ -127,60 +128,60 @@ will report [p] as unbounded. To solve this, you can use dependent sequences,
 using [(x,y)>:item] will allow [x] (but not [y]) to be used both in the action
 and the rule. The separation with dependent and non dependent part is crucial
 as dependent grammar are memoised and you don't want "noise". Here is an
-exemple of grammar using this to implement an extensible calculator
+example of grammar using this to implement an extensible calculator
 (see [tests/calc_ext.ml]):
 {[
 let%parser rec
- expr pmax = ((pe,e1)>:expr pmax [@ae false] [@cs Charset.from_string "-&~^+=*/\\$!:"])
-               ((pop,b)>:op pe pmax [@ae false] [@cs Charset.from_string "-+0-9(a-zA-Z"])
-               ((__,e2)::expr pop)
-                      =>  (pop, b e1 e2)
+ expr pmax = ((pe,e1)>:expr pmax)((pop,b)>:op pe pmax)
+               ((__,e2)::expr pop)                =>  (pop, b e1 e2)
             ; (x::FLOAT)                          => (0.0,x)
             ; '(' (e::expr_top) ')'               => (0.0,e)
 ]}
 
-In this example, the [ae] and [cs] attribute allows to tell if
-the rest of the rule accepts an empty input ([ae]) and to give a possible
-character set at the beginning of this input. These must cover all values of
-the parameter to be correct. This can improve parsing performance a lot but
-is not mandatory for correction.
-
 Here are the meaning of let bindings for grammars through the ppx extension:
 - non recursive let bindings correspond to just a name for the grammar.
 - recursive let bindings correspond either to
-  - [Grammar.declare_grammar + Grammar.set_grammar] (if no paramater)
-  - [Grammar.grammar_familly + setting the grammar] if a parameter is given.
+  - [Grammar.declare_grammar + Grammar.set_grammar] (if no parameter)
+  - [Grammar.grammar_family + setting the grammar] if parameters are given.
+    multiple parameter and using label are supported through curryfication
+    by the ppx extension.
 
-A rule [p_1 < p_2 < ... < p_n] will automatically add rules to include the
-grammar parametrized by [p_i] in the grammar parametrized by [p_(i+1)]. Recall
-that due to the type of {!Pacomb.Grammar.grammar_family} recursive grammars
-can only have one parameter.
+For recursive grammar with exactly one parameter, a rule [p_1 < p_2 < ... < p_n]
+will automatically add rules to include the grammar parametrized by [p_i] in the
+grammar parametrized by [p_(i+1)]. This was used by the calculator example above.
 
 [let%parser] accepts three attribute:
   - [[@cache]] to cache the grammar (that is call [Grammar.cache] on the grammar)
-  - [[@merge f]] to apply [f] is two parsetrees are possible for the same input.
+  - [[@merge f]] to apply [f] if two parsetrees are possible for the same input.
     This corresponds to [Grammar.cache ~merge:f].
-  - [[@layout blank]] or [[@layout blank ~config:expr]] to apply Grammar.layout.
+  - [[@layout blank]] or [[@layout blank ~config:expr]] to apply Grammar.layout
+    and change the blank characters for the grammar.
 
 Anything which does not correspond to this grammar will be unchanged
 in the ocaml code (like the type definition in the example
 above).  A mutually recursive definition can also mix the definition of
 grammars (parametric of not) with the definition of normal ocaml values.
-This means you could put the whole file between inside [%%parse ...].
+This means you could put the whole file inside [%%parse ...].
 
 {1:limitations Limitations}
 
 Pacomb must eliminate left recursion in grammars in order to use combinators
 that would loop otherwise. However, left recursion is not supported if it
-traverses A {!Pacomb.Grammar.layout} contructor to change blanks (probably
-possible to solve this, but probably not woth it).
+traverses A {!Pacomb.Grammar.layout} constructor to change blanks (probably
+possible to solve this, but probably not worth it).
 
 Grammars are not left factorised automatically: (A B) | (A C) may parse A twice and
 this may result in very poor performance. Two solutions:
   - left factorise your grammar yourself,
   - Use Grammar.cache trading memory for speed.
 
+Note: left recursion do not need and is not eliminated if the grammar uses
+a cache. However, this solution to use combinator is too slow for non ambiguous
+grammars so we do not impose a cache to all left recursive grammars.
+
 The ppx extension is not too bad but still suffers from the fact that it uses
-a sublanguage of OCaml to describe grammar. For instance [let%parser g =
+a sub-language of OCaml to describe grammar. For instance [let%parser g =
 ((_,x)::g) => x] is not legal because [_] cannot be used in an Ocaml
-expression. Though the following works: [let%parser g = ((__,x)::g) => x]
+expression. Though the following works: [let%parser g = ((__,x)::g) => x].
+The syntax [(((x,y) = z) :: g) => (x,y,z_pos)] is not very nice as we
+use [=] to replace the [as] keyword and we also need a lot of parentheses.

@@ -10,6 +10,9 @@ type 'a t = 'a grammar
 
 (** {2 Grammar contructors} *)
 
+(** All  construœqctors can be  given an optional  [name] argument that  is used
+    when printing the grammar. *)
+
 (** [print_grammar ch g] prints the grammar [g] of the given output channel.  if
     [def=false] (the  default is [true])  it will print the  transformed grammar
     prior to compilation. *)
@@ -25,7 +28,8 @@ val error : ?name:string -> string -> 'a grammar
 val empty : ?name:string -> 'a -> 'a grammar
 
 (** [test  b] is  [if b then  empty ()  else fail ()].  Very usefull  in grammar
-    family at the beginning of a rule *)
+    family at the beginning of a rule. The test is done at grammar construction,
+    not at parsing time (except if it is used in a dependant grammar). *)
 val cond : ?name:string -> bool -> unit grammar
 
 (** [term  t] accepts the  terminal [t] and  returns its semantics.   See module
@@ -38,14 +42,16 @@ val appl : ?name:string -> 'a grammar -> ('a -> 'b) -> 'b grammar
 (** [alt [g1;g2;...;gn]] parses with [g1] and if it fails then [g2] and so on *)
 val alt : ?name:string -> 'a grammar list -> 'a grammar
 
-(** [seq g1 g2 f] parse with g1 and then with g2 for the rest of the input, uses
-    [f] to combine both semantics *)
+(** [seq g1 g2]  parses with [g1] and then with [g2] for  the rest of the input,
+    combine both semantics by apply the semantics of [g2] to [g1] *)
 val seq : ?name:string -> 'a grammar -> ('a -> 'b) grammar -> 'b grammar
 
+
+(** variation of the abover when we do not use all semantics *)
 val seq1 : ?name:string -> 'a grammar -> 'b grammar -> 'a grammar
 val seq2 : ?name:string -> 'a grammar -> 'b grammar -> 'b grammar
 
-(** [dseq g1 ~cs g2)] is a  dependant sequence, the grammar [g2] used after [g1]
+(** [dseq  g1 g2)] is  a dependant sequence, the  grammar [g2] used  after  [g1]
     may depend  upon the semantics  of [g1]. This is  not very efficient  as the
     grammar [g2] must be compiled at  parsing time.  [g2] is memoized by default
     to partially overcome this fact. *)
@@ -68,10 +74,11 @@ val seq_lpos : ?name:string -> 'a grammar -> (Pos.t * 'a -> 'b) grammar
 val seq_rpos : ?name:string -> 'a grammar -> ('a * Pos.t -> 'b) grammar
                -> 'b grammar
 
-(** [cache  g] avoid to  parse twice  the same input  with [g] by  memoizing the
-    result of  the first parsing. Using  [cache] allows to recover  a polynomial
-    time complexity (cubic at  worst) and a quadratic space (in  the size of the
-    input) *)
+(** [cache  g] avoids to parse twice  the same input  with [g] by  memoizing the
+    result of  the first parsing. The  optional [merge] parameter is  applied to
+    group semantics corresponding  to the same part of the  input. Using [cache]
+    with [merge] allows to recover a polynomial time complexity (cubic at worst)
+    and a quadratic space (in the size of the input) *)
 val cache : ?name:string -> ?merge:('a -> 'a -> 'a) -> 'a grammar -> 'a grammar
 
 (** allows to perform a test, the test function receive the position before
@@ -84,14 +91,24 @@ val test_after : ?name:string
                  -> (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a grammar -> 'a grammar
 
+(** particular cases of the above testing the absence of blanks. *)
 val no_blank_before : 'a grammar -> 'a grammar
+val no_blank_after : 'a grammar -> 'a grammar
 
 (** [layout b g] changes the blank  function to parse the input with the grammar
     [g].  The optional parameters allow to  control which blanks are used at the
-    bounndary. Both  can be used  in which case the  new blanks are  used second
+    boundary.  Both  can be used  in which case the  new blanks are  used second
     before parsing with [g] and first after. *)
 val layout : ?name:string -> ?config:Lex.layout_config
              -> Lex.blank -> 'a grammar -> 'a grammar
+
+(** usual option/star/plus combinator *)
+val option : ?name:string -> 'a grammar -> 'a option grammar
+val default_option : ?name:string -> 'a -> 'a grammar -> 'a grammar
+val star : ?name:string -> 'a grammar -> 'a list grammar
+val plus : ?name:string -> 'a grammar -> 'a list grammar
+val star_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar
+val plus_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar
 
 (** {2 Definition of recursive grammars } *)
 
@@ -108,14 +125,6 @@ val set_grammar : 'a grammar -> 'a grammar -> unit
 (** [fixpoint g] compute  the fixpoint of [g], that is a  grammar [g0] such that
     [g0 = g g0] *)
 val fixpoint : ?name:string -> ('a grammar -> 'a grammar) -> 'a grammar
-
-(** usual option combinator *)
-val option : ?name:string -> 'a grammar -> 'a option grammar
-val default_option : ?name:string -> 'a -> 'a grammar -> 'a grammar
-val star : ?name:string -> 'a grammar -> 'a list grammar
-val plus : ?name:string -> 'a grammar -> 'a list grammar
-val star_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar
-val plus_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar
 
 (** [grammar_family to_str name] returns a  pair [(gs, set_gs)], where [gs] is a
     finite  family of  grammars parametrized  by a  value of  type ['a].  A name
@@ -154,9 +163,11 @@ val give_name : string -> 'a grammar -> 'a grammar
     the end of the given combinator *)
 val parse_buffer : 'a grammar -> Lex.blank -> Lex.buf -> Lex.pos -> 'a
 
-(** Partial parsing.  Beware, the returned position is not  the maximum position
-    that can be reached by the grammar. The charset is the character accepted at
-    the end of input. Mainly useful with 'eof' when [blank_after] is [true]. *)
+(** Partial parsing.  Beware, the returned  position is not the maximum position
+    that can  be reached  by the grammar  it the grammar  is ambiguous.  In this
+    case, a message is printed on  stderr. The charset is the character accepted
+    at  the  end of  input.  Mainly  useful  with  'eof' when  [blank_after]  is
+    [true]. *)
 val partial_parse_buffer : 'a grammar -> Lex.blank -> ?blank_after:bool ->
                            Lex.buf -> Lex.pos -> 'a * Lex.buf * Lex.pos
 
@@ -164,12 +175,12 @@ val partial_parse_buffer : 'a grammar -> Lex.blank -> ?blank_after:bool ->
     debug ambiguity in a supposed non ambiguous grammar. *)
 val parse_all_buffer : 'a grammar -> Lex.blank -> Lex.buf -> Lex.pos -> 'a list
 
-(** Parse a whole string, reporting position according to utf8 if
-    optional argument [utf8] is given and true *)
-val parse_string
-    : ?utf8:bool -> ?filename:string -> 'a grammar -> Lex.blank -> string -> 'a
+(**  Parse a  whole string,  reporting position  according to  utf8 if  optional
+    argument [utf8] is given and [true] *)
+val parse_string  : ?utf8:bool -> ?filename:string
+                    -> 'a grammar -> Lex.blank -> string -> 'a
 
-(** Parse a whole input channel *)
-val parse_channel
-    : ?utf8:bool -> ?filename:string
-      -> 'a grammar -> Lex.blank -> in_channel -> 'a
+(**  Parse a  whole  input  channel, reporting  postiion  according  to utf8  if
+    optional argument [utf8] is given and [true] *)
+val parse_channel : ?utf8:bool -> ?filename:string
+                    -> 'a grammar -> Lex.blank -> in_channel -> 'a
