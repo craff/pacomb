@@ -386,18 +386,21 @@ let vb_to_parser rec_ vb =
     let (params,exp) =
       let rec fn exp =
         match exp.pexp_desc with
-        | Pexp_fun (Nolabel, None, param, exp) when rec_ = Recursive ->
+        | Pexp_fun (lbl, def, param, exp) when rec_ = Recursive ->
            let (params, exp) = fn exp in
-           (param::params, exp)
+           ((lbl,def,param)::params, exp)
         | _ -> ([], exp)
       in
       fn vb.pvb_expr
     in
     let (name, param) = match params with
         []  -> (name, None)
-      | [p] -> (name, Some (p,false))
-      | ps  -> ( mkloc (name.txt^"@uncurry") name.loc
-               , Some(Pat.tuple ~loc:vb.pvb_expr.pexp_loc (ps), true))
+      | [(Nolabel,None,p)] -> (name, Some (p,None))
+      | ps  ->
+         let curry = List.map (fun (lbl,def,_) -> (lbl,def)) ps in
+         let ps = List.map (fun (_,_,p) -> p) ps in
+         ( mkloc (name.txt^"@uncurry") name.loc
+         , Some(Pat.tuple ~loc:vb.pvb_expr.pexp_loc (ps), Some curry))
     in
     let name_param = match param with
       | None -> None
@@ -448,25 +451,22 @@ let vb_to_parser rec_ vb =
            [%expr Pacomb.Grammar.declare_grammar
                [%e Exp.constant ~loc:name.loc (Const.string name.txt)]]]
       | Some(_,_,_,curry) ->
-         let pat = if curry then Pat.var name else pat in
+         let pat = if curry <> None then Pat.var name else pat in
          [Vb.mk ~loc (Pat.tuple [pat; Pat.var (mkloc (set name) name.loc)])
            [%expr Pacomb.Grammar.grammar_family
                [%e Exp.constant ~loc:name.loc (Const.string name.txt)]]]
     in
     let hn (loc,_,(name:string loc),pat,param,_) =
       match param with
-      | Some(_,_,apat,true) ->
-         let arity = match apat.ppat_desc with
-           | Ppat_tuple ls -> List.length ls
-             | _            -> assert false
-         in
-         let args = Array.to_list
-                      (Array.init arity (fun i ->
-                           mknoloc ("x@"^string_of_int i)))
+      | Some(_,_,_,Some lbls) ->
+         let args =
+           List.mapi
+             (fun i (lbl,def) -> (lbl,def,mknoloc ("x@"^string_of_int i)))
+             lbls
          in
          let tuple =
            Exp.tuple (
-               List.map (fun v -> Exp.ident (mknoloc (Lident v.txt))) args
+               List.map (fun (_,_,v) -> Exp.ident (mknoloc (Lident v.txt))) args
              )
          in
          let exp =
@@ -475,9 +475,9 @@ let vb_to_parser rec_ vb =
                [%e tuple]]
          in
          let exp =
-           List.fold_right (fun v exp ->
+           List.fold_right (fun (lbl,def,v) exp ->
                let pat = Pat.var v in
-               Exp.fun_ Nolabel None pat exp) args exp
+               Exp.fun_ lbl def pat exp) args exp
          in
          [Vb.mk  ~loc pat exp]
       | _ -> []
