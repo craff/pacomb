@@ -75,7 +75,7 @@ module type Preprocessor =
         new file name, the new line number and [None] if the data must be
         ignored or [Some(data)] which is the new data. The new file name and
         line number can be used to implement line number directives.  The
-        function may aise [Preprocessor_error] in case of error. *)
+        function may raise [Preprocessor_error] in case of error. *)
     val update : state -> string -> int -> string -> bool
                    -> state * string * int * string option
 
