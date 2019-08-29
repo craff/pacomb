@@ -308,7 +308,7 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
        | _ -> [exp]
      in
      let prios = fn e in
-     let (name,param,_) =
+     let (name,param,_,_) =
        match name_param with None -> assert false
                            | Some x -> x
      in
@@ -383,16 +383,28 @@ let vb_to_parser rec_ vb =
       | _                    -> (mknoloc "", true )
     in
     let (name,do_warn) = treat_pat vb.pvb_pat in
-    let (param,exp) = match vb.pvb_expr.pexp_desc with
-      | Pexp_fun (Nolabel, None, param, exp) when rec_ = Recursive ->
-         (Some param, exp)
-      | _ -> (None, vb.pvb_expr)
+    let (params,exp) =
+      let rec fn exp =
+        match exp.pexp_desc with
+        | Pexp_fun (Nolabel, None, param, exp) when rec_ = Recursive ->
+           let (params, exp) = fn exp in
+           (param::params, exp)
+        | _ -> ([], exp)
+      in
+      fn vb.pvb_expr
+    in
+    let (name, param) = match params with
+        []  -> (name, None)
+      | [p] -> (name, Some (p,false))
+      | ps  -> ( mkloc (name.txt^"@uncurry") name.loc
+               , Some(Pat.tuple ~loc:vb.pvb_expr.pexp_loc (ps), true))
     in
     let name_param = match param with
       | None -> None
-      | Some p -> Some ( mkloc (Lident name.txt) name.loc
-                       , gen_id "@p"
-                       , p)
+      | Some (p,curry) ->
+         Some ( mkloc (Lident name.txt) name.loc
+              , gen_id "@p"
+              , p, curry)
     in
     let (changed,rules) = exp_to_grammar ?name_param exp in
     if changed && do_warn then
@@ -430,20 +442,47 @@ let vb_to_parser rec_ vb =
   let declarations =
     let gn (loc,changed,(name:string loc),pat,param,_) =
       assert changed;
-      let vd =
-        match param with
-        | None ->
-           Vb.mk ~loc pat
-             [%expr Pacomb.Grammar.declare_grammar
-                [%e Exp.constant ~loc:name.loc (Const.string name.txt)]]
-        | Some _ ->
-           Vb.mk ~loc (Pat.tuple [pat; Pat.var (mkloc (set name) name.loc)])
-             [%expr Pacomb.Grammar.grammar_family
-                [%e Exp.constant ~loc:name.loc (Const.string name.txt)]]
-      in
-      [vd]
+      match param with
+      | None ->
+         [Vb.mk ~loc pat
+           [%expr Pacomb.Grammar.declare_grammar
+               [%e Exp.constant ~loc:name.loc (Const.string name.txt)]]]
+      | Some(_,_,_,curry) ->
+         let pat = if curry then Pat.var name else pat in
+         [Vb.mk ~loc (Pat.tuple [pat; Pat.var (mkloc (set name) name.loc)])
+           [%expr Pacomb.Grammar.grammar_family
+               [%e Exp.constant ~loc:name.loc (Const.string name.txt)]]]
     in
-    List.map gn gr
+    let hn (loc,_,(name:string loc),pat,param,_) =
+      match param with
+      | Some(_,_,apat,true) ->
+         let arity = match apat.ppat_desc with
+           | Ppat_tuple ls -> List.length ls
+             | _            -> assert false
+         in
+         let args = Array.to_list
+                      (Array.init arity (fun i ->
+                           mknoloc ("x@"^string_of_int i)))
+         in
+         let tuple =
+           Exp.tuple (
+               List.map (fun v -> Exp.ident (mknoloc (Lident v.txt))) args
+             )
+         in
+         let exp =
+           [%expr
+               [%e Exp.ident (Location.mkloc (Lident name.txt) name.loc)]
+               [%e tuple]]
+         in
+         let exp =
+           List.fold_right (fun v exp ->
+               let pat = Pat.var v in
+               Exp.fun_ Nolabel None pat exp) args exp
+         in
+         [Vb.mk  ~loc pat exp]
+      | _ -> []
+    in
+    List.map gn gr @ List.map hn gr
   in
   let orig =
     let gn (loc,_,_,pat,_,rules) =
@@ -460,7 +499,7 @@ let vb_to_parser rec_ vb =
            [%expr Pacomb.Grammar.set_grammar
              [%e Exp.ident (Location.mkloc (Lident name.txt) name.loc)]
              [%e rules]]
-        | Some (_,pn,pat) ->
+        | Some (_,pn,pat,_) ->
            let pat = Pat.alias pat (mknoloc pn) in
            [%expr
              [%e Exp.ident (Location.mkloc (Lident (set name)) name.loc)]
