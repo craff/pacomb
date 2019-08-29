@@ -837,15 +837,15 @@ let parse_all_buffer
     Comb.parse_all_buffer g blank_fun buf0 col0
 
 let parse_string
-    : type a. ?utf8:bool -> ?filename:string ->
+    : type a. ?utf8:Utf8.context -> ?filename:string ->
               a t -> Lex.blank -> string -> a =
-  fun ?(utf8=false) ?filename g b s ->
+  fun ?(utf8=Utf8.ASCII) ?filename g b s ->
     parse_buffer g b (Input.from_string ~utf8 ?filename s) Input.init_pos
 
 let parse_channel
-    : type a. ?utf8:bool -> ?filename:string ->
+    : type a. ?utf8:Utf8.context -> ?filename:string ->
               a t -> Lex.blank -> in_channel -> a =
-  fun ?(utf8=false) ?filename g b ic ->
+  fun ?(utf8=Utf8.ASCII) ?filename g b ic ->
     parse_buffer g b (Input.from_channel ~utf8 ?filename ic) Input.init_pos
 
 let lpos ?name g = lpos ?name ?pk:None g

@@ -27,20 +27,22 @@ val get : buffer -> pos -> char
 
 (** {2 Creating a buffer} *)
 
-(** [from_file fn] returns a buffer constructed using the file [fn].
-    if [utf8] is [true] ([false] is the default), positions are reported
-    according to [utf8]. [read] is still reading bytes.  *)
-val from_file : ?utf8:bool -> string -> buffer
+type context = Utf8.context
+
+(** [from_file fn] returns a buffer constructed using the file [fn].  if
+    [utf8] is  [Utf8.UTF8] ([Utf8.ASCII] is the default),  positions are
+    reported according to [utf8]. [read] is still reading bytes.  *)
+val from_file : ?utf8:context -> string -> buffer
 
 (** [from_channel ~filename ch] returns a buffer constructed  using  the
     channel [ch]. The optional [filename] is only used as a reference to
     the channel in error messages. *)
-val from_channel : ?utf8:bool -> ?filename:string -> in_channel -> buffer
+val from_channel : ?utf8:context -> ?filename:string -> in_channel -> buffer
 
 (** [from_string ~filename str] returns a buffer constructed  using  the
     string [str]. The optional [filename] is only used as a reference to
     the channel in error messages. *)
-val from_string : ?utf8:bool -> ?filename:string -> string -> buffer
+val from_string : ?utf8:context -> ?filename:string -> string -> buffer
 
 (** [from_fun finalise utf8 name get data] returns a buffer  constructed
     from the object [data] using the [get] function. The get function is
@@ -48,7 +50,7 @@ val from_string : ?utf8:bool -> ?filename:string -> string -> buffer
     function is applied to [data]  when the end of file is reached.  The
     [name] string is used to reference  the origin of the data in  error
     messages. Position are reported according to [utf8]. *)
-val from_fun : ('a -> unit) -> bool -> string -> ('a -> string * bool)
+val from_fun : ('a -> unit) -> context -> string -> ('a -> string * bool)
                -> 'a -> buffer
 
 (** Exception that can be raised by a preprocessor in case of error. The
@@ -90,17 +92,17 @@ module type Preprocessor =
 module WithPP : functor (PP : Preprocessor) ->
   sig
     (** Same as [Input.from_fun] but uses the preprocessor. *)
-    val from_fun : ('a -> unit) -> bool -> string -> ('a -> string * bool)
+    val from_fun : ('a -> unit) -> context -> string -> ('a -> string * bool)
                      -> 'a -> buffer
 
     (** Same as [Input.from_channel] but uses the preprocessor. *)
-    val from_channel : ?utf8:bool -> ?filename:string -> in_channel -> buffer
+    val from_channel : ?utf8:context -> ?filename:string -> in_channel -> buffer
 
     (** Same as [Input.from_file] but uses the preprocessor. *)
-    val from_file : ?utf8:bool -> string -> buffer
+    val from_file : ?utf8:context -> string -> buffer
 
     (** Same as [Input.from_string] but uses the preprocessor. *)
-    val from_string : ?utf8:bool -> ?filename:string -> string -> buffer
+    val from_string : ?utf8:context -> ?filename:string -> string -> buffer
   end
 
 (** {2 Buffer manipulation functions} *)

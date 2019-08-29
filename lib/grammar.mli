@@ -176,11 +176,10 @@ val partial_parse_buffer : 'a grammar -> Lex.blank -> ?blank_after:bool ->
 val parse_all_buffer : 'a grammar -> Lex.blank -> Lex.buf -> Lex.pos -> 'a list
 
 (**  Parse a  whole string,  reporting position  according to  utf8 if  optional
-    argument [utf8] is given and [true] *)
-val parse_string  : ?utf8:bool -> ?filename:string
+    argument [utf8] is given and [Utf8.UTF8 or Utf8.CJK_UTF8] *)
+val parse_string  : ?utf8:Utf8.context -> ?filename:string
                     -> 'a grammar -> Lex.blank -> string -> 'a
 
-(**  Parse a  whole  input  channel, reporting  postiion  according  to utf8  if
-    optional argument [utf8] is given and [true] *)
-val parse_channel : ?utf8:bool -> ?filename:string
+(**  Parse a  whole  input  channel, reporting  postiion  according  to utf8. *)
+val parse_channel : ?utf8:Utf8.context -> ?filename:string
                     -> 'a grammar -> Lex.blank -> in_channel -> 'a

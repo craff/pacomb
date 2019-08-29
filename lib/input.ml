@@ -1,3 +1,5 @@
+type context = Utf8.context
+
 type line =
   { is_eof       : bool   (* Has the end of the buffer been reached? *)
   ; lnum         : int    (* Line number (startig at 1)              *)
@@ -8,7 +10,7 @@ type line =
   ; data         : string (* Contents of the buffer                  *)
   ; mutable next : buffer (* Following line                          *)
   ; name         : string (* The name of the buffer (e.g. file name) *)
-  ; utf8         : bool   (* Uses utf8 for positions                 *)
+  ; utf8         : context(* Uses utf8 for positions                 *)
   ; uid          : int    (* Unique identifier                       *)
   ; mutable ctnr : Container.t option array}
                           (* for map table, initialized if used      *)
@@ -27,7 +29,7 @@ let new_uid =
 let empty_buffer name lnum loff boff =
   let rec line = lazy
     { is_eof = true ; name ; lnum ; loff ; boff; llen = 0; coff = 0
-    ; data = "" ; next = line ; uid = new_uid (); utf8 = false
+    ; data = "" ; next = line ; uid = new_uid (); utf8 = ASCII
     ; ctnr = [||] }
   in line
 
@@ -74,26 +76,51 @@ let line_offset (lazy b) = b.loff
 let byte_pos (lazy b) p = b.boff + p
 
 (* Get the utf8 column number corresponding to the given position. *)
-let utf8_col_num data i =
+let utf8_col_num context data i =
   let rec find num pos =
     if pos < i then
       let cc = Char.code data.[pos] in
-      if cc lsr 7 = 0 then find (num+1) (pos+1) else
-      if (cc lsr 5) land 1 = 0 then find (num+1) (pos+2) else
-      if (cc lsr 4) land 1 = 0 then find (num+1) (pos+3) else
-      if (cc lsr 3) land 1 = 0 then find (num+1) (pos+4) else
+      let code i =
+        let n = match i with
+          1 -> cc land 0b0111_1111
+        | 2 -> (cc land (0b0001_1111) lsl 6) land
+                 (Char.code data.[pos+1] land 0b0011_1111)
+        | 3 -> (cc land (0b0000_1111) lsl 12) land
+                 ((Char.code data.[pos+1] land 0b0011_1111) lsl 6)  land
+                   (Char.code data.[pos+2] land 0b0011_1111)
+        | 4 -> (cc land (0b0000_0111) lsl 18) land
+                 ((Char.code data.[pos+1] land 0b0011_1111) lsl 12) land
+                   ((Char.code data.[pos+2] land 0b0011_1111) lsl 6)  land
+                     (Char.code data.[pos+3] land 0b0011_1111)
+        | _ -> assert false
+        in
+        Uchar.of_int n
+      in
+      if cc lsr 7 = 0 then
+        find (num+1)
+          (pos+Utf8.width ~context (code 1))
+      else if (cc lsr 5) land 1 = 0 then
+          find (num+1)
+            (pos+Utf8.width ~context (code 2))
+      else if (cc lsr 4) land 1 = 0 then
+        find (num+1)
+          (pos+Utf8.width ~context (code 3))
+      else if (cc lsr 3) land 1 = 0 then
+        find (num+1)
+          (pos+Utf8.width ~context (code 3))
+      else
       -0 (* Invalid utf8 character. *)
     else num
   in find 0 0
 
-let utf8_len data = utf8_col_num data (String.length data)
+let utf8_len context data = utf8_col_num context data (String.length data)
 
 let col_num (lazy b) p =
-  if b.utf8 then b.coff + utf8_col_num b.data p
+  if b.utf8 <> ASCII then b.coff + utf8_col_num b.utf8 b.data p
     else b.coff + p
 
 let char_pos (lazy b) p =
-  if b.utf8 then b.loff + utf8_col_num b.data p
+  if b.utf8 <> ASCII then b.loff + utf8_col_num b.utf8 b.data p
     else b.loff + p
 
 (* Ensure that the given position is in the current line. *)
@@ -114,7 +141,7 @@ let buffer_uid (lazy buf) = buf.uid
 
 module type MinimalInput =
   sig
-    val from_fun : ('a -> unit) -> bool -> string
+    val from_fun : ('a -> unit) -> context -> string
                    -> ('a -> (string * bool)) -> 'a -> buffer
   end
 
@@ -149,16 +176,17 @@ module GenericInput(M : MinimalInput) =
   struct
     include M
 
-    let from_channel : ?utf8:bool -> ?filename:string -> in_channel -> buffer =
-      fun ?(utf8=false) ?(filename="") ch ->
+    let from_channel
+        : ?utf8:context -> ?filename:string -> in_channel -> buffer =
+      fun ?(utf8=Utf8.ASCII) ?(filename="") ch ->
         from_fun ignore utf8 filename input_line ch
 
-    let from_file : ?utf8:bool -> string -> buffer =
-      fun ?(utf8=false) fname ->
+    let from_file : ?utf8:context -> string -> buffer =
+      fun ?(utf8=Utf8.ASCII) fname ->
         from_fun close_in utf8 fname input_line (open_in fname)
 
-    let from_string : ?utf8:bool -> ?filename:string -> string -> buffer =
-      fun ?(utf8=false) ?(filename="") str ->
+    let from_string : ?utf8:context -> ?filename:string -> string -> buffer =
+      fun ?(utf8=Utf8.ASCII) ?(filename="") str ->
           let size = String.length str in
           let get_string_line (str, p) =
             let start = !p in
@@ -185,7 +213,7 @@ include GenericInput(
           try
             let (data, nl) = get_line file in
             let llen = String.length data in
-            let len = if utf8 then utf8_len data else llen in
+            let len = if utf8 <> Utf8.ASCII then utf8_len utf8 data else llen in
             let nlnum, ncoff = if nl then (lnum+1, 0) else (lnum, coff + len) in
             fun () ->
               { is_eof = false ; lnum ; loff ; boff; coff; llen ; data ; name
@@ -232,7 +260,9 @@ module Make(PP : Preprocessor) =
             match res with
             | Some data ->
                let llen = String.length data in
-               let len = if utf8 then utf8_len data else llen in
+               let len =
+                 if utf8 <> Utf8.ASCII then utf8_len utf8 data else llen
+               in
                let (nlnum, ncoff) =
                  if nl then (lnum+1, 0) else (lnum, coff+len)
                in
