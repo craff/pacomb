@@ -26,13 +26,13 @@ val replace_ascii : ?map:(char -> char) -> (char,'b) t -> string -> 'b -> unit
     identifiers that are keywords *)
 val mem_ascii : ?map:(char -> char) -> (char,'b) t -> string -> bool
 
-(** Same as above for an unicode string *)
+(** Same as above for an unicode string, which are splitted in graphemes *)
 val add_utf8
-  : ?map:(Uchar.t -> Uchar.t) -> (Uchar.t, 'b) t -> string -> 'b -> unit
+  : ?map:(string -> string) -> (string, 'b) t -> string -> 'b -> unit
 val replace_utf8
-  : ?map:(Uchar.t -> Uchar.t) -> (Uchar.t,'b) t -> string -> 'b -> unit
+  : ?map:(string -> string) -> (string,'b) t -> string -> 'b -> unit
 val mem_utf8
-  : ?map:(Uchar.t -> Uchar.t) -> (Uchar.t,'b) t -> string -> bool
+  : ?map:(string -> string) -> (string,'b) t -> string -> bool
 
 (**  Parses word  from a  dictionnary returning  as action  all the  assiociated
     values (it is an ambiguous grammar if there is more than one value).
@@ -47,4 +47,4 @@ val word : ?name:string -> ?final_test:(Input.buffer -> Input.pos -> bool)
            -> ?map:(char -> char) -> (char, 'a) t -> 'a Grammar.t
 
 val utf8_word : ?name:string -> ?final_test:(Input.buffer -> Input.pos -> bool)
-           -> ?map:(Uchar.t -> Uchar.t) -> (Uchar.t, 'a) t -> 'a Grammar.t
+           -> ?map:(string -> string) -> (string, 'a) t -> 'a Grammar.t

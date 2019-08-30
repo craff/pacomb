@@ -70,29 +70,15 @@ let add_ascii : bool -> (char -> char) -> (char,'b) t -> string -> 'b -> unit =
 let replace_ascii ?(map=idt) tbl s v = add_ascii true map tbl s v
 let add_ascii     ?(map=idt) tbl s v = add_ascii false map tbl s v
 
-let mem_utf8 : ?map:(Uchar.t -> Uchar.t)
-               -> (Uchar.t, 'b) t -> string -> bool =
+let mem_utf8 : ?map:(string -> string)
+               -> (string, 'b) t -> string -> bool =
   fun ?(map=idt) tbl s ->
-    let fold f a =
-      let%parser rec utf8_fold =
-        () => a
-      ; (a::utf8_fold) (c::UTF8) => f a c
-      in
-      Grammar.parse_string utf8_fold Lex.noblank s
-    in
-    mem map tbl fold
+    mem map tbl (fun f a -> Utf8.fold_grapheme f a s)
 
-let add_utf8 : bool -> (Uchar.t -> Uchar.t)
-               -> (Uchar.t, 'b) t -> string -> 'b -> unit =
+let add_utf8 : bool -> (string -> string)
+               -> (string, 'b) t -> string -> 'b -> unit =
   fun repl map tbl s v ->
-    let fold f a =
-      let%parser rec utf8_fold =
-        () => a
-      ; (a::utf8_fold) (c::UTF8) => f a c
-      in
-      Grammar.parse_string utf8_fold Lex.noblank s
-    in
-    add repl map tbl fold v
+    add repl map tbl (fun f a -> Utf8.fold_grapheme f a s) v
 
 let replace_utf8 ?(map=idt) tbl s v = add_utf8 true map tbl s v
 let add_utf8     ?(map=idt) tbl s v = add_utf8 false map tbl s v
@@ -114,16 +100,16 @@ let word : ?name:string -> ?final_test:(Input.buffer -> Input.pos -> bool)
   Grammar.(layout ?name Lex.noblank
              (test_after (fun _ _ -> final_test) (parse_char map tbl)))
 
-let parse_utf8 : (Uchar.t -> Uchar.t) -> (Uchar.t, 'a) t -> 'a Grammar.t =
+let parse_utf8 : (string -> string) -> (string, 'a) t -> 'a Grammar.t =
   fun map tbl ->
     let%parser rec p tbl =
       (x::Grammar.alt (List.map Grammar.empty tbl.leafs))      => x
-      ; ((c,__)>:((c::UTF8) => (map c,()))) (x::p (next tbl c)) => x
+      ; ((c,__)>:((c::GRAPHEME) => (map c,()))) (x::p (next tbl c)) => x
     in
     p tbl
 
 let utf8_word : ?name:string -> ?final_test:(Input.buffer -> Input.pos -> bool)
-           -> ?map:(Uchar.t -> Uchar.t) -> (Uchar.t, 'a) t -> 'a Grammar.t =
+           -> ?map:(string -> string) -> (string, 'a) t -> 'a Grammar.t =
   fun ?name ?(final_test=fun _ _ -> true) ?(map=fun c -> c) tbl ->
   Grammar.(layout ?name Lex.noblank
              (test_after (fun _ _ -> final_test) (parse_utf8 map tbl)))

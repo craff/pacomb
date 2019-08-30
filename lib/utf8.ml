@@ -6696,7 +6696,7 @@ let prev_grapheme : string -> int -> int =
           done;
         0
       with | Exit -> !npos
-let fold_grapheme : (string -> 'a -> 'a) -> 'a -> string -> 'a =
+let fold_grapheme : ('a -> string -> 'a) -> 'a -> string -> 'a =
   fun fn ->
     fun acc ->
       fun s ->
@@ -6705,6 +6705,6 @@ let fold_grapheme : (string -> 'a -> 'a) -> 'a -> string -> 'a =
         while (!pos) < (String.length s) do
           (let npos = next_grapheme s (!pos) in
            let s = String.sub s (!pos) (npos - (!pos)) in
-           pos := npos; res := (fn s (!res)))
+           pos := npos; res := (fn (!res) s))
           done;
         !res

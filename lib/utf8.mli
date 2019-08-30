@@ -53,4 +53,4 @@ val next_grapheme : string -> int -> int
 
 val prev_grapheme : string -> int -> int
 
-val fold_grapheme : (string -> 'a -> 'a) -> 'a -> string -> 'a
+val fold_grapheme : ('a -> string -> 'a) -> 'a -> string -> 'a
