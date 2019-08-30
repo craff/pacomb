@@ -97,17 +97,13 @@ let utf8_col_num context data i =
         Uchar.of_int n
       in
       if cc lsr 7 = 0 then
-        find (num+1)
-          (pos+Utf8.width ~context (code 1))
+        find (num+Utf8.width ~context (code 1)) (pos + 1)
       else if (cc lsr 5) land 1 = 0 then
-          find (num+1)
-            (pos+Utf8.width ~context (code 2))
+          find (num+Utf8.width ~context (code 2)) (pos + 2)
       else if (cc lsr 4) land 1 = 0 then
-        find (num+1)
-          (pos+Utf8.width ~context (code 3))
+        find (num+Utf8.width ~context (code 3)) (pos + 3)
       else if (cc lsr 3) land 1 = 0 then
-        find (num+1)
-          (pos+Utf8.width ~context (code 3))
+        find (num+Utf8.width ~context (code 4)) (pos + 4)
       else
       -0 (* Invalid utf8 character. *)
     else num
