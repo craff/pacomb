@@ -1,7 +1,8 @@
 type context =
-  ASCII | UTF8 | CJK_UTF8
-
-let width ?(context=UTF8) c =
+  | ASCII
+  | UTF8
+  | CJK_UTF8
+let width ?(context= UTF8)  c =
   let n = Uchar.to_int c in
   if context = CJK_UTF8
   then
@@ -3347,3 +3348,3249 @@ let width ?(context=UTF8) c =
                      then (if n < 173 then 1 else 0)
                      else if n < 127 then 1 else (-1))
                   else if n < 0 then (if n < 1 then 1 else (-1)) else 0
+type grapheme_break_property =
+  | Other
+  | CR
+  | LF
+  | Prepend
+  | Control
+  | Extend
+  | SpacingMark
+  | L
+  | V
+  | T
+  | LV
+  | LVT
+  | ZWJ
+  | RegionalIndicator
+  | ExtPict
+let gbp c =
+  let n = Uchar.to_int c in
+  if n < 47869
+  then
+    (if n < 54197
+     then
+       (if n < 71342
+        then
+          (if n < 121399
+           then
+             (if n < 127514
+              then
+                (if n < 129340
+                 then
+                   (if n < 129632
+                    then
+                      (if n < 129667
+                       then
+                         (if n < 917506
+                          then
+                            (if n < 917632
+                             then (if n < 917760 then Other else Extend)
+                             else if n < 917536 then Other else Extend)
+                          else
+                            if n < 129686
+                            then (if n < 917505 then Other else Control)
+                            else if n < 129680 then Other else ExtPict)
+                       else
+                         if n < 129652
+                         then
+                           (if n < 129659
+                            then (if n < 129664 then Other else ExtPict)
+                            else if n < 129656 then Other else ExtPict)
+                         else
+                           if n < 129646
+                           then (if n < 129648 then Other else ExtPict)
+                           else Other)
+                    else
+                      if n < 129443
+                      then
+                        (if n < 129454
+                         then
+                           (if n < 129485
+                            then (if n < 129620 then ExtPict else Other)
+                            else if n < 129483 then ExtPict else Other)
+                         else
+                           if n < 129445
+                           then (if n < 129451 then ExtPict else Other)
+                           else ExtPict)
+                      else
+                        if n < 129394
+                        then
+                          (if n < 129399
+                           then (if n < 129402 then Other else ExtPict)
+                           else if n < 129395 then Other else ExtPict)
+                        else
+                          if n < 129350
+                          then (if n < 129351 then Other else ExtPict)
+                          else Other)
+                 else
+                   if n < 128326
+                   then
+                     (if n < 128763
+                      then
+                        (if n < 128992
+                         then
+                           (if n < 129293
+                            then (if n < 129339 then ExtPict else Other)
+                            else if n < 129004 then ExtPict else Other)
+                         else
+                           if n < 128981
+                           then (if n < 128985 then ExtPict else Other)
+                           else ExtPict)
+                      else
+                        if n < 128726
+                        then
+                          (if n < 128749
+                           then (if n < 128752 then Other else ExtPict)
+                           else if n < 128736 then Other else ExtPict)
+                        else
+                          if n < 128592
+                          then (if n < 128640 then Other else ExtPict)
+                          else Other)
+                   else
+                     if n < 127570
+                     then
+                       (if n < 127744
+                        then
+                          (if n < 128000
+                           then (if n < 128318 then ExtPict else Other)
+                           else if n < 127995 then ExtPict else Extend)
+                        else
+                          if n < 127584
+                          then (if n < 127590 then ExtPict else Other)
+                          else ExtPict)
+                     else
+                       if n < 127536
+                       then
+                         (if n < 127547
+                          then (if n < 127568 then Other else ExtPict)
+                          else if n < 127538 then Other else ExtPict)
+                       else
+                         if n < 127515
+                         then (if n < 127535 then Other else ExtPict)
+                         else Other)
+              else
+                if n < 125259
+                then
+                  (if n < 127280
+                   then
+                     (if n < 127374
+                      then
+                        (if n < 127462
+                         then
+                           (if n < 127489
+                            then (if n < 127491 then ExtPict else Other)
+                            else if n < 127488 then ExtPict else Other)
+                         else
+                           if n < 127377
+                           then (if n < 127387 then RegionalIndicator
+                                 else Other)
+                           else if n < 127375 then ExtPict else Other)
+                      else
+                        if n < 127344
+                        then
+                          (if n < 127358
+                           then (if n < 127360 then ExtPict else Other)
+                           else if n < 127346 then ExtPict else Other)
+                        else
+                          if n < 127340
+                          then (if n < 127341 then ExtPict else Other)
+                          else ExtPict)
+                   else
+                     if n < 127153
+                     then
+                       (if n < 127184
+                        then
+                          (if n < 127222
+                           then (if n < 127279 then Other else ExtPict)
+                           else if n < 127185 then Other else ExtPict)
+                        else
+                          if n < 127168
+                          then (if n < 127169 then Other else ExtPict)
+                          else Other)
+                     else
+                       if n < 127024
+                       then
+                         (if n < 127136
+                          then (if n < 127151 then ExtPict else Other)
+                          else if n < 127124 then ExtPict else Other)
+                       else
+                         if n < 126976
+                         then (if n < 127020 then ExtPict else Other)
+                         else ExtPict)
+                else
+                  if n < 122905
+                  then
+                    (if n < 123184
+                     then
+                       (if n < 123632
+                        then
+                          (if n < 125143
+                           then (if n < 125252 then Other else Extend)
+                           else if n < 125136 then Other else Extend)
+                        else
+                          if n < 123191
+                          then (if n < 123628 then Other else Extend)
+                          else Other)
+                     else
+                       if n < 122915
+                       then
+                         (if n < 122918
+                          then (if n < 122923 then Extend else Other)
+                          else if n < 122917 then Extend else Other)
+                       else
+                         if n < 122907
+                         then (if n < 122914 then Extend else Other)
+                         else Extend)
+                  else
+                    if n < 121499
+                    then
+                      (if n < 121520
+                       then
+                         (if n < 122887
+                          then (if n < 122888 then Other else Extend)
+                          else if n < 122880 then Other else Extend)
+                       else
+                         if n < 121504
+                         then (if n < 121505 then Other else Extend)
+                         else Other)
+                    else
+                      if n < 121461
+                      then
+                        (if n < 121476
+                         then (if n < 121477 then Extend else Other)
+                         else if n < 121462 then Extend else Other)
+                      else
+                        if n < 121403
+                        then (if n < 121453 then Extend else Other)
+                        else Extend)
+           else
+             if n < 72884
+             then
+               (if n < 92917
+                then
+                  (if n < 119142
+                   then
+                     (if n < 119171
+                      then
+                        (if n < 119214
+                         then
+                           (if n < 119365
+                            then (if n < 121344 then Other else Extend)
+                            else if n < 119362 then Other else Extend)
+                         else
+                           if n < 119180
+                           then (if n < 119210 then Other else Extend)
+                           else if n < 119173 then Other else Extend)
+                      else
+                        if n < 119149
+                        then
+                          (if n < 119155
+                           then (if n < 119163 then Other else Extend)
+                           else if n < 119150 then Control else Extend)
+                        else
+                          if n < 119143
+                          then (if n < 119146 then SpacingMark else Other)
+                          else Extend)
+                   else
+                     if n < 94095
+                     then
+                       (if n < 113823
+                        then
+                          (if n < 113828
+                           then (if n < 119141 then SpacingMark else Extend)
+                           else if n < 113824 then Other else Control)
+                        else
+                          if n < 94099
+                          then (if n < 113821 then Other else Extend)
+                          else Other)
+                     else
+                       if n < 94031
+                       then
+                         (if n < 94033
+                          then (if n < 94088 then Extend else Other)
+                          else if n < 94032 then SpacingMark else Other)
+                       else
+                         if n < 92976
+                         then (if n < 92983 then Extend else Other)
+                         else Extend)
+                else
+                  if n < 73103
+                  then
+                    (if n < 73112
+                     then
+                       (if n < 73463
+                        then
+                          (if n < 78905
+                           then (if n < 92912 then Other else Extend)
+                           else if n < 78896 then Other else Control)
+                        else
+                          if n < 73459
+                          then (if n < 73461 then Other else SpacingMark)
+                          else Extend)
+                     else
+                       if n < 73107
+                       then
+                         (if n < 73110
+                          then (if n < 73111 then Other else Extend)
+                          else if n < 73109 then SpacingMark else Extend)
+                       else
+                         if n < 73104
+                         then (if n < 73106 then SpacingMark else Other)
+                         else Extend)
+                  else
+                    if n < 73020
+                    then
+                      (if n < 73030
+                       then
+                         (if n < 73032
+                          then (if n < 73098 then Other else SpacingMark)
+                          else if n < 73031 then Other else Extend)
+                       else
+                         if n < 73022
+                         then (if n < 73023 then Prepend else Extend)
+                         else Other)
+                    else
+                      if n < 73009
+                      then
+                        (if n < 73018
+                         then (if n < 73019 then Extend else Other)
+                         else if n < 73015 then Extend else Other)
+                      else
+                        if n < 72885
+                        then (if n < 72887 then Extend else Other)
+                        else Extend)
+             else
+               if n < 72249
+               then
+                 (if n < 72346
+                  then
+                    (if n < 72768
+                     then
+                       (if n < 72873
+                        then
+                          (if n < 72881
+                           then (if n < 72882 then SpacingMark else Extend)
+                           else if n < 72874 then SpacingMark else Extend)
+                        else
+                          if n < 72850
+                          then (if n < 72872 then SpacingMark else Other)
+                          else Extend)
+                     else
+                       if n < 72759
+                       then
+                         (if n < 72766
+                          then (if n < 72767 then Other else Extend)
+                          else if n < 72760 then SpacingMark else Extend)
+                       else
+                         if n < 72751
+                         then (if n < 72752 then Other else Extend)
+                         else SpacingMark)
+                  else
+                    if n < 72279
+                    then
+                      (if n < 72324
+                       then
+                         (if n < 72343
+                          then (if n < 72344 then Other else Extend)
+                          else if n < 72330 then SpacingMark else Extend)
+                       else
+                         if n < 72281
+                         then (if n < 72284 then Prepend else Other)
+                         else Extend)
+                    else
+                      if n < 72255
+                      then
+                        (if n < 72264
+                         then (if n < 72273 then SpacingMark else Extend)
+                         else if n < 72263 then Other else Extend)
+                      else
+                        if n < 72250
+                        then (if n < 72251 then Other else Extend)
+                        else Prepend)
+               else
+                 if n < 71737
+                 then
+                   (if n < 72160
+                    then
+                      (if n < 72165
+                       then
+                         (if n < 72203
+                          then (if n < 72243 then SpacingMark else Extend)
+                          else if n < 72193 then Other else Extend)
+                       else
+                         if n < 72161
+                         then (if n < 72164 then Other else SpacingMark)
+                         else Other)
+                    else
+                      if n < 72148
+                      then
+                        (if n < 72154
+                         then (if n < 72156 then Extend else SpacingMark)
+                         else if n < 72152 then Extend else Other)
+                      else
+                        if n < 71739
+                        then (if n < 72145 then Extend else SpacingMark)
+                        else Other)
+                 else
+                   if n < 71458
+                   then
+                     (if n < 71468
+                      then
+                        (if n < 71727
+                         then (if n < 71736 then Extend else SpacingMark)
+                         else if n < 71724 then Extend else SpacingMark)
+                      else
+                        if n < 71462
+                        then (if n < 71463 then Other else Extend)
+                        else SpacingMark)
+                   else
+                     if n < 71351
+                     then
+                       (if n < 71453
+                        then (if n < 71456 then Extend else SpacingMark)
+                        else if n < 71352 then Extend else Other)
+                     else
+                       if n < 71344
+                       then (if n < 71350 then Extend else SpacingMark)
+                       else Extend)
+        else
+          if n < 69635
+          then
+            (if n < 70464
+             then
+               (if n < 70842
+                then
+                  (if n < 71102
+                   then
+                     (if n < 71227
+                      then
+                        (if n < 71233
+                         then
+                           (if n < 71340
+                            then (if n < 71341 then SpacingMark else Extend)
+                            else if n < 71339 then SpacingMark else Extend)
+                         else
+                           if n < 71230
+                           then (if n < 71231 then Other else Extend)
+                           else if n < 71229 then SpacingMark else Extend)
+                      else
+                        if n < 71132
+                        then
+                          (if n < 71216
+                           then (if n < 71219 then SpacingMark else Extend)
+                           else if n < 71134 then SpacingMark else Other)
+                        else
+                          if n < 71103
+                          then (if n < 71105 then Extend else Other)
+                          else Extend)
+                   else
+                     if n < 70852
+                     then
+                       (if n < 71090
+                        then
+                          (if n < 71096
+                           then (if n < 71100 then SpacingMark else Extend)
+                           else if n < 71094 then SpacingMark else Other)
+                        else
+                          if n < 71087
+                          then (if n < 71088 then Extend else SpacingMark)
+                          else Extend)
+                     else
+                       if n < 70846
+                       then
+                         (if n < 70849
+                          then (if n < 70850 then Other else Extend)
+                          else if n < 70847 then SpacingMark else Extend)
+                       else
+                         if n < 70843
+                         then (if n < 70845 then SpacingMark else Extend)
+                         else SpacingMark)
+                else
+                  if n < 70517
+                  then
+                    (if n < 70727
+                     then
+                       (if n < 70832
+                        then
+                          (if n < 70835
+                           then (if n < 70841 then Extend else SpacingMark)
+                           else if n < 70833 then Extend else SpacingMark)
+                        else
+                          if n < 70750
+                          then (if n < 70751 then Extend else Other)
+                          else Extend)
+                     else
+                       if n < 70720
+                       then
+                         (if n < 70725
+                          then (if n < 70726 then Other else Extend)
+                          else if n < 70722 then SpacingMark else Extend)
+                       else
+                         if n < 70709
+                         then (if n < 70712 then SpacingMark else Extend)
+                         else SpacingMark)
+                  else
+                    if n < 70487
+                    then
+                      (if n < 70500
+                       then
+                         (if n < 70509
+                          then (if n < 70512 then Other else Extend)
+                          else if n < 70502 then Other else Extend)
+                       else
+                         if n < 70488
+                         then (if n < 70498 then Other else SpacingMark)
+                         else Other)
+                    else
+                      if n < 70471
+                      then
+                        (if n < 70475
+                         then (if n < 70478 then Extend else Other)
+                         else if n < 70473 then SpacingMark else Other)
+                      else
+                        if n < 70465
+                        then (if n < 70469 then SpacingMark else Other)
+                        else SpacingMark)
+             else
+               if n < 70067
+               then
+                 (if n < 70200
+                  then
+                    (if n < 70400
+                     then
+                       (if n < 70459
+                        then
+                          (if n < 70462
+                           then (if n < 70463 then Extend else SpacingMark)
+                           else if n < 70461 then Extend else Other)
+                        else
+                          if n < 70402
+                          then (if n < 70404 then Extend else Other)
+                          else SpacingMark)
+                     else
+                       if n < 70367
+                       then
+                         (if n < 70371
+                          then (if n < 70379 then Extend else Other)
+                          else if n < 70368 then Extend else SpacingMark)
+                       else
+                         if n < 70206
+                         then (if n < 70207 then Extend else Other)
+                         else Extend)
+                  else
+                    if n < 70093
+                    then
+                      (if n < 70194
+                       then
+                         (if n < 70197
+                          then (if n < 70198 then Other else Extend)
+                          else if n < 70196 then SpacingMark else Extend)
+                       else
+                         if n < 70188
+                         then (if n < 70191 then SpacingMark else Extend)
+                         else SpacingMark)
+                    else
+                      if n < 70081
+                      then
+                        (if n < 70084
+                         then (if n < 70089 then Other else Extend)
+                         else if n < 70082 then Other else Prepend)
+                      else
+                        if n < 70070
+                        then (if n < 70079 then Other else SpacingMark)
+                        else Extend)
+               else
+                 if n < 69838
+                 then
+                   (if n < 69957
+                    then
+                      (if n < 70004
+                       then
+                         (if n < 70018
+                          then (if n < 70019 then SpacingMark else Other)
+                          else if n < 70016 then SpacingMark else Extend)
+                       else
+                         if n < 69959
+                         then (if n < 70003 then Other else Extend)
+                         else Other)
+                    else
+                      if n < 69927
+                      then
+                        (if n < 69933
+                         then (if n < 69941 then SpacingMark else Other)
+                         else if n < 69932 then Extend else SpacingMark)
+                      else
+                        if n < 69888
+                        then (if n < 69891 then Extend else Other)
+                        else Extend)
+                 else
+                   if n < 69811
+                   then
+                     (if n < 69819
+                      then
+                        (if n < 69822
+                         then (if n < 69837 then Other else Prepend)
+                         else if n < 69821 then Other else Prepend)
+                      else
+                        if n < 69815
+                        then (if n < 69817 then Other else Extend)
+                        else SpacingMark)
+                   else
+                     if n < 69759
+                     then
+                       (if n < 69763
+                        then (if n < 69808 then Extend else SpacingMark)
+                        else if n < 69762 then Other else SpacingMark)
+                     else
+                       if n < 69688
+                       then (if n < 69703 then Extend else Other)
+                       else Extend)
+          else
+            if n < 54981
+            then
+              (if n < 65438
+               then
+                 (if n < 68108
+                  then
+                    (if n < 68327
+                     then
+                       (if n < 69457
+                        then
+                          (if n < 69633
+                           then (if n < 69634 then Other else SpacingMark)
+                           else if n < 69632 then Extend else SpacingMark)
+                        else
+                          if n < 68904
+                          then (if n < 69446 then Other else Extend)
+                          else if n < 68900 then Other else Extend)
+                     else
+                       if n < 68155
+                       then
+                         (if n < 68160
+                          then (if n < 68325 then Other else Extend)
+                          else if n < 68159 then Other else Extend)
+                       else
+                         if n < 68112
+                         then (if n < 68152 then Other else Extend)
+                         else Other)
+                  else
+                    if n < 66273
+                    then
+                      (if n < 68097
+                       then
+                         (if n < 68101
+                          then (if n < 68103 then Extend else Other)
+                          else if n < 68100 then Extend else Other)
+                       else
+                         if n < 66422
+                         then (if n < 66427 then Extend else Other)
+                         else Extend)
+                    else
+                      if n < 65532
+                      then
+                        (if n < 66046
+                         then (if n < 66272 then Other else Extend)
+                         else if n < 66045 then Other else Extend)
+                      else
+                        if n < 65440
+                        then (if n < 65529 then Other else Control)
+                        else Other)
+               else
+                 if n < 55177
+                 then
+                   (if n < 64287
+                    then
+                      (if n < 65056
+                       then
+                         (if n < 65279
+                          then (if n < 65280 then Extend else Other)
+                          else if n < 65072 then Control else Other)
+                       else
+                         if n < 65024
+                         then (if n < 65040 then Extend else Other)
+                         else Extend)
+                    else
+                      if n < 55239
+                      then
+                        (if n < 55292
+                         then (if n < 64286 then Other else Extend)
+                         else if n < 55243 then Other else T)
+                      else
+                        if n < 55204
+                        then (if n < 55216 then Other else V)
+                        else Other)
+                 else
+                   if n < 55092
+                   then
+                     (if n < 55121
+                      then
+                        (if n < 55149
+                         then (if n < 55176 then LVT else LV)
+                         else if n < 55148 then LVT else LV)
+                      else
+                        if n < 55093
+                        then (if n < 55120 then LVT else LV)
+                        else LVT)
+                   else
+                     if n < 55036
+                     then
+                       (if n < 55064
+                        then (if n < 55065 then LV else LVT)
+                        else if n < 55037 then LV else LVT)
+                     else
+                       if n < 55008
+                       then (if n < 55009 then LV else LVT)
+                       else LV)
+            else
+              if n < 54589
+              then
+                (if n < 54785
+                 then
+                   (if n < 54896
+                    then
+                      (if n < 54925
+                       then
+                         (if n < 54953
+                          then (if n < 54980 then LVT else LV)
+                          else if n < 54952 then LVT else LV)
+                       else
+                         if n < 54897
+                         then (if n < 54924 then LVT else LV)
+                         else LVT)
+                    else
+                      if n < 54840
+                      then
+                        (if n < 54868
+                         then (if n < 54869 then LV else LVT)
+                         else if n < 54841 then LV else LVT)
+                      else
+                        if n < 54812
+                        then (if n < 54813 then LV else LVT)
+                        else LV)
+                 else
+                   if n < 54700
+                   then
+                     (if n < 54729
+                      then
+                        (if n < 54757
+                         then (if n < 54784 then LVT else LV)
+                         else if n < 54756 then LVT else LV)
+                      else
+                        if n < 54701
+                        then (if n < 54728 then LVT else LV)
+                        else LVT)
+                   else
+                     if n < 54644
+                     then
+                       (if n < 54672
+                        then (if n < 54673 then LV else LVT)
+                        else if n < 54645 then LV else LVT)
+                     else
+                       if n < 54616
+                       then (if n < 54617 then LV else LVT)
+                       else LV)
+              else
+                if n < 54393
+                then
+                  (if n < 54504
+                   then
+                     (if n < 54533
+                      then
+                        (if n < 54561
+                         then (if n < 54588 then LVT else LV)
+                         else if n < 54560 then LVT else LV)
+                      else
+                        if n < 54505
+                        then (if n < 54532 then LVT else LV)
+                        else LVT)
+                   else
+                     if n < 54448
+                     then
+                       (if n < 54476
+                        then (if n < 54477 then LV else LVT)
+                        else if n < 54449 then LV else LVT)
+                     else
+                       if n < 54420
+                       then (if n < 54421 then LV else LVT)
+                       else LV)
+                else
+                  if n < 54308
+                  then
+                    (if n < 54337
+                     then
+                       (if n < 54365
+                        then (if n < 54392 then LVT else LV)
+                        else if n < 54364 then LVT else LV)
+                     else
+                       if n < 54309
+                       then (if n < 54336 then LVT else LV)
+                       else LVT)
+                  else
+                    if n < 54252
+                    then
+                      (if n < 54280
+                       then (if n < 54281 then LV else LVT)
+                       else if n < 54253 then LV else LVT)
+                    else
+                      if n < 54224
+                      then (if n < 54225 then LV else LVT)
+                      else LV)
+     else
+       if n < 51033
+       then
+         (if n < 52628
+          then
+            (if n < 53412
+             then
+               (if n < 53804
+                then
+                  (if n < 54000
+                   then
+                     (if n < 54085
+                      then
+                        (if n < 54141
+                         then
+                           (if n < 54169
+                            then (if n < 54196 then LVT else LV)
+                            else if n < 54168 then LVT else LV)
+                         else
+                           if n < 54113
+                           then (if n < 54140 then LVT else LV)
+                           else if n < 54112 then LVT else LV)
+                      else
+                        if n < 54029
+                        then
+                          (if n < 54057
+                           then (if n < 54084 then LVT else LV)
+                           else if n < 54056 then LVT else LV)
+                        else
+                          if n < 54001
+                          then (if n < 54028 then LVT else LV)
+                          else LVT)
+                   else
+                     if n < 53889
+                     then
+                       (if n < 53944
+                        then
+                          (if n < 53972
+                           then (if n < 53973 then LV else LVT)
+                           else if n < 53945 then LV else LVT)
+                        else
+                          if n < 53916
+                          then (if n < 53917 then LV else LVT)
+                          else LV)
+                     else
+                       if n < 53833
+                       then
+                         (if n < 53861
+                          then (if n < 53888 then LVT else LV)
+                          else if n < 53860 then LVT else LV)
+                       else
+                         if n < 53805
+                         then (if n < 53832 then LVT else LV)
+                         else LVT)
+                else
+                  if n < 53608
+                  then
+                    (if n < 53693
+                     then
+                       (if n < 53748
+                        then
+                          (if n < 53776
+                           then (if n < 53777 then LV else LVT)
+                           else if n < 53749 then LV else LVT)
+                        else
+                          if n < 53720
+                          then (if n < 53721 then LV else LVT)
+                          else LV)
+                     else
+                       if n < 53637
+                       then
+                         (if n < 53665
+                          then (if n < 53692 then LVT else LV)
+                          else if n < 53664 then LVT else LV)
+                       else
+                         if n < 53609
+                         then (if n < 53636 then LVT else LV)
+                         else LVT)
+                  else
+                    if n < 53497
+                    then
+                      (if n < 53552
+                       then
+                         (if n < 53580
+                          then (if n < 53581 then LV else LVT)
+                          else if n < 53553 then LV else LVT)
+                       else
+                         if n < 53524
+                         then (if n < 53525 then LV else LVT)
+                         else LV)
+                    else
+                      if n < 53441
+                      then
+                        (if n < 53469
+                         then (if n < 53496 then LVT else LV)
+                         else if n < 53468 then LVT else LV)
+                      else
+                        if n < 53413
+                        then (if n < 53440 then LVT else LV)
+                        else LVT)
+             else
+               if n < 53020
+               then
+                 (if n < 53216
+                  then
+                    (if n < 53301
+                     then
+                       (if n < 53356
+                        then
+                          (if n < 53384
+                           then (if n < 53385 then LV else LVT)
+                           else if n < 53357 then LV else LVT)
+                        else
+                          if n < 53328
+                          then (if n < 53329 then LV else LVT)
+                          else LV)
+                     else
+                       if n < 53245
+                       then
+                         (if n < 53273
+                          then (if n < 53300 then LVT else LV)
+                          else if n < 53272 then LVT else LV)
+                       else
+                         if n < 53217
+                         then (if n < 53244 then LVT else LV)
+                         else LVT)
+                  else
+                    if n < 53105
+                    then
+                      (if n < 53160
+                       then
+                         (if n < 53188
+                          then (if n < 53189 then LV else LVT)
+                          else if n < 53161 then LV else LVT)
+                       else
+                         if n < 53132
+                         then (if n < 53133 then LV else LVT)
+                         else LV)
+                    else
+                      if n < 53049
+                      then
+                        (if n < 53077
+                         then (if n < 53104 then LVT else LV)
+                         else if n < 53076 then LVT else LV)
+                      else
+                        if n < 53021
+                        then (if n < 53048 then LVT else LV)
+                        else LVT)
+               else
+                 if n < 52824
+                 then
+                   (if n < 52909
+                    then
+                      (if n < 52964
+                       then
+                         (if n < 52992
+                          then (if n < 52993 then LV else LVT)
+                          else if n < 52965 then LV else LVT)
+                       else
+                         if n < 52936
+                         then (if n < 52937 then LV else LVT)
+                         else LV)
+                    else
+                      if n < 52853
+                      then
+                        (if n < 52881
+                         then (if n < 52908 then LVT else LV)
+                         else if n < 52880 then LVT else LV)
+                      else
+                        if n < 52825
+                        then (if n < 52852 then LVT else LV)
+                        else LVT)
+                 else
+                   if n < 52713
+                   then
+                     (if n < 52768
+                      then
+                        (if n < 52796
+                         then (if n < 52797 then LV else LVT)
+                         else if n < 52769 then LV else LVT)
+                      else
+                        if n < 52740
+                        then (if n < 52741 then LV else LVT)
+                        else LV)
+                   else
+                     if n < 52657
+                     then
+                       (if n < 52685
+                        then (if n < 52712 then LVT else LV)
+                        else if n < 52684 then LVT else LV)
+                     else
+                       if n < 52629
+                       then (if n < 52656 then LVT else LV)
+                       else LVT)
+          else
+            if n < 51817
+            then
+              (if n < 52209
+               then
+                 (if n < 52405
+                  then
+                    (if n < 52516
+                     then
+                       (if n < 52572
+                        then
+                          (if n < 52600
+                           then (if n < 52601 then LV else LVT)
+                           else if n < 52573 then LV else LVT)
+                        else
+                          if n < 52544
+                          then (if n < 52545 then LV else LVT)
+                          else if n < 52517 then LV else LVT)
+                     else
+                       if n < 52460
+                       then
+                         (if n < 52488
+                          then (if n < 52489 then LV else LVT)
+                          else if n < 52461 then LV else LVT)
+                       else
+                         if n < 52432
+                         then (if n < 52433 then LV else LVT)
+                         else LV)
+                  else
+                    if n < 52320
+                    then
+                      (if n < 52349
+                       then
+                         (if n < 52377
+                          then (if n < 52404 then LVT else LV)
+                          else if n < 52376 then LVT else LV)
+                       else
+                         if n < 52321
+                         then (if n < 52348 then LVT else LV)
+                         else LVT)
+                    else
+                      if n < 52264
+                      then
+                        (if n < 52292
+                         then (if n < 52293 then LV else LVT)
+                         else if n < 52265 then LV else LVT)
+                      else
+                        if n < 52236
+                        then (if n < 52237 then LV else LVT)
+                        else LV)
+               else
+                 if n < 52013
+                 then
+                   (if n < 52124
+                    then
+                      (if n < 52153
+                       then
+                         (if n < 52181
+                          then (if n < 52208 then LVT else LV)
+                          else if n < 52180 then LVT else LV)
+                       else
+                         if n < 52125
+                         then (if n < 52152 then LVT else LV)
+                         else LVT)
+                    else
+                      if n < 52068
+                      then
+                        (if n < 52096
+                         then (if n < 52097 then LV else LVT)
+                         else if n < 52069 then LV else LVT)
+                      else
+                        if n < 52040
+                        then (if n < 52041 then LV else LVT)
+                        else LV)
+                 else
+                   if n < 51928
+                   then
+                     (if n < 51957
+                      then
+                        (if n < 51985
+                         then (if n < 52012 then LVT else LV)
+                         else if n < 51984 then LVT else LV)
+                      else
+                        if n < 51929
+                        then (if n < 51956 then LVT else LV)
+                        else LVT)
+                   else
+                     if n < 51872
+                     then
+                       (if n < 51900
+                        then (if n < 51901 then LV else LVT)
+                        else if n < 51873 then LV else LVT)
+                     else
+                       if n < 51844
+                       then (if n < 51845 then LV else LVT)
+                       else LV)
+            else
+              if n < 51425
+              then
+                (if n < 51621
+                 then
+                   (if n < 51732
+                    then
+                      (if n < 51761
+                       then
+                         (if n < 51789
+                          then (if n < 51816 then LVT else LV)
+                          else if n < 51788 then LVT else LV)
+                       else
+                         if n < 51733
+                         then (if n < 51760 then LVT else LV)
+                         else LVT)
+                    else
+                      if n < 51676
+                      then
+                        (if n < 51704
+                         then (if n < 51705 then LV else LVT)
+                         else if n < 51677 then LV else LVT)
+                      else
+                        if n < 51648
+                        then (if n < 51649 then LV else LVT)
+                        else LV)
+                 else
+                   if n < 51536
+                   then
+                     (if n < 51565
+                      then
+                        (if n < 51593
+                         then (if n < 51620 then LVT else LV)
+                         else if n < 51592 then LVT else LV)
+                      else
+                        if n < 51537
+                        then (if n < 51564 then LVT else LV)
+                        else LVT)
+                   else
+                     if n < 51480
+                     then
+                       (if n < 51508
+                        then (if n < 51509 then LV else LVT)
+                        else if n < 51481 then LV else LVT)
+                     else
+                       if n < 51452
+                       then (if n < 51453 then LV else LVT)
+                       else LV)
+              else
+                if n < 51229
+                then
+                  (if n < 51340
+                   then
+                     (if n < 51369
+                      then
+                        (if n < 51397
+                         then (if n < 51424 then LVT else LV)
+                         else if n < 51396 then LVT else LV)
+                      else
+                        if n < 51341
+                        then (if n < 51368 then LVT else LV)
+                        else LVT)
+                   else
+                     if n < 51284
+                     then
+                       (if n < 51312
+                        then (if n < 51313 then LV else LVT)
+                        else if n < 51285 then LV else LVT)
+                     else
+                       if n < 51256
+                       then (if n < 51257 then LV else LVT)
+                       else LV)
+                else
+                  if n < 51144
+                  then
+                    (if n < 51173
+                     then
+                       (if n < 51201
+                        then (if n < 51228 then LVT else LV)
+                        else if n < 51200 then LVT else LV)
+                     else
+                       if n < 51145
+                       then (if n < 51172 then LVT else LV)
+                       else LVT)
+                  else
+                    if n < 51088
+                    then
+                      (if n < 51116
+                       then (if n < 51117 then LV else LVT)
+                       else if n < 51089 then LV else LVT)
+                    else
+                      if n < 51060
+                      then (if n < 51061 then LV else LVT)
+                      else LV)
+       else
+         if n < 49464
+         then
+           (if n < 50248
+            then
+              (if n < 50640
+               then
+                 (if n < 50836
+                  then
+                    (if n < 50921
+                     then
+                       (if n < 50977
+                        then
+                          (if n < 51005
+                           then (if n < 51032 then LVT else LV)
+                           else if n < 51004 then LVT else LV)
+                        else
+                          if n < 50949
+                          then (if n < 50976 then LVT else LV)
+                          else if n < 50948 then LVT else LV)
+                     else
+                       if n < 50865
+                       then
+                         (if n < 50893
+                          then (if n < 50920 then LVT else LV)
+                          else if n < 50892 then LVT else LV)
+                       else
+                         if n < 50837
+                         then (if n < 50864 then LVT else LV)
+                         else LVT)
+                  else
+                    if n < 50725
+                    then
+                      (if n < 50780
+                       then
+                         (if n < 50808
+                          then (if n < 50809 then LV else LVT)
+                          else if n < 50781 then LV else LVT)
+                       else
+                         if n < 50752
+                         then (if n < 50753 then LV else LVT)
+                         else LV)
+                    else
+                      if n < 50669
+                      then
+                        (if n < 50697
+                         then (if n < 50724 then LVT else LV)
+                         else if n < 50696 then LVT else LV)
+                      else
+                        if n < 50641
+                        then (if n < 50668 then LVT else LV)
+                        else LVT)
+               else
+                 if n < 50444
+                 then
+                   (if n < 50529
+                    then
+                      (if n < 50584
+                       then
+                         (if n < 50612
+                          then (if n < 50613 then LV else LVT)
+                          else if n < 50585 then LV else LVT)
+                       else
+                         if n < 50556
+                         then (if n < 50557 then LV else LVT)
+                         else LV)
+                    else
+                      if n < 50473
+                      then
+                        (if n < 50501
+                         then (if n < 50528 then LVT else LV)
+                         else if n < 50500 then LVT else LV)
+                      else
+                        if n < 50445
+                        then (if n < 50472 then LVT else LV)
+                        else LVT)
+                 else
+                   if n < 50333
+                   then
+                     (if n < 50388
+                      then
+                        (if n < 50416
+                         then (if n < 50417 then LV else LVT)
+                         else if n < 50389 then LV else LVT)
+                      else
+                        if n < 50360
+                        then (if n < 50361 then LV else LVT)
+                        else LV)
+                   else
+                     if n < 50277
+                     then
+                       (if n < 50305
+                        then (if n < 50332 then LVT else LV)
+                        else if n < 50304 then LVT else LV)
+                     else
+                       if n < 50249
+                       then (if n < 50276 then LVT else LV)
+                       else LVT)
+            else
+              if n < 49856
+              then
+                (if n < 50052
+                 then
+                   (if n < 50137
+                    then
+                      (if n < 50192
+                       then
+                         (if n < 50220
+                          then (if n < 50221 then LV else LVT)
+                          else if n < 50193 then LV else LVT)
+                       else
+                         if n < 50164
+                         then (if n < 50165 then LV else LVT)
+                         else LV)
+                    else
+                      if n < 50081
+                      then
+                        (if n < 50109
+                         then (if n < 50136 then LVT else LV)
+                         else if n < 50108 then LVT else LV)
+                      else
+                        if n < 50053
+                        then (if n < 50080 then LVT else LV)
+                        else LVT)
+                 else
+                   if n < 49941
+                   then
+                     (if n < 49996
+                      then
+                        (if n < 50024
+                         then (if n < 50025 then LV else LVT)
+                         else if n < 49997 then LV else LVT)
+                      else
+                        if n < 49968
+                        then (if n < 49969 then LV else LVT)
+                        else LV)
+                   else
+                     if n < 49885
+                     then
+                       (if n < 49913
+                        then (if n < 49940 then LVT else LV)
+                        else if n < 49912 then LVT else LV)
+                     else
+                       if n < 49857
+                       then (if n < 49884 then LVT else LV)
+                       else LVT)
+              else
+                if n < 49660
+                then
+                  (if n < 49745
+                   then
+                     (if n < 49800
+                      then
+                        (if n < 49828
+                         then (if n < 49829 then LV else LVT)
+                         else if n < 49801 then LV else LVT)
+                      else
+                        if n < 49772
+                        then (if n < 49773 then LV else LVT)
+                        else LV)
+                   else
+                     if n < 49689
+                     then
+                       (if n < 49717
+                        then (if n < 49744 then LVT else LV)
+                        else if n < 49716 then LVT else LV)
+                     else
+                       if n < 49661
+                       then (if n < 49688 then LVT else LV)
+                       else LVT)
+                else
+                  if n < 49549
+                  then
+                    (if n < 49604
+                     then
+                       (if n < 49632
+                        then (if n < 49633 then LV else LVT)
+                        else if n < 49605 then LV else LVT)
+                     else
+                       if n < 49576
+                       then (if n < 49577 then LV else LVT)
+                       else LV)
+                  else
+                    if n < 49493
+                    then
+                      (if n < 49521
+                       then (if n < 49548 then LVT else LV)
+                       else if n < 49520 then LVT else LV)
+                    else
+                      if n < 49465
+                      then (if n < 49492 then LVT else LV)
+                      else LVT)
+         else
+           if n < 48653
+           then
+             (if n < 49045
+              then
+                (if n < 49241
+                 then
+                   (if n < 49352
+                    then
+                      (if n < 49408
+                       then
+                         (if n < 49436
+                          then (if n < 49437 then LV else LVT)
+                          else if n < 49409 then LV else LVT)
+                       else
+                         if n < 49380
+                         then (if n < 49381 then LV else LVT)
+                         else if n < 49353 then LV else LVT)
+                    else
+                      if n < 49296
+                      then
+                        (if n < 49324
+                         then (if n < 49325 then LV else LVT)
+                         else if n < 49297 then LV else LVT)
+                      else
+                        if n < 49268
+                        then (if n < 49269 then LV else LVT)
+                        else LV)
+                 else
+                   if n < 49156
+                   then
+                     (if n < 49185
+                      then
+                        (if n < 49213
+                         then (if n < 49240 then LVT else LV)
+                         else if n < 49212 then LVT else LV)
+                      else
+                        if n < 49157
+                        then (if n < 49184 then LVT else LV)
+                        else LVT)
+                   else
+                     if n < 49100
+                     then
+                       (if n < 49128
+                        then (if n < 49129 then LV else LVT)
+                        else if n < 49101 then LV else LVT)
+                     else
+                       if n < 49072
+                       then (if n < 49073 then LV else LVT)
+                       else LV)
+              else
+                if n < 48849
+                then
+                  (if n < 48960
+                   then
+                     (if n < 48989
+                      then
+                        (if n < 49017
+                         then (if n < 49044 then LVT else LV)
+                         else if n < 49016 then LVT else LV)
+                      else
+                        if n < 48961
+                        then (if n < 48988 then LVT else LV)
+                        else LVT)
+                   else
+                     if n < 48904
+                     then
+                       (if n < 48932
+                        then (if n < 48933 then LV else LVT)
+                        else if n < 48905 then LV else LVT)
+                     else
+                       if n < 48876
+                       then (if n < 48877 then LV else LVT)
+                       else LV)
+                else
+                  if n < 48764
+                  then
+                    (if n < 48793
+                     then
+                       (if n < 48821
+                        then (if n < 48848 then LVT else LV)
+                        else if n < 48820 then LVT else LV)
+                     else
+                       if n < 48765
+                       then (if n < 48792 then LVT else LV)
+                       else LVT)
+                  else
+                    if n < 48708
+                    then
+                      (if n < 48736
+                       then (if n < 48737 then LV else LVT)
+                       else if n < 48709 then LV else LVT)
+                    else
+                      if n < 48680
+                      then (if n < 48681 then LV else LVT)
+                      else LV)
+           else
+             if n < 48261
+             then
+               (if n < 48457
+                then
+                  (if n < 48568
+                   then
+                     (if n < 48597
+                      then
+                        (if n < 48625
+                         then (if n < 48652 then LVT else LV)
+                         else if n < 48624 then LVT else LV)
+                      else
+                        if n < 48569
+                        then (if n < 48596 then LVT else LV)
+                        else LVT)
+                   else
+                     if n < 48512
+                     then
+                       (if n < 48540
+                        then (if n < 48541 then LV else LVT)
+                        else if n < 48513 then LV else LVT)
+                     else
+                       if n < 48484
+                       then (if n < 48485 then LV else LVT)
+                       else LV)
+                else
+                  if n < 48372
+                  then
+                    (if n < 48401
+                     then
+                       (if n < 48429
+                        then (if n < 48456 then LVT else LV)
+                        else if n < 48428 then LVT else LV)
+                     else
+                       if n < 48373
+                       then (if n < 48400 then LVT else LV)
+                       else LVT)
+                  else
+                    if n < 48316
+                    then
+                      (if n < 48344
+                       then (if n < 48345 then LV else LVT)
+                       else if n < 48317 then LV else LVT)
+                    else
+                      if n < 48288
+                      then (if n < 48289 then LV else LVT)
+                      else LV)
+             else
+               if n < 48065
+               then
+                 (if n < 48176
+                  then
+                    (if n < 48205
+                     then
+                       (if n < 48233
+                        then (if n < 48260 then LVT else LV)
+                        else if n < 48232 then LVT else LV)
+                     else
+                       if n < 48177
+                       then (if n < 48204 then LVT else LV)
+                       else LVT)
+                  else
+                    if n < 48120
+                    then
+                      (if n < 48148
+                       then (if n < 48149 then LV else LVT)
+                       else if n < 48121 then LV else LVT)
+                    else
+                      if n < 48092
+                      then (if n < 48093 then LV else LVT)
+                      else LV)
+               else
+                 if n < 47980
+                 then
+                   (if n < 48009
+                    then
+                      (if n < 48037
+                       then (if n < 48064 then LVT else LV)
+                       else if n < 48036 then LVT else LV)
+                    else
+                      if n < 47981
+                      then (if n < 48008 then LVT else LV)
+                      else LVT)
+                 else
+                   if n < 47924
+                   then
+                     (if n < 47952
+                      then (if n < 47953 then LV else LVT)
+                      else if n < 47925 then LV else LVT)
+                   else
+                     if n < 47896
+                     then (if n < 47897 then LV else LVT)
+                     else LV)
+  else
+    if n < 8986
+    then
+      (if n < 44704
+       then
+         (if n < 46273
+          then
+            (if n < 47084
+             then
+               (if n < 47476
+                then
+                  (if n < 47672
+                   then
+                     (if n < 47757
+                      then
+                        (if n < 47813
+                         then
+                           (if n < 47841
+                            then (if n < 47868 then LVT else LV)
+                            else if n < 47840 then LVT else LV)
+                         else
+                           if n < 47785
+                           then (if n < 47812 then LVT else LV)
+                           else if n < 47784 then LVT else LV)
+                      else
+                        if n < 47701
+                        then
+                          (if n < 47729
+                           then (if n < 47756 then LVT else LV)
+                           else if n < 47728 then LVT else LV)
+                        else
+                          if n < 47673
+                          then (if n < 47700 then LVT else LV)
+                          else LVT)
+                   else
+                     if n < 47561
+                     then
+                       (if n < 47616
+                        then
+                          (if n < 47644
+                           then (if n < 47645 then LV else LVT)
+                           else if n < 47617 then LV else LVT)
+                        else
+                          if n < 47588
+                          then (if n < 47589 then LV else LVT)
+                          else LV)
+                     else
+                       if n < 47505
+                       then
+                         (if n < 47533
+                          then (if n < 47560 then LVT else LV)
+                          else if n < 47532 then LVT else LV)
+                       else
+                         if n < 47477
+                         then (if n < 47504 then LVT else LV)
+                         else LVT)
+                else
+                  if n < 47280
+                  then
+                    (if n < 47365
+                     then
+                       (if n < 47420
+                        then
+                          (if n < 47448
+                           then (if n < 47449 then LV else LVT)
+                           else if n < 47421 then LV else LVT)
+                        else
+                          if n < 47392
+                          then (if n < 47393 then LV else LVT)
+                          else LV)
+                     else
+                       if n < 47309
+                       then
+                         (if n < 47337
+                          then (if n < 47364 then LVT else LV)
+                          else if n < 47336 then LVT else LV)
+                       else
+                         if n < 47281
+                         then (if n < 47308 then LVT else LV)
+                         else LVT)
+                  else
+                    if n < 47169
+                    then
+                      (if n < 47224
+                       then
+                         (if n < 47252
+                          then (if n < 47253 then LV else LVT)
+                          else if n < 47225 then LV else LVT)
+                       else
+                         if n < 47196
+                         then (if n < 47197 then LV else LVT)
+                         else LV)
+                    else
+                      if n < 47113
+                      then
+                        (if n < 47141
+                         then (if n < 47168 then LVT else LV)
+                         else if n < 47140 then LVT else LV)
+                      else
+                        if n < 47085
+                        then (if n < 47112 then LVT else LV)
+                        else LVT)
+             else
+               if n < 46665
+               then
+                 (if n < 46861
+                  then
+                    (if n < 46972
+                     then
+                       (if n < 47028
+                        then
+                          (if n < 47056
+                           then (if n < 47057 then LV else LVT)
+                           else if n < 47029 then LV else LVT)
+                        else
+                          if n < 47000
+                          then (if n < 47001 then LV else LVT)
+                          else if n < 46973 then LV else LVT)
+                     else
+                       if n < 46916
+                       then
+                         (if n < 46944
+                          then (if n < 46945 then LV else LVT)
+                          else if n < 46917 then LV else LVT)
+                       else
+                         if n < 46888
+                         then (if n < 46889 then LV else LVT)
+                         else LV)
+                  else
+                    if n < 46776
+                    then
+                      (if n < 46805
+                       then
+                         (if n < 46833
+                          then (if n < 46860 then LVT else LV)
+                          else if n < 46832 then LVT else LV)
+                       else
+                         if n < 46777
+                         then (if n < 46804 then LVT else LV)
+                         else LVT)
+                    else
+                      if n < 46720
+                      then
+                        (if n < 46748
+                         then (if n < 46749 then LV else LVT)
+                         else if n < 46721 then LV else LVT)
+                      else
+                        if n < 46692
+                        then (if n < 46693 then LV else LVT)
+                        else LV)
+               else
+                 if n < 46469
+                 then
+                   (if n < 46580
+                    then
+                      (if n < 46609
+                       then
+                         (if n < 46637
+                          then (if n < 46664 then LVT else LV)
+                          else if n < 46636 then LVT else LV)
+                       else
+                         if n < 46581
+                         then (if n < 46608 then LVT else LV)
+                         else LVT)
+                    else
+                      if n < 46524
+                      then
+                        (if n < 46552
+                         then (if n < 46553 then LV else LVT)
+                         else if n < 46525 then LV else LVT)
+                      else
+                        if n < 46496
+                        then (if n < 46497 then LV else LVT)
+                        else LV)
+                 else
+                   if n < 46384
+                   then
+                     (if n < 46413
+                      then
+                        (if n < 46441
+                         then (if n < 46468 then LVT else LV)
+                         else if n < 46440 then LVT else LV)
+                      else
+                        if n < 46385
+                        then (if n < 46412 then LVT else LV)
+                        else LVT)
+                   else
+                     if n < 46328
+                     then
+                       (if n < 46356
+                        then (if n < 46357 then LV else LVT)
+                        else if n < 46329 then LV else LVT)
+                     else
+                       if n < 46300
+                       then (if n < 46301 then LV else LVT)
+                       else LV)
+          else
+            if n < 45488
+            then
+              (if n < 45880
+               then
+                 (if n < 46076
+                  then
+                    (if n < 46161
+                     then
+                       (if n < 46217
+                        then
+                          (if n < 46245
+                           then (if n < 46272 then LVT else LV)
+                           else if n < 46244 then LVT else LV)
+                        else
+                          if n < 46189
+                          then (if n < 46216 then LVT else LV)
+                          else if n < 46188 then LVT else LV)
+                     else
+                       if n < 46105
+                       then
+                         (if n < 46133
+                          then (if n < 46160 then LVT else LV)
+                          else if n < 46132 then LVT else LV)
+                       else
+                         if n < 46077
+                         then (if n < 46104 then LVT else LV)
+                         else LVT)
+                  else
+                    if n < 45965
+                    then
+                      (if n < 46020
+                       then
+                         (if n < 46048
+                          then (if n < 46049 then LV else LVT)
+                          else if n < 46021 then LV else LVT)
+                       else
+                         if n < 45992
+                         then (if n < 45993 then LV else LVT)
+                         else LV)
+                    else
+                      if n < 45909
+                      then
+                        (if n < 45937
+                         then (if n < 45964 then LVT else LV)
+                         else if n < 45936 then LVT else LV)
+                      else
+                        if n < 45881
+                        then (if n < 45908 then LVT else LV)
+                        else LVT)
+               else
+                 if n < 45684
+                 then
+                   (if n < 45769
+                    then
+                      (if n < 45824
+                       then
+                         (if n < 45852
+                          then (if n < 45853 then LV else LVT)
+                          else if n < 45825 then LV else LVT)
+                       else
+                         if n < 45796
+                         then (if n < 45797 then LV else LVT)
+                         else LV)
+                    else
+                      if n < 45713
+                      then
+                        (if n < 45741
+                         then (if n < 45768 then LVT else LV)
+                         else if n < 45740 then LVT else LV)
+                      else
+                        if n < 45685
+                        then (if n < 45712 then LVT else LV)
+                        else LVT)
+                 else
+                   if n < 45573
+                   then
+                     (if n < 45628
+                      then
+                        (if n < 45656
+                         then (if n < 45657 then LV else LVT)
+                         else if n < 45629 then LV else LVT)
+                      else
+                        if n < 45600
+                        then (if n < 45601 then LV else LVT)
+                        else LV)
+                   else
+                     if n < 45517
+                     then
+                       (if n < 45545
+                        then (if n < 45572 then LVT else LV)
+                        else if n < 45544 then LVT else LV)
+                     else
+                       if n < 45489
+                       then (if n < 45516 then LVT else LV)
+                       else LVT)
+            else
+              if n < 45096
+              then
+                (if n < 45292
+                 then
+                   (if n < 45377
+                    then
+                      (if n < 45432
+                       then
+                         (if n < 45460
+                          then (if n < 45461 then LV else LVT)
+                          else if n < 45433 then LV else LVT)
+                       else
+                         if n < 45404
+                         then (if n < 45405 then LV else LVT)
+                         else LV)
+                    else
+                      if n < 45321
+                      then
+                        (if n < 45349
+                         then (if n < 45376 then LVT else LV)
+                         else if n < 45348 then LVT else LV)
+                      else
+                        if n < 45293
+                        then (if n < 45320 then LVT else LV)
+                        else LVT)
+                 else
+                   if n < 45181
+                   then
+                     (if n < 45236
+                      then
+                        (if n < 45264
+                         then (if n < 45265 then LV else LVT)
+                         else if n < 45237 then LV else LVT)
+                      else
+                        if n < 45208
+                        then (if n < 45209 then LV else LVT)
+                        else LV)
+                   else
+                     if n < 45125
+                     then
+                       (if n < 45153
+                        then (if n < 45180 then LVT else LV)
+                        else if n < 45152 then LVT else LV)
+                     else
+                       if n < 45097
+                       then (if n < 45124 then LVT else LV)
+                       else LVT)
+              else
+                if n < 44900
+                then
+                  (if n < 44985
+                   then
+                     (if n < 45040
+                      then
+                        (if n < 45068
+                         then (if n < 45069 then LV else LVT)
+                         else if n < 45041 then LV else LVT)
+                      else
+                        if n < 45012
+                        then (if n < 45013 then LV else LVT)
+                        else LV)
+                   else
+                     if n < 44929
+                     then
+                       (if n < 44957
+                        then (if n < 44984 then LVT else LV)
+                        else if n < 44956 then LVT else LV)
+                     else
+                       if n < 44901
+                       then (if n < 44928 then LVT else LV)
+                       else LVT)
+                else
+                  if n < 44789
+                  then
+                    (if n < 44844
+                     then
+                       (if n < 44872
+                        then (if n < 44873 then LV else LVT)
+                        else if n < 44845 then LV else LVT)
+                     else
+                       if n < 44816
+                       then (if n < 44817 then LV else LVT)
+                       else LV)
+                  else
+                    if n < 44733
+                    then
+                      (if n < 44761
+                       then (if n < 44788 then LVT else LV)
+                       else if n < 44760 then LVT else LV)
+                    else
+                      if n < 44705
+                      then (if n < 44732 then LVT else LV)
+                      else LVT)
+       else
+         if n < 43188
+         then
+           (if n < 44003
+            then
+              (if n < 44285
+               then
+                 (if n < 44481
+                  then
+                    (if n < 44592
+                     then
+                       (if n < 44648
+                        then
+                          (if n < 44676
+                           then (if n < 44677 then LV else LVT)
+                           else if n < 44649 then LV else LVT)
+                        else
+                          if n < 44620
+                          then (if n < 44621 then LV else LVT)
+                          else if n < 44593 then LV else LVT)
+                     else
+                       if n < 44536
+                       then
+                         (if n < 44564
+                          then (if n < 44565 then LV else LVT)
+                          else if n < 44537 then LV else LVT)
+                       else
+                         if n < 44508
+                         then (if n < 44509 then LV else LVT)
+                         else LV)
+                  else
+                    if n < 44396
+                    then
+                      (if n < 44425
+                       then
+                         (if n < 44453
+                          then (if n < 44480 then LVT else LV)
+                          else if n < 44452 then LVT else LV)
+                       else
+                         if n < 44397
+                         then (if n < 44424 then LVT else LV)
+                         else LVT)
+                    else
+                      if n < 44340
+                      then
+                        (if n < 44368
+                         then (if n < 44369 then LV else LVT)
+                         else if n < 44341 then LV else LVT)
+                      else
+                        if n < 44312
+                        then (if n < 44313 then LV else LVT)
+                        else LV)
+               else
+                 if n < 44089
+                 then
+                   (if n < 44200
+                    then
+                      (if n < 44229
+                       then
+                         (if n < 44257
+                          then (if n < 44284 then LVT else LV)
+                          else if n < 44256 then LVT else LV)
+                       else
+                         if n < 44201
+                         then (if n < 44228 then LVT else LV)
+                         else LVT)
+                    else
+                      if n < 44144
+                      then
+                        (if n < 44172
+                         then (if n < 44173 then LV else LVT)
+                         else if n < 44145 then LV else LVT)
+                      else
+                        if n < 44116
+                        then (if n < 44117 then LV else LVT)
+                        else LV)
+                 else
+                   if n < 44013
+                   then
+                     (if n < 44033
+                      then
+                        (if n < 44061
+                         then (if n < 44088 then LVT else LV)
+                         else if n < 44060 then LVT else LV)
+                      else
+                        if n < 44014
+                        then (if n < 44032 then LVT else LV)
+                        else Other)
+                   else
+                     if n < 44008
+                     then
+                       (if n < 44011
+                        then (if n < 44012 then Extend else SpacingMark)
+                        else if n < 44009 then Other else SpacingMark)
+                     else
+                       if n < 44005
+                       then (if n < 44006 then Extend else SpacingMark)
+                       else Extend)
+            else
+              if n < 43569
+              then
+                (if n < 43701
+                 then
+                   (if n < 43755
+                    then
+                      (if n < 43760
+                       then
+                         (if n < 43766
+                          then (if n < 43767 then SpacingMark else Other)
+                          else if n < 43765 then Extend else SpacingMark)
+                       else
+                         if n < 43756
+                         then (if n < 43758 then Other else SpacingMark)
+                         else Extend)
+                    else
+                      if n < 43710
+                      then
+                        (if n < 43713
+                         then (if n < 43714 then SpacingMark else Other)
+                         else if n < 43712 then Extend else Other)
+                      else
+                        if n < 43703
+                        then (if n < 43705 then Extend else Other)
+                        else Extend)
+                 else
+                   if n < 43597
+                   then
+                     (if n < 43645
+                      then
+                        (if n < 43697
+                         then (if n < 43698 then Other else Extend)
+                         else if n < 43696 then Other else Extend)
+                      else
+                        if n < 43598
+                        then (if n < 43644 then Other else Extend)
+                        else Other)
+                   else
+                     if n < 43575
+                     then
+                       (if n < 43588
+                        then (if n < 43596 then SpacingMark else Extend)
+                        else if n < 43587 then Other else Extend)
+                     else
+                       if n < 43571
+                       then (if n < 43573 then Other else Extend)
+                       else SpacingMark)
+              else
+                if n < 43392
+                then
+                  (if n < 43452
+                   then
+                     (if n < 43493
+                      then
+                        (if n < 43561
+                         then (if n < 43567 then Extend else SpacingMark)
+                         else if n < 43494 then Extend else Other)
+                      else
+                        if n < 43454
+                        then (if n < 43457 then Extend else Other)
+                        else SpacingMark)
+                   else
+                     if n < 43443
+                     then
+                       (if n < 43446
+                        then (if n < 43450 then Extend else SpacingMark)
+                        else if n < 43444 then Extend else SpacingMark)
+                     else
+                       if n < 43395
+                       then (if n < 43396 then Extend else Other)
+                       else SpacingMark)
+                else
+                  if n < 43302
+                  then
+                    (if n < 43346
+                     then
+                       (if n < 43360
+                        then (if n < 43389 then Extend else Other)
+                        else if n < 43348 then L else Other)
+                     else
+                       if n < 43310
+                       then (if n < 43335 then SpacingMark else Extend)
+                       else Other)
+                  else
+                    if n < 43232
+                    then
+                      (if n < 43263
+                       then (if n < 43264 then Extend else Other)
+                       else if n < 43250 then Extend else Other)
+                    else
+                      if n < 43204
+                      then (if n < 43206 then Extend else Other)
+                      else Extend)
+         else
+           if n < 10083
+           then
+             (if n < 12337
+              then
+                (if n < 42656
+                 then
+                   (if n < 43019
+                    then
+                      (if n < 43047
+                       then
+                         (if n < 43136
+                          then (if n < 43138 then SpacingMark else Other)
+                          else if n < 43048 then SpacingMark else Other)
+                       else
+                         if n < 43043
+                         then (if n < 43045 then SpacingMark else Extend)
+                         else if n < 43020 then SpacingMark else Other)
+                    else
+                      if n < 43010
+                      then
+                        (if n < 43014
+                         then (if n < 43015 then Extend else Other)
+                         else if n < 43011 then Extend else Other)
+                      else
+                        if n < 42736
+                        then (if n < 42738 then Extend else Other)
+                        else Extend)
+                 else
+                   if n < 12953
+                   then
+                     (if n < 42611
+                      then
+                        (if n < 42622
+                         then (if n < 42654 then Other else Extend)
+                         else if n < 42612 then Other else Extend)
+                      else
+                        if n < 12954
+                        then (if n < 42607 then Other else Extend)
+                        else Other)
+                   else
+                     if n < 12441
+                     then
+                       (if n < 12951
+                        then (if n < 12952 then ExtPict else Other)
+                        else if n < 12443 then ExtPict else Other)
+                     else
+                       if n < 12349
+                       then (if n < 12350 then Extend else Other)
+                       else ExtPict)
+              else
+                if n < 11035
+                then
+                  (if n < 11506
+                   then
+                     (if n < 11744
+                      then
+                        (if n < 12330
+                         then (if n < 12336 then Other else ExtPict)
+                         else if n < 11776 then Extend else Other)
+                      else
+                        if n < 11647
+                        then (if n < 11648 then Extend else Other)
+                        else Extend)
+                   else
+                     if n < 11089
+                     then
+                       (if n < 11094
+                        then (if n < 11503 then Other else Extend)
+                        else if n < 11093 then Other else ExtPict)
+                     else
+                       if n < 11037
+                       then (if n < 11088 then Other else ExtPict)
+                       else Other)
+                else
+                  if n < 10161
+                  then
+                    (if n < 10548
+                     then
+                       (if n < 11013
+                        then (if n < 11016 then ExtPict else Other)
+                        else if n < 10550 then ExtPict else Other)
+                     else
+                       if n < 10175
+                       then (if n < 10176 then ExtPict else Other)
+                       else ExtPict)
+                  else
+                    if n < 10136
+                    then
+                      (if n < 10146
+                       then (if n < 10160 then Other else ExtPict)
+                       else if n < 10145 then Other else ExtPict)
+                    else
+                      if n < 10088
+                      then (if n < 10133 then Other else ExtPict)
+                      else Other)
+           else
+             if n < 9872
+             then
+               (if n < 10035
+                then
+                  (if n < 10061
+                   then
+                     (if n < 10067
+                      then
+                        (if n < 10071
+                         then (if n < 10072 then ExtPict else Other)
+                         else if n < 10070 then ExtPict else Other)
+                      else
+                        if n < 10062
+                        then (if n < 10063 then ExtPict else Other)
+                        else ExtPict)
+                   else
+                     if n < 10053
+                     then
+                       (if n < 10056
+                        then (if n < 10060 then Other else ExtPict)
+                        else if n < 10055 then Other else ExtPict)
+                     else
+                       if n < 10037
+                       then (if n < 10052 then Other else ExtPict)
+                       else Other)
+                else
+                  if n < 10007
+                  then
+                    (if n < 10017
+                     then
+                       (if n < 10024
+                        then (if n < 10025 then ExtPict else Other)
+                        else if n < 10018 then ExtPict else Other)
+                     else
+                       if n < 10013
+                       then (if n < 10014 then ExtPict else Other)
+                       else ExtPict)
+                  else
+                    if n < 10003
+                    then
+                      (if n < 10005
+                       then (if n < 10006 then Other else ExtPict)
+                       else if n < 10004 then Other else ExtPict)
+                    else
+                      if n < 9990
+                      then (if n < 9992 then Other else ExtPict)
+                      else Other)
+             else
+               if n < 9642
+               then
+                 (if n < 9727
+                  then
+                    (if n < 9735
+                     then
+                       (if n < 9748
+                        then (if n < 9862 then ExtPict else Other)
+                        else if n < 9747 then ExtPict else Other)
+                     else
+                       if n < 9728
+                       then (if n < 9734 then ExtPict else Other)
+                       else ExtPict)
+                  else
+                    if n < 9655
+                    then
+                      (if n < 9665
+                       then (if n < 9723 then Other else ExtPict)
+                       else if n < 9664 then Other else ExtPict)
+                    else
+                      if n < 9644
+                      then (if n < 9654 then Other else ExtPict)
+                      else Other)
+               else
+                 if n < 9168
+                 then
+                   (if n < 9208
+                    then
+                      (if n < 9410
+                       then (if n < 9411 then ExtPict else Other)
+                       else if n < 9211 then ExtPict else Other)
+                    else
+                      if n < 9193
+                      then (if n < 9204 then ExtPict else Other)
+                      else ExtPict)
+                 else
+                   if n < 9001
+                   then
+                     (if n < 9097
+                      then (if n < 9167 then Other else ExtPict)
+                      else if n < 9096 then Other else ExtPict)
+                   else
+                     if n < 8988
+                     then (if n < 9000 then Other else ExtPict)
+                     else Other)
+    else
+      if n < 3397
+      then
+        (if n < 6277
+         then
+           (if n < 7086
+            then
+              (if n < 7616
+               then
+                 (if n < 8266
+                  then
+                    (if n < 8482
+                     then
+                       (if n < 8596
+                        then
+                          (if n < 8617
+                           then (if n < 8619 then ExtPict else Other)
+                           else if n < 8602 then ExtPict else Other)
+                        else
+                          if n < 8505
+                          then (if n < 8506 then ExtPict else Other)
+                          else if n < 8483 then ExtPict else Other)
+                     else
+                       if n < 8294
+                       then
+                         (if n < 8400
+                          then (if n < 8433 then ExtPict else Other)
+                          else if n < 8304 then Extend else Other)
+                       else
+                         if n < 8288
+                         then (if n < 8293 then Control else Other)
+                         else Control)
+                  else
+                    if n < 8206
+                    then
+                      (if n < 8239
+                       then
+                         (if n < 8253
+                          then (if n < 8265 then Other else ExtPict)
+                          else if n < 8252 then Other else ExtPict)
+                       else
+                         if n < 8208
+                         then (if n < 8232 then Other else Control)
+                         else Other)
+                    else
+                      if n < 7680
+                      then
+                        (if n < 8204
+                         then (if n < 8205 then Control else ZWJ)
+                         else if n < 8203 then Extend else Control)
+                      else
+                        if n < 7674
+                        then (if n < 7675 then Other else Extend)
+                        else Other)
+               else
+                 if n < 7224
+                 then
+                   (if n < 7405
+                    then
+                      (if n < 7413
+                       then
+                         (if n < 7416
+                          then (if n < 7418 then Extend else Other)
+                          else if n < 7415 then Extend else SpacingMark)
+                       else
+                         if n < 7406
+                         then (if n < 7412 then Other else Extend)
+                         else Other)
+                    else
+                      if n < 7380
+                      then
+                        (if n < 7394
+                         then (if n < 7401 then Extend else Other)
+                         else if n < 7393 then Extend else SpacingMark)
+                      else
+                        if n < 7376
+                        then (if n < 7379 then Extend else Other)
+                        else Extend)
+                 else
+                   if n < 7151
+                   then
+                     (if n < 7204
+                      then
+                        (if n < 7220
+                         then (if n < 7222 then Other else Extend)
+                         else if n < 7212 then SpacingMark else Extend)
+                      else
+                        if n < 7154
+                        then (if n < 7156 then SpacingMark else Other)
+                        else SpacingMark)
+                   else
+                     if n < 7144
+                     then
+                       (if n < 7149
+                        then (if n < 7150 then Extend else SpacingMark)
+                        else if n < 7146 then Extend else SpacingMark)
+                     else
+                       if n < 7142
+                       then (if n < 7143 then Extend else SpacingMark)
+                       else Extend)
+            else
+              if n < 6765
+              then
+                (if n < 6978
+                 then
+                   (if n < 7043
+                    then
+                      (if n < 7078
+                       then
+                         (if n < 7082
+                          then (if n < 7083 then Other else Extend)
+                          else if n < 7080 then SpacingMark else Extend)
+                       else
+                         if n < 7073
+                         then (if n < 7074 then SpacingMark else Extend)
+                         else SpacingMark)
+                    else
+                      if n < 7019
+                      then
+                        (if n < 7040
+                         then (if n < 7042 then Other else SpacingMark)
+                         else if n < 7028 then Extend else Other)
+                      else
+                        if n < 6979
+                        then (if n < 6981 then Extend else Other)
+                        else SpacingMark)
+                 else
+                   if n < 6912
+                   then
+                     (if n < 6964
+                      then
+                        (if n < 6972
+                         then (if n < 6973 then Extend else SpacingMark)
+                         else if n < 6971 then Extend else SpacingMark)
+                      else
+                        if n < 6916
+                        then (if n < 6917 then Extend else Other)
+                        else SpacingMark)
+                   else
+                     if n < 6783
+                     then
+                       (if n < 6832
+                        then (if n < 6847 then Extend else Other)
+                        else if n < 6784 then Extend else Other)
+                     else
+                       if n < 6771
+                       then (if n < 6781 then Extend else Other)
+                       else Extend)
+              else
+                if n < 6679
+                then
+                  (if n < 6744
+                   then
+                     (if n < 6753
+                      then
+                        (if n < 6755
+                         then (if n < 6757 then SpacingMark else Extend)
+                         else if n < 6754 then Other else Extend)
+                      else
+                        if n < 6751
+                        then (if n < 6752 then Other else Extend)
+                        else Other)
+                   else
+                     if n < 6684
+                     then
+                       (if n < 6742
+                        then (if n < 6743 then Extend else SpacingMark)
+                        else if n < 6741 then Extend else SpacingMark)
+                     else
+                       if n < 6681
+                       then (if n < 6683 then Other else Extend)
+                       else SpacingMark)
+                else
+                  if n < 6441
+                  then
+                    (if n < 6450
+                     then
+                       (if n < 6457
+                        then (if n < 6460 then Extend else Other)
+                        else if n < 6451 then Extend else SpacingMark)
+                     else
+                       if n < 6444
+                       then (if n < 6448 then Extend else SpacingMark)
+                       else Other)
+                  else
+                    if n < 6314
+                    then
+                      (if n < 6435
+                       then (if n < 6439 then SpacingMark else Extend)
+                       else if n < 6432 then SpacingMark else Extend)
+                    else
+                      if n < 6279
+                      then (if n < 6313 then Other else Extend)
+                      else Other)
+         else
+           if n < 3981
+           then
+             (if n < 4253
+              then
+                (if n < 6002
+                 then
+                   (if n < 6087
+                    then
+                      (if n < 6110
+                       then
+                         (if n < 6158
+                          then (if n < 6159 then Extend else Other)
+                          else if n < 6155 then Control else Extend)
+                       else
+                         if n < 6100
+                         then (if n < 6109 then Other else Extend)
+                         else if n < 6089 then Other else Extend)
+                    else
+                      if n < 6070
+                      then
+                        (if n < 6078
+                         then (if n < 6086 then SpacingMark else Extend)
+                         else if n < 6071 then SpacingMark else Extend)
+                      else
+                        if n < 6004
+                        then (if n < 6068 then SpacingMark else Extend)
+                        else Other)
+                 else
+                   if n < 4960
+                   then
+                     (if n < 5938
+                      then
+                        (if n < 5970
+                         then (if n < 5972 then Extend else Other)
+                         else if n < 5941 then Extend else Other)
+                      else
+                        if n < 5906
+                        then (if n < 5909 then Extend else Other)
+                        else Extend)
+                   else
+                     if n < 4448
+                     then
+                       (if n < 4608
+                        then (if n < 4957 then Other else Extend)
+                        else if n < 4520 then Other else T)
+                     else
+                       if n < 4254
+                       then (if n < 4352 then V else L)
+                       else Other)
+              else
+                if n < 4182
+                then
+                  (if n < 4226
+                   then
+                     (if n < 4229
+                      then
+                        (if n < 4237
+                         then (if n < 4238 then Extend else Other)
+                         else if n < 4231 then Extend else Other)
+                      else
+                        if n < 4227
+                        then (if n < 4228 then Extend else SpacingMark)
+                        else Other)
+                   else
+                     if n < 4190
+                     then
+                       (if n < 4209
+                        then (if n < 4213 then Extend else Other)
+                        else if n < 4193 then Extend else Other)
+                     else
+                       if n < 4184
+                       then (if n < 4186 then Extend else Other)
+                       else Extend)
+                else
+                  if n < 4145
+                  then
+                    (if n < 4153
+                     then
+                       (if n < 4157
+                        then (if n < 4159 then SpacingMark else Other)
+                        else if n < 4155 then Extend else SpacingMark)
+                     else
+                       if n < 4146
+                       then (if n < 4152 then Extend else Other)
+                       else Extend)
+                  else
+                    if n < 4029
+                    then
+                      (if n < 4039
+                       then (if n < 4141 then SpacingMark else Extend)
+                       else if n < 4038 then Other else Extend)
+                    else
+                      if n < 3992
+                      then (if n < 3993 then Other else Extend)
+                      else Other)
+           else
+             if n < 3635
+             then
+               (if n < 3893
+                then
+                  (if n < 3904
+                   then
+                     (if n < 3968
+                      then
+                        (if n < 3974
+                         then (if n < 3976 then Extend else Other)
+                         else if n < 3973 then Extend else Other)
+                      else
+                        if n < 3953
+                        then (if n < 3967 then Extend else SpacingMark)
+                        else Extend)
+                   else
+                     if n < 3896
+                     then
+                       (if n < 3898
+                        then (if n < 3902 then Other else SpacingMark)
+                        else if n < 3897 then Other else Extend)
+                     else
+                       if n < 3894
+                       then (if n < 3895 then Other else Extend)
+                       else Other)
+                else
+                  if n < 3763
+                  then
+                    (if n < 3784
+                     then
+                       (if n < 3864
+                        then (if n < 3866 then Extend else Other)
+                        else if n < 3790 then Extend else Other)
+                     else
+                       if n < 3764
+                       then (if n < 3773 then Extend else Other)
+                       else Extend)
+                  else
+                    if n < 3655
+                    then
+                      (if n < 3761
+                       then (if n < 3762 then SpacingMark else Other)
+                       else if n < 3663 then Extend else Other)
+                    else
+                      if n < 3636
+                      then (if n < 3643 then Extend else Other)
+                      else Extend)
+             else
+               if n < 3531
+               then
+                 (if n < 3544
+                  then
+                    (if n < 3570
+                     then
+                       (if n < 3633
+                        then (if n < 3634 then SpacingMark else Other)
+                        else if n < 3572 then Extend else Other)
+                     else
+                       if n < 3551
+                       then (if n < 3552 then SpacingMark else Other)
+                       else Extend)
+                  else
+                    if n < 3538
+                    then
+                      (if n < 3542
+                       then (if n < 3543 then SpacingMark else Other)
+                       else if n < 3541 then Extend else Other)
+                    else
+                      if n < 3535
+                      then (if n < 3536 then Extend else SpacingMark)
+                      else Extend)
+               else
+                 if n < 3415
+                 then
+                   (if n < 3428
+                    then
+                      (if n < 3460
+                       then (if n < 3530 then Other else Extend)
+                       else if n < 3458 then Other else SpacingMark)
+                    else
+                      if n < 3416
+                      then (if n < 3426 then Other else Extend)
+                      else Other)
+                 else
+                   if n < 3402
+                   then
+                     (if n < 3406
+                      then (if n < 3407 then Extend else Other)
+                      else if n < 3405 then Prepend else Extend)
+                   else
+                     if n < 3398
+                     then (if n < 3401 then SpacingMark else Other)
+                     else SpacingMark)
+      else
+        if n < 2559
+        then
+          (if n < 2947
+           then
+             (if n < 3201
+              then
+                (if n < 3274
+                 then
+                   (if n < 3328
+                    then
+                      (if n < 3389
+                       then
+                         (if n < 3391
+                          then (if n < 3393 then Other else Extend)
+                          else if n < 3390 then SpacingMark else Extend)
+                       else
+                         if n < 3332
+                         then (if n < 3387 then Other else Extend)
+                         else if n < 3330 then Other else SpacingMark)
+                    else
+                      if n < 3285
+                      then
+                        (if n < 3298
+                         then (if n < 3300 then Extend else Other)
+                         else if n < 3287 then Extend else Other)
+                      else
+                        if n < 3276
+                        then (if n < 3278 then Extend else Other)
+                        else Extend)
+                 else
+                   if n < 3264
+                   then
+                     (if n < 3269
+                      then
+                        (if n < 3271
+                         then (if n < 3273 then SpacingMark else Other)
+                         else if n < 3270 then SpacingMark else Extend)
+                      else
+                        if n < 3266
+                        then (if n < 3267 then Other else SpacingMark)
+                        else Extend)
+                   else
+                     if n < 3260
+                     then
+                       (if n < 3262
+                        then (if n < 3263 then SpacingMark else Extend)
+                        else if n < 3261 then SpacingMark else Other)
+                     else
+                       if n < 3202
+                       then (if n < 3204 then Extend else Other)
+                       else SpacingMark)
+              else
+                if n < 3073
+                then
+                  (if n < 3145
+                   then
+                     (if n < 3157
+                      then
+                        (if n < 3170
+                         then (if n < 3172 then Extend else Other)
+                         else if n < 3159 then Extend else Other)
+                      else
+                        if n < 3146
+                        then (if n < 3150 then Extend else Other)
+                        else Extend)
+                   else
+                     if n < 3134
+                     then
+                       (if n < 3141
+                        then (if n < 3142 then Other else Extend)
+                        else if n < 3137 then Other else SpacingMark)
+                     else
+                       if n < 3076
+                       then (if n < 3077 then Extend else Other)
+                       else Extend)
+                else
+                  if n < 3017
+                  then
+                    (if n < 3022
+                     then
+                       (if n < 3032
+                        then (if n < 3072 then SpacingMark else Extend)
+                        else if n < 3031 then Other else Extend)
+                     else
+                       if n < 3018
+                       then (if n < 3021 then Other else Extend)
+                       else SpacingMark)
+                  else
+                    if n < 3008
+                    then
+                      (if n < 3011
+                       then (if n < 3014 then Other else SpacingMark)
+                       else if n < 3009 then Other else SpacingMark)
+                    else
+                      if n < 3006
+                      then (if n < 3007 then Extend else SpacingMark)
+                      else Extend)
+           else
+             if n < 2761
+             then
+               (if n < 2878
+                then
+                  (if n < 2893
+                   then
+                     (if n < 2904
+                      then
+                        (if n < 2916
+                         then (if n < 2946 then Other else Extend)
+                         else if n < 2914 then Other else Extend)
+                      else
+                        if n < 2894
+                        then (if n < 2902 then Other else Extend)
+                        else Other)
+                   else
+                     if n < 2885
+                     then
+                       (if n < 2889
+                        then (if n < 2891 then Extend else SpacingMark)
+                        else if n < 2887 then Other else SpacingMark)
+                     else
+                       if n < 2880
+                       then (if n < 2881 then Other else Extend)
+                       else SpacingMark)
+                else
+                  if n < 2810
+                  then
+                    (if n < 2818
+                     then
+                       (if n < 2876
+                        then (if n < 2877 then Extend else Other)
+                        else if n < 2820 then Extend else Other)
+                     else
+                       if n < 2816
+                       then (if n < 2817 then SpacingMark else Extend)
+                       else Other)
+                  else
+                    if n < 2765
+                    then
+                      (if n < 2786
+                       then (if n < 2788 then Extend else Other)
+                       else if n < 2766 then Extend else Other)
+                    else
+                      if n < 2762
+                      then (if n < 2763 then Extend else SpacingMark)
+                      else Other)
+             else
+               if n < 2642
+               then
+                 (if n < 2692
+                  then
+                    (if n < 2750
+                     then
+                       (if n < 2758
+                        then (if n < 2759 then SpacingMark else Extend)
+                        else if n < 2753 then Other else Extend)
+                     else
+                       if n < 2748
+                       then (if n < 2749 then SpacingMark else Other)
+                       else Extend)
+                  else
+                    if n < 2677
+                    then
+                      (if n < 2689
+                       then (if n < 2691 then Other else SpacingMark)
+                       else if n < 2678 then Extend else Other)
+                    else
+                      if n < 2672
+                      then (if n < 2674 then Extend else Other)
+                      else Extend)
+               else
+                 if n < 2625
+                 then
+                   (if n < 2633
+                    then
+                      (if n < 2638
+                       then (if n < 2641 then Other else Extend)
+                       else if n < 2635 then Other else Extend)
+                    else
+                      if n < 2627
+                      then (if n < 2631 then Other else Extend)
+                      else Other)
+                 else
+                   if n < 2564
+                   then
+                     (if n < 2621
+                      then (if n < 2622 then Extend else SpacingMark)
+                      else if n < 2620 then Other else Extend)
+                   else
+                     if n < 2561
+                     then (if n < 2563 then Other else SpacingMark)
+                     else Extend)
+        else
+          if n < 1810
+          then
+            (if n < 2366
+             then
+               (if n < 2493
+                then
+                  (if n < 2507
+                   then
+                     (if n < 2520
+                      then
+                        (if n < 2532
+                         then (if n < 2558 then Other else Extend)
+                         else if n < 2530 then Other else Extend)
+                      else
+                        if n < 2510
+                        then (if n < 2519 then Other else Extend)
+                        else if n < 2509 then Other else Extend)
+                   else
+                     if n < 2497
+                     then
+                       (if n < 2503
+                        then (if n < 2505 then SpacingMark else Other)
+                        else if n < 2501 then SpacingMark else Other)
+                     else
+                       if n < 2494
+                       then (if n < 2495 then Extend else SpacingMark)
+                       else Extend)
+                else
+                  if n < 2392
+                  then
+                    (if n < 2433
+                     then
+                       (if n < 2436
+                        then (if n < 2492 then Other else Extend)
+                        else if n < 2434 then Other else SpacingMark)
+                     else
+                       if n < 2402
+                       then (if n < 2404 then Extend else Other)
+                       else Extend)
+                  else
+                    if n < 2381
+                    then
+                      (if n < 2384
+                       then (if n < 2385 then Other else Extend)
+                       else if n < 2382 then Other else SpacingMark)
+                    else
+                      if n < 2369
+                      then (if n < 2377 then Extend else SpacingMark)
+                      else Extend)
+             else
+               if n < 2088
+               then
+                 (if n < 2275
+                  then
+                    (if n < 2362
+                     then
+                       (if n < 2364
+                        then (if n < 2365 then SpacingMark else Other)
+                        else if n < 2363 then Extend else SpacingMark)
+                     else
+                       if n < 2307
+                       then (if n < 2308 then Extend else Other)
+                       else SpacingMark)
+                  else
+                    if n < 2137
+                    then
+                      (if n < 2259
+                       then (if n < 2274 then Extend else Prepend)
+                       else if n < 2140 then Extend else Other)
+                    else
+                      if n < 2089
+                      then (if n < 2094 then Extend else Other)
+                      else Extend)
+               else
+                 if n < 2045
+                 then
+                   (if n < 2074
+                    then
+                      (if n < 2084
+                       then (if n < 2085 then Other else Extend)
+                       else if n < 2075 then Other else Extend)
+                    else
+                      if n < 2046
+                      then (if n < 2070 then Other else Extend)
+                      else Other)
+                 else
+                   if n < 1958
+                   then
+                     (if n < 2027
+                      then (if n < 2036 then Extend else Other)
+                      else if n < 1969 then Extend else Other)
+                   else
+                     if n < 1840
+                     then (if n < 1867 then Extend else Other)
+                     else Extend)
+          else
+            if n < 1473
+            then
+              (if n < 1648
+               then
+                 (if n < 1767
+                  then
+                    (if n < 1774
+                     then
+                       (if n < 1808
+                        then (if n < 1809 then Other else Extend)
+                        else if n < 1807 then Other else Prepend)
+                     else
+                       if n < 1769
+                       then (if n < 1770 then Other else Extend)
+                       else Other)
+                  else
+                    if n < 1757
+                    then
+                      (if n < 1759
+                       then (if n < 1765 then Extend else Other)
+                       else if n < 1758 then Extend else Other)
+                    else
+                      if n < 1649
+                      then (if n < 1750 then Prepend else Extend)
+                      else Other)
+               else
+                 if n < 1542
+                 then
+                   (if n < 1564
+                    then
+                      (if n < 1611
+                       then (if n < 1632 then Extend else Other)
+                       else if n < 1565 then Extend else Other)
+                    else
+                      if n < 1552
+                      then (if n < 1563 then Control else Other)
+                      else Extend)
+                 else
+                   if n < 1478
+                   then
+                     (if n < 1480
+                      then (if n < 1536 then Other else Prepend)
+                      else if n < 1479 then Other else Extend)
+                   else
+                     if n < 1475
+                     then (if n < 1476 then Other else Extend)
+                     else Other)
+            else
+              if n < 160
+              then
+                (if n < 880
+                 then
+                   (if n < 1425
+                    then
+                      (if n < 1471
+                       then (if n < 1472 then Extend else Other)
+                       else if n < 1470 then Extend else Other)
+                    else
+                      if n < 1155
+                      then (if n < 1162 then Extend else Other)
+                      else Extend)
+                 else
+                   if n < 173
+                   then
+                     (if n < 175
+                      then (if n < 768 then Other else Extend)
+                      else if n < 174 then Other else ExtPict)
+                   else
+                     if n < 169
+                     then (if n < 170 then Control else Other)
+                     else ExtPict)
+              else
+                if n < 35
+                then
+                  (if n < 43
+                   then
+                     (if n < 58
+                      then (if n < 127 then Other else Control)
+                      else if n < 48 then Other else ExtPict)
+                   else
+                     if n < 36
+                     then (if n < 42 then Other else ExtPict)
+                     else Other)
+                else
+                  if n < 11
+                  then
+                    (if n < 14
+                     then (if n < 32 then ExtPict else Other)
+                     else if n < 13 then Control else CR)
+                  else
+                    if n < 0
+                    then (if n < 10 then Control else LF)
+                    else Control
+
+type previous_chars =
+  EvenRegionalIndicator | ExtPictExtendStar | NoPrevious
+
+(* [break_between previous c1 c2] returns true if and only if a grapheme break
+   is between c1 and c2.
+   previous must tel if there is an even number of RI before c1, if
+   c1 is a RI. It should tell if there is a pattern
+   ExtPict Extend* before c1 if c1 is ZWJ *)
+
+let break_between previous bp1 bp2 =
+  match (bp1,bp2) with
+  | (CR, LF)                 -> false (* rule 3.0 *)
+  | ((Control | CR | LF), _) -> true  (* rule 4.0 *)
+  | (_, (Control | CR | LF)) -> true  (* rule 5.0 *)
+  | (L, (L | V | LV | LVT))  -> false (* rule 6.0 *)
+  | ((LV | V), (V | T))      -> false (* rule 7.0 *)
+  | ((LVT | T), T)           -> false (* rule 8.0 *)
+  | (_, (Extend | ZWJ))      -> false (* rule 9.0 *)
+  | (_, SpacingMark)         -> false (* rule 9.1 *)
+  | (Prepend, _)             -> false (* rule 9.2 *)
+  | (ZWJ, ExtPict) when previous = ExtPictExtendStar
+                             -> false (* rule 11.0 *)
+  | (RegionalIndicator, RegionalIndicator) when previous = EvenRegionalIndicator
+                             -> false (* rule 12.0 and 13.0, assuming *)
+
+  | _                        -> true  (* rule 999.0 *)
+
+(*
+ * Decode a UTF8 character at a given position in a string.
+ * Arguments:
+ *   s : the string,
+ *   i : index where to look.
+ * Returns a couple (c, l) where c is the code of the character and l is the
+ * number of bytes read.
+ * Raise invalid_arg if s.[i] is not a valid first byte for a UTF8 character.
+ * No checks are run on the hypothetical second, third and fourth byte (i.e.
+ * length of s is not checked, and shape 0x10xxxxxx of byte is not checked).
+ *)
+let decode : string -> int -> (Uchar.t * int) = fun s i ->
+  let cc = Char.code s.[i] in
+  if cc lsr 7 = 0 then
+    (Uchar.of_int cc, 1)
+  else if (cc lsr 6) land 1 = 0 then
+    raise (invalid_arg "UTF8.decode")
+  else if (cc lsr 5) land 1 = 0 then
+    let i0 = (cc land 0b00011111) lsl 6 in
+    let i1 = (Char.code s.[i+1]) land 0b00111111 in
+    (Uchar.of_int (i0 lor i1), 2)
+  else if (cc lsr 4) land 1 = 0 then
+    let i0 = (cc land 0b00001111) lsl 12 in
+    let i1 = ((Char.code s.[i+1]) land 0b00111111) lsl 6 in
+    let i2 = (Char.code s.[i+2])  land 0b00111111 in
+    (Uchar.of_int (i0 lor i1 lor i2), 3)
+  else if (cc lsr 3) land 1 = 0 then
+    let i0 = (cc land 0b00000111) lsl 18 in
+    let i1 = ((Char.code s.[i+1]) land 0b00111111) lsl 12 in
+    let i2 = ((Char.code s.[i+2]) land 0b00111111) lsl 6 in
+    let i3 = (Char.code s.[i+3])  land 0b00111111 in
+    (Uchar.of_int (i0 lor i1 lor i2 lor i3), 4)
+  else
+    raise (invalid_arg "UTF8.decode")
+
+let look : string -> int -> Uchar.t = fun s i ->
+  fst (decode s i)
+
+let next : string -> int -> int = fun s i ->
+  let (_, sz) = decode s i in
+  i + sz
+
+let prev : string -> int -> int = fun s i ->
+  let ps = List.filter (fun i -> i >= 0) [i-1; i-2; i-3; i-4] in
+  let rec try_until_found l =
+    match l with
+    | []    -> assert false
+    | p::ps -> try
+               let (_, sz) = decode s p in
+               if p + sz <> i then assert false;
+               p
+             with
+               Invalid_argument _ -> try_until_found ps
+  in try_until_found ps
+
+let grapheme_break : string -> int -> bool = fun s pos ->
+  if pos = 0 || pos >= String.length s then true else
+    let i0 = prev s pos in
+    let c1 = look s i0 and c2 = look s pos in
+    let bp1 = gbp c1 and bp2 = gbp c2 in
+    let rec previous_ri acc i0 bp1 =
+      match bp1 with
+      | RegionalIndicator ->
+         begin
+           if i0 = 0 then not acc else
+             let i0 = prev s i0 in
+             let c1 = look s i0 in
+             let bp1 = gbp c1 in
+             previous_ri (not acc) i0 bp1
+         end
+      | _ -> acc
+    in
+    let rec previous_pict i0 bp1 =
+      match bp1 with
+      | Extend ->
+         begin
+           if i0 = 0 then false else
+             let i0 = prev s i0 in
+             let c1 = look s i0 in
+             let bp1 = gbp c1 in
+             previous_pict i0 bp1
+         end
+      | ExtPict -> true
+      | _       -> false
+    in
+    let previous =
+      match bp1 with
+      | ZWJ ->
+         if previous_pict i0 Extend then ExtPictExtendStar
+         else NoPrevious
+      | RegionalIndicator ->
+         if previous_ri false i0 RegionalIndicator then EvenRegionalIndicator
+         else NoPrevious
+      | _ -> NoPrevious
+    in
+    break_between previous bp1 bp2
+
+let next_grapheme : string -> int -> int = fun s pos ->
+  let npos = ref pos in
+  try
+    while !npos < String.length s do
+      npos := next s !npos;
+      if grapheme_break s !npos then raise Exit
+    done;
+    raise Not_found (* end of string *)
+  with
+    Exit -> !npos
+
+let prev_grapheme : string -> int -> int = fun s pos ->
+  let npos = ref pos in
+  try
+    while !npos > 0 do
+      npos := prev s !npos;
+      if grapheme_break s !npos then raise Exit
+    done;
+    0
+  with
+    Exit -> !npos
+
+let fold_grapheme : (string -> 'a -> 'a) -> 'a -> string -> 'a =
+  fun fn acc s ->
+  let pos = ref 0 in
+  let res = ref acc in
+  while !pos < String.length s do
+    let npos = next_grapheme s !pos in
+    let s = String.sub s !pos (npos - !pos) in
+    pos := npos;
+    res := fn s !res;
+  done;
+  !res

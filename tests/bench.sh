@@ -26,6 +26,9 @@ dune exec $opts -- ./big_sexp.exe 5_000_000 | time dune exec $opts ./sexp_yacc/s
 echo "testing the calculator (with grammar/combinator)"
 dune exec $opts -- ./big_expr.exe 5 4 4 | time dune exec $opts ../examples/calc.exe > /dev/null
 
+echo "testing the calculator (with grammar/combinator, utf8 mode)"
+dune exec $opts -- ./big_expr.exe 5 4 4 | time dune exec $opts ../tests/calc_utf8.exe > /dev/null
+
 echo "testing the calculator (with grammar/combinator, using fammilies for prio)"
 dune exec $opts -- ./big_expr.exe 5 4 4 | time dune exec $opts ../examples/calc_prio.exe > /dev/null
 
