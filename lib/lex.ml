@@ -85,7 +85,7 @@ let charset_from_test f =
   done;
   !l
 
-let utf8 : ?name:string -> unit -> Uchar.t t = fun ?name () ->
+let any_utf8 : ?name:string -> unit -> Uchar.t t = fun ?name () ->
   { n = default "UTF8" name
   ; c = Charset.full
   ; f = fun s n ->
@@ -134,6 +134,52 @@ let utf8 : ?name:string -> unit -> Uchar.t t = fun ?name () ->
         in
         (Uchar.of_int n0,s,n)
   }
+
+(** [string s] Accepts only the given string.*)
+let string : ?name:string -> string -> 'a -> 'a t = fun ?name k x ->
+  if k = "" then invalid_arg "Lex.string: empty string";
+  { n = default (sp "%S" k) name
+  ; c = Charset.singleton k.[0]
+  ; f = fun s n ->
+        let l = String.length k in
+        let rec fn i s n =
+          if i >= l then (s,n) else
+            let c,s,n = Input.read s n in
+            if c <> k.[i] then raise NoParse;
+            fn (i+1) s n
+        in
+        let (s,n) = fn 0 s n in
+        (x,s,n) }
+
+let utf8 : ?name:string -> Uchar.t -> 'a -> 'a t = fun ?name k x ->
+  string ?name (Utf8.encode k) x
+
+let any_grapheme : ?name:string -> unit -> string t = fun ?name () ->
+  { n = default "GRAPHEME" name
+  ; c = Charset.full
+  ; f = fun s n ->
+        let rec fn acc s n =
+          try
+            let (c,s',n') = (any_utf8 ()).f s n in
+            if acc <> [] && Utf8.grapheme_break_after acc c then
+              (acc,s,n)
+            else
+              fn (c::acc) s' n'
+          with NoParse ->
+            if acc <> [] then (acc, s, n) else raise NoParse
+        in
+        try
+          let (l,s,n) = fn [] s n in
+          (String.concat "" (List.rev_map Utf8.encode l),s, n)
+        with Invalid_argument _ -> raise NoParse }
+
+let grapheme : ?name:string -> string -> 'a -> 'a t = fun ?name k x ->
+  if k = "" then invalid_arg "Lex.grapheme: empty string";
+  { n = default ("GRAPHEME("^k^")") name
+  ; c = Charset.singleton k.[0]
+  ; f = fun s n ->
+        let (k',s,n) = (any_grapheme ()).f s n in
+        if k = k' then (x,s,n) else raise NoParse }
 
 (** Accept a character for which the test returns [true] *)
 let test : ?name:string -> (char -> bool) -> char t = fun ?name f ->
@@ -259,22 +305,6 @@ let plus : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
         in
         let (x,s,n) = t.f s n in
         fn (f (a ()) x) s n }
-
-(** [string s] Accepts only the given string.*)
-let string : ?name:string -> string -> 'a -> 'a t = fun ?name k x ->
-  if k = "" then invalid_arg "Lex.string: empty string";
-  { n = default (sp "%S" k) name
-  ; c = Charset.singleton k.[0]
-  ; f = fun s n ->
-        let l = String.length k in
-        let rec fn i s n =
-          if i >= l then (s,n) else
-            let c,s,n = Input.read s n in
-            if c <> k.[i] then raise NoParse;
-            fn (i+1) s n
-        in
-        let (s,n) = fn 0 s n in
-        (x,s,n) }
 
 (** Parses an integer in base 10. ["+42"] is accepted. *)
 let int : ?name:string -> unit -> int t = fun ?name () ->

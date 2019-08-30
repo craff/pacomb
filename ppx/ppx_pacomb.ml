@@ -109,7 +109,13 @@ let rec exp_to_term exp =
   | [%expr FLOAT] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.float ())]
   | [%expr UTF8] ->
-     [%expr Pacomb.Grammar.term (Pacomb.Lex.utf8 ())]
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.any_utf8 ())]
+  | [%expr UTF8([%e? c])] ->
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.utf8 [%e c] ())]
+  | [%expr GRAPHEME] ->
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.any_grapheme ())]
+  | [%expr GRAPHEME([%e? c])] ->
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.grapheme [%e c] ())]
   | [%expr EOF] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.eof ())]
   | [%expr RE([%e? s])] ->

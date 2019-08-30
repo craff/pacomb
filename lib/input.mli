@@ -44,15 +44,14 @@ val from_channel : ?utf8:context -> ?filename:string -> in_channel -> buffer
     error messages. *)
 val from_string : ?utf8:context -> ?filename:string -> string -> buffer
 
-(** [from_fun  finalise utf8 name  get back  data] returns a  buffer constructed
-    from the object [data] using the [get] function. The get function is used to
-    obtain one line of input from [data].  The [finalise] function is applied to
-    [data]  when the  end of  file is  reached.  The  [name] string  is used  to
-    reference the  origin of the data  in error messages. Position  are reported
-    according to [utf8].  [back data n] is  needed to and called  to go backward
-    [n] byte to the previous grapheme break if [utf8 <> Utf8.ASCII] *)
+(** [from_fun finalise utf8 name get data] returns a buffer constructed from the
+    object [data] using  the [get] function. The get function  is used to obtain
+    one line of input from [data].  The [finalise] function is applied to [data]
+    when the end of file is reached.  The [name] string is used to reference the
+    origin of  the data in  error messages.  Position are reported  according to
+    [utf8].  *)
 val from_fun : ('a -> unit) -> context -> string -> ('a -> string * bool)
-               -> ('a -> int -> unit) -> 'a -> buffer
+               -> 'a -> buffer
 
 (** Exception that can  be raised by a preprocessor in case  of error. The first
     string references the name of the buffer (e.g. the name of the corresponding
@@ -93,7 +92,7 @@ module WithPP : functor (PP : Preprocessor) ->
   sig
     (** Same as [Input.from_fun] but uses the preprocessor. *)
     val from_fun : ('a -> unit) -> context -> string -> ('a -> string * bool)
-                     -> ('a -> int -> unit) -> 'a -> buffer
+                     -> 'a -> buffer
 
     (** Same as [Input.from_channel] but uses the preprocessor. *)
     val from_channel : ?utf8:context -> ?filename:string -> in_channel -> buffer

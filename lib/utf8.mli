@@ -29,11 +29,25 @@ val gbp : Uchar.t -> grapheme_break_property
 type previous_chars =
   EvenRegionalIndicator | ExtPictExtendStar | NoPrevious
 
+val encode : Uchar.t -> string
+
+val decode : string -> int -> Uchar.t * int
+
 val look : string -> int -> Uchar.t
 
 val next : string -> int -> int
 
 val prev : string -> int -> int
+
+val of_list : Uchar.t list -> string
+
+val to_list : string -> Uchar.t list
+
+val fold : ('a -> Uchar.t -> 'a) -> 'a -> string -> 'a
+
+val grapheme_break : string -> int -> bool
+
+val grapheme_break_after : Uchar.t list -> Uchar.t -> bool
 
 val next_grapheme : string -> int -> int
 

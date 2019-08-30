@@ -138,8 +138,7 @@ let buffer_uid (lazy buf) = buf.uid
 module type MinimalInput =
   sig
     val from_fun : ('a -> unit) -> context -> string
-                   -> ('a -> (string * bool))
-                   -> ('a -> int -> unit) -> 'a -> buffer
+                   -> ('a -> (string * bool)) -> 'a -> buffer
   end
 
 (* The following code has been borrowed from OCaml's “pervasives.ml” file of
@@ -151,7 +150,7 @@ external unsafe_input : in_channel -> bytes -> int -> int -> int =
 external input_scan_line : in_channel -> int =
   "caml_ml_input_scan_line"
 
-(* returns [(s,nl)] is [nl = true] iff there is a newline at the end of [s] *)
+(* returns [(s,nl)] with [nl = true] iff there is a newline at the end of [s] *)
 let input_line ch =
   let n = input_scan_line ch in
   if n = 0 then (* n = 0: we are at EOF *)
@@ -169,10 +168,6 @@ let input_line ch =
       (Bytes.unsafe_to_string res, false)
     end
 
-let back ch n =
-  let p = pos_in ch - n in
-  seek_in ch p
-
 module GenericInput(M : MinimalInput) =
   struct
     include M
@@ -180,16 +175,15 @@ module GenericInput(M : MinimalInput) =
     let from_channel
         : ?utf8:context -> ?filename:string -> in_channel -> buffer =
       fun ?(utf8=Utf8.ASCII) ?(filename="") ch ->
-        from_fun ignore utf8 filename input_line back ch
+        from_fun ignore utf8 filename input_line ch
 
     let from_file : ?utf8:context -> string -> buffer =
       fun ?(utf8=Utf8.ASCII) fname ->
-        from_fun close_in utf8 fname input_line back (open_in fname)
+        from_fun close_in utf8 fname input_line (open_in fname)
 
     let from_string : ?utf8:context -> ?filename:string -> string -> buffer =
       fun ?(utf8=Utf8.ASCII) ?(filename="") str ->
           let size = String.length str in
-          let back (_,p) n = p := !p - n in
           let get_string_line (str, p) =
             let start = !p in
             if start >= size then raise End_of_file;
@@ -203,31 +197,34 @@ module GenericInput(M : MinimalInput) =
             let pos' = !p - start in
             (String.sub str start pos', nl)
           in
-          from_fun ignore utf8 filename get_string_line back (str, ref 0)
+          from_fun ignore utf8 filename get_string_line (str, ref 0)
   end
 
 include GenericInput(
   struct
-    let from_fun finalise utf8 name get_line back file =
-      let rec fn name lnum loff boff coff cont =
+    let from_fun finalise utf8 name get_line file =
+      let rec fn remain name lnum loff boff coff cont =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
-            let (data, nl) = get_line file in
+            let (data0, nl) =
+              try get_line file
+              with End_of_file when remain <> ""  -> ("", false)
+            in
+            let data = if remain <> "" then remain ^ data0 else data0 in
             let llen = String.length data in
-            let (data,llen) =
-              if not nl && utf8 <> Utf8.ASCII then
+            let (remain,data,llen) =
+              if not nl && data0 <> "" && utf8 <> Utf8.ASCII then
                 let p = Utf8.prev_grapheme data llen in
-                back file (llen - p);
-                (String.sub data 0 p, p)
+                (String.sub data p (llen - p), String.sub data 0 p, p)
               else
-                (data, llen)
+                ("",data, llen)
             in
             let len = if utf8 <> Utf8.ASCII then utf8_len utf8 data else llen in
             let nlnum, ncoff = if nl then (lnum+1, 0) else (lnum, coff + len) in
             fun () ->
               { is_eof = false ; lnum ; loff ; boff; coff; llen ; data ; name
-              ; next = lazy (fn name nlnum (loff + len)
+              ; next = lazy (fn remain name nlnum (loff + len)
                                            (boff + llen) ncoff cont)
               ; utf8 ; uid = new_uid () ; ctnr = [||] }
           with End_of_file ->
@@ -240,7 +237,7 @@ include GenericInput(
           let cont name lnum loff boff =
             Lazy.force (empty_buffer name lnum loff boff)
           in
-          fn name 1 0 0 0 cont
+          fn "" name 1 0 0 0 cont
         end
   end)
 
@@ -260,20 +257,23 @@ module type Preprocessor =
 
 module Make(PP : Preprocessor) =
   struct
-    let from_fun finalise utf8 name get_line back file =
-      let rec fn name lnum loff boff coff st cont =
+    let from_fun finalise utf8 name get_line file =
+      let rec fn remain name lnum loff boff coff st cont =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
-            let (data, nl) = get_line file in
+            let (data0, nl) =
+              try get_line file
+              with End_of_file when remain <> ""  -> ("", false)
+            in
+            let data = if remain <> "" then remain ^ data0 else data0 in
             let llen = String.length data in
-            let data =
-              if not nl && utf8 <> Utf8.ASCII then
+            let (remain,data) =
+              if not nl && data0 <> "" && utf8 <> Utf8.ASCII then
                 let p = Utf8.prev_grapheme data llen in
-                back file (llen - p);
-                String.sub data 0 p
+                (String.sub data p (llen-p), String.sub data 0 p)
               else
-                data
+                ("",data)
             in
             let (st, name, lnum, res) = PP.update st name lnum data nl in
             match res with
@@ -287,11 +287,11 @@ module Make(PP : Preprocessor) =
                in
               fun () ->
                 { is_eof = false ; lnum ; loff ; boff; coff; llen ; data ; name
-                ; next = lazy (fn name nlnum (loff + len) (boff + llen)
+                ; next = lazy (fn remain name nlnum (loff + len) (boff + llen)
                                  ncoff st cont)
                 ; utf8 ; uid = new_uid () ; ctnr = [||] }
             | None ->
-              fun () -> fn name lnum loff boff coff st cont
+              fun () -> fn remain name lnum loff boff coff st cont
           with End_of_file ->
             finalise file;
             fun () -> cont name (lnum+1) loff boff st
@@ -303,7 +303,7 @@ module Make(PP : Preprocessor) =
             PP.check_final st name;
             Lazy.force (empty_buffer name lnum loff boff)
           in
-          fn name 1 0 0 0 PP.initial_state cont
+          fn "" name 1 0 0 0 PP.initial_state cont
         end
   end
 

@@ -29,6 +29,15 @@
   (libraries))
 
 (test
+  (name Break)
+  (modules Break)
+  (preprocess (pps pacomb.ppx))
+  (libraries unix pacomb)
+  (deps Break.exe GraphemeBreakTest.txt)
+  (action
+    (run ./Break.exe ./GraphemeBreakTest.txt)))
+
+(test
   (name calc_factor)
   (modules calc_factor)
   (preprocess (pps pacomb.ppx))

@@ -148,8 +148,23 @@ val char_lit : ?name:string -> unit -> char t
 val string_lit : ?name:string -> unit -> string t
 
 (** Parses a unicode UTF8 char
-    [name] defauls to ["UTF8"] *)
-val utf8 : ?name:string -> unit -> Uchar.t t
+    [name] defaults to ["UTF8"] *)
+val any_utf8 : ?name:string -> unit -> Uchar.t t
+
+(** [utf8 c x] parses a specific unicode char and returns [x],
+    [name] defaults to the string representing the char *)
+val utf8 : ?name:string -> Uchar.t -> 'a -> 'a t
+
+(** Parses any utf8 grapheme.
+    [name] defaults to ["GRAPHEME"] *)
+val any_grapheme : ?name:string -> unit -> string t
+
+(** [grapheme s x] parses the given utf8 grapheme and return [x].
+    The difference with [string s x] is that if the input starts
+    with a grapheme [s'] such that [s] is a strict prefix of [s'],
+    parsing will fail.
+    [name] defaults to ["GRAPHEME("^s^")"] *)
+val grapheme : ?name:string -> string -> 'a -> 'a t
 
 (** [keyword ~name k cs x = seq ~name (string  k ()) (test f ()) (fun _ _ -> x)]
      usefull to  accept a  keyword only  when not  followed by  an alpha-numeric
