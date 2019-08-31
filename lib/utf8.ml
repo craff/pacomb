@@ -6708,3 +6708,20 @@ let fold_grapheme : ('a -> string -> 'a) -> 'a -> string -> 'a =
            pos := npos; res := (fn (!res) s))
           done;
         !res
+
+let length : string -> int = fun s ->
+  fold (fun i _ -> i + 1) 0 s
+
+let sub s start len =
+  let slen = String.length s in
+  let rec find pos num =
+    if num < 0 then invalid_arg "Utf8.sub (negative index)";
+    if num = 0 then pos else
+      begin
+        if pos >= slen then invalid_arg "Utf8.sub (char out of bound)";
+        find (next s pos) (num-1)
+      end
+  in
+  let start = find 0 start in
+  let len   = (find start len) - start in
+  String.sub s start len

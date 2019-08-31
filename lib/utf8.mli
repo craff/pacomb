@@ -45,6 +45,10 @@ val to_list : string -> Uchar.t list
 
 val fold : ('a -> Uchar.t -> 'a) -> 'a -> string -> 'a
 
+val length : string -> int
+
+val sub : string -> int -> int -> string
+
 val grapheme_break : string -> int -> bool
 
 val grapheme_break_after : Uchar.t list -> Uchar.t -> bool
