@@ -191,6 +191,41 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
   | [%expr [%e? rule] => [%e? action]] ->
      let (rule,cond) = exp_to_rule rule in
      let loc_a = action.pexp_loc in
+     let gl_pos = mknoloc ("_pos") in
+     let gl_lpos = mknoloc ("_lpos") in
+     let gl_rpos = mknoloc ("_rpos") in
+     let has_gl_pos = has_ident gl_pos.txt action in
+     let has_gl_lpos = has_gl_pos || has_ident gl_lpos.txt action in
+     let has_gl_rpos = has_gl_pos || has_ident gl_rpos.txt action in
+     let acts_fn =
+       if has_gl_pos then
+         let pat = Pat.var gl_pos in
+         let vb = [
+             Vb.mk pat
+               (Exp.record
+                  [( mknoloc (Ldot(Lident "Pos","start"))
+                   , Exp.ident (mknoloc (Lident gl_lpos.txt)))
+                  ;( mknoloc (Ldot(Lident "Pos","end_"))
+                   , Exp.ident (mknoloc (Lident gl_rpos.txt)))]
+                       None)]
+         in
+         (fun exp -> Exp.let_ Nonrecursive vb (acts_fn exp))
+       else acts_fn
+     in
+     let acts_fn =
+       if has_gl_lpos then
+         (fun exp -> let loc = exp.pexp_loc in
+                     [%expr fun _lpos -> [%e (acts_fn exp)]])
+       else
+         acts_fn
+     in
+     let acts_fn =
+       if has_gl_rpos then
+         (fun exp -> let loc = exp.pexp_loc in
+                     [%expr fun _rpos -> [%e (acts_fn exp)]])
+       else
+         acts_fn
+     in
      let gn (acts_fn, rule) (name, dep, item, loc_e) = match name with
        | None    ->
           let pat = Pat.any () in
@@ -236,6 +271,7 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
           in
           let acts_fn exp =
             let loc = exp.pexp_loc in
+            (* add ignore(id) if we only use position *)
             if not has_id && (has_id_lpos || has_id_rpos) then
               begin
                 let id = Exp.ident (mkloc (Lident id.txt) id.loc) in
@@ -279,6 +315,18 @@ let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
        [%expr [%e f] [%e item] [%e exp]]
      in
      let rule = List.fold_right fn rule action in
+     let rule =
+       if has_gl_rpos then
+         let loc = rule.pexp_loc in
+         [%expr Pacomb.Grammar.rpos [%e rule]]
+       else rule
+     in
+     let rule =
+       if has_gl_lpos then
+         let loc = rule.pexp_loc in
+         [%expr Pacomb.Grammar.lpos [%e rule]]
+       else rule
+     in
      let rule =
        match cond with
        | None -> rule

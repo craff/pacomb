@@ -74,7 +74,8 @@ let%parser g = (x::bin) 'a' 'b' => Pos.(x_lpos.col,x,x_rpos.col)
 let _ = tests g [("42+13 a b ",(0,(42,Add,13),5))
                ; ("a 42 * 4 b ",(2,(42,Mul,4),10))
                ; ("a b 42 / 2 ",(0,(42,Div,2),10))]
-
+let%parser g = 'a' 'b' => Pos.(_pos.start.col,_pos.end_.col)
+let _ = tests g [("a b ",(0,3))]
 
 (* test recursion *)
 let%parser rec g = (y::g) (x::INT) => x+y
