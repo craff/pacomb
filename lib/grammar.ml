@@ -268,7 +268,8 @@ let empty ?name x = mkg ?name (Empty x)
 let cond ?name b = if b then empty ?name () else fail ?name ()
 
 let term ?name (x) =
-  if accept_empty x then invalid_arg "term: empty terminals";
+  if accept_empty x then
+    invalid_arg (Printf.sprintf "term: empty terminals %s" x.n);
   let name = match name with None -> x.Lex.n | Some n -> n in
   mkg ~name (Term x)
 
@@ -350,7 +351,11 @@ let declare_grammar name =
 let set_grammar : type a. a grammar -> a grammar -> unit =
   fun g1 g2 ->
     if g1.d <> Tmp then
-      failwith "set_grammar: grammar already set or not created by set_grammar";
+      failwith
+        (Printf.sprintf
+           "set_grammar: grammar %s already set or not created by set_grammar"
+           g1.n)
+    ;
     g1.d <- g2.d
 
 let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
