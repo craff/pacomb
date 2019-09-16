@@ -167,8 +167,9 @@ let rec exp_to_rule e =
   | Pexp_apply({ pexp_desc =
       Pexp_apply({ pexp_desc =
         Pexp_ident
-          { txt = Lident("="|"<"|">"|"<="|">="|"<>"|"=="|"!="|
-                         "not"|"&&"|"||")}}, _)} as cond,
+          { txt = Lident("="|"<"|">"|"<="|">="|"<>"|"=="|"!="|"<<="|">>="|"==="|
+                         "not"|"&&"|"||"|"=|" as sym)}}, [(Nolabel,a0);(Nolabel,a1)])}
+               as cond,
       (Nolabel,a3)::rest) ->
      let (rule,_) = exp_to_rule (Exp.apply a3 rest) in
      let cond = if (sym = "=|") then CondMatch(a0,a1) else CondTest(cond) in
