@@ -88,7 +88,11 @@ let rec exp_to_pattern e =
   | { pexp_desc = Pexp_open(_,m,e)} ->
      let (name, pat) = exp_to_pattern e in
      (name, Pat.open_ ~loc m  pat)
-  | _ -> warn loc "expression eft of \"::\" does not represent a pattern"
+  | { pexp_desc = Pexp_construct(c,a) } ->
+     (None, Pat.construct c (match a with
+                     | None -> None
+                     | Some e -> Some(snd (exp_to_pattern e))))
+  | _ -> warn loc "expression left of \"::\" does not represent a pattern"
 
 (* transform an expression into a terminal *)
 let rec exp_to_term exp =
@@ -149,6 +153,11 @@ let exp_to_rule_item (e, loc_e) =  match e with
   | _ ->
      (None, None, exp_to_term e, loc_e)
 
+type cond =
+  CondMatch of expression * expression
+| CondTest of expression
+| CondNone
+
 (* transform exp into rule, that is list of rule item. Accept
    - a sequence of items (that is applications of items)
    - or () to denote the empty rule *)
@@ -162,9 +171,10 @@ let rec exp_to_rule e =
                          "not"|"&&"|"||")}}, _)} as cond,
       (Nolabel,a3)::rest) ->
      let (rule,_) = exp_to_rule (Exp.apply a3 rest) in
-     (rule, Some cond)
+     let cond = if (sym = "=|") then CondMatch(a0,a1) else CondTest(cond) in
+     (rule, cond)
   | Pexp_construct({txt = Lident "()"; loc}, None) ->
-     ([None, None, [%expr Pacomb.Grammar.empty ()], loc_e], None)
+     ([None, None, [%expr Pacomb.Grammar.empty ()], loc_e], CondNone)
   | Pexp_apply(e1, args) ->
      let e1, args = match e1, args with
        | (([%expr (~* )] | [%expr (~+) ] | [%expr (~?) ])
