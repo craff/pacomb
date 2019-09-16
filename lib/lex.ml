@@ -504,7 +504,7 @@ let seqs : 'a t list -> ('a -> 'a -> 'a) -> 'a t = fun l f ->
 (** keyword *)
 let keyword : ?name:string -> string -> (char -> bool) -> 'a -> 'a t =
   fun ?name k f x ->
-    seq ?name (string k ()) (test f) (fun _ _ -> x)
+    seq ?name (string k ()) (not_test f ()) (fun _ _ -> x)
 
 (** Functions managing blanks *)
 
