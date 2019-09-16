@@ -408,15 +408,19 @@ let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
       let g = declare_grammar (name^"_"^param_to_string p) in
       Hashtbl_eq.add tbl p g;
       (match !is_set with None -> ()
-      | Some f ->
-         set_grammar g (f p);
+                        | Some f -> set_grammar g (f p);
       );
       g),
   (fun f ->
+    let all_set = ref false in
+    while not !all_set do
+      all_set := true;
+      Hashtbl_eq.iter (fun p r ->
+          if r.d = Tmp then
+            (all_set := false; set_grammar r (f p))) tbl;
+    done;
     is_set := Some f;
-    Hashtbl_eq.iter (fun p r ->
-      set_grammar r (f p);
-    ) tbl)
+    )
 
 (** helpers for the constructors of 'a grne *)
 let ne_alt l =
