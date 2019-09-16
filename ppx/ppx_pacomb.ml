@@ -178,163 +178,169 @@ let rec exp_to_rule e =
      in
      let kn (_,e') = (e',merge_loc e'.pexp_loc loc_e) in
      let l = (e1, e.pexp_loc) :: List.map kn args in
-     (List.map exp_to_rule_item l, None)
+     (List.map exp_to_rule_item l, CondNone)
   | _ ->
-     ([exp_to_rule_item (e, e.pexp_loc)], None)
+     ([exp_to_rule_item (e, e.pexp_loc)], CondNone)
+
+let rec base_rule acts_fn rule action =
+  let (rule,cond) = exp_to_rule rule in
+  let loc_a = action.pexp_loc in
+  let gl_pos = mknoloc ("_pos") in
+  let gl_lpos = mknoloc ("_lpos") in
+  let gl_rpos = mknoloc ("_rpos") in
+  let has_gl_pos = has_ident gl_pos.txt action in
+  let has_gl_lpos = has_gl_pos || has_ident gl_lpos.txt action in
+  let has_gl_rpos = has_gl_pos || has_ident gl_rpos.txt action in
+  let acts_fn =
+    if has_gl_pos then
+      let pat = Pat.var gl_pos in
+      let vb = [
+          Vb.mk pat
+            (Exp.record
+               [( mknoloc (Ldot(Lident "Pos","start"))
+                , Exp.ident (mknoloc (Lident gl_lpos.txt)))
+               ;( mknoloc (Ldot(Lident "Pos","end_"))
+                , Exp.ident (mknoloc (Lident gl_rpos.txt)))]
+               None)]
+      in
+      (fun exp -> Exp.let_ Nonrecursive vb (acts_fn exp))
+    else acts_fn
+  in
+  let acts_fn =
+    if has_gl_lpos then
+      (fun exp -> let loc = exp.pexp_loc in
+                  [%expr fun _lpos -> [%e (acts_fn exp)]])
+    else
+      acts_fn
+  in
+  let acts_fn =
+    if has_gl_rpos then
+      (fun exp -> let loc = exp.pexp_loc in
+                  [%expr fun _rpos -> [%e (acts_fn exp)]])
+    else
+      acts_fn
+  in
+  let gn (acts_fn, rule) (name, dep, item, loc_e) = match name with
+    | None    ->
+       let pat = Pat.any () in
+       let acts_fn exp =
+         Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp)
+       in
+       (acts_fn, (false, false, dep, item, loc_e) :: rule)
+    | Some (None, pat) ->
+       let acts_fn exp =
+         Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp)
+       in
+       (acts_fn, (false,false,dep,item,loc_e) :: rule)
+    | Some (Some id, pat) ->
+       let id_pos = mkloc (id.txt ^ "_pos") id.loc in
+       let id_lpos = mkloc (id.txt ^ "_lpos") id.loc in
+       let id_rpos = mkloc (id.txt ^ "_rpos") id.loc in
+       let has_id = has_ident id.txt action in
+       let has_id_pos = has_ident id_pos.txt action in
+       let has_id_lpos = has_id_pos || has_ident id_lpos.txt action in
+       let has_id_rpos = has_id_pos || has_ident id_rpos.txt action in
+       let pat =
+         match has_id_lpos, has_id_rpos with
+         | false, false -> pat
+         | true, false -> Pat.tuple [Pat.var id_lpos; pat]
+         | false, true -> Pat.tuple [pat; Pat.var id_rpos]
+         | true, true -> Pat.tuple [Pat.var id_lpos; pat; Pat.var id_rpos]
+       in
+       let acts_fn =
+         if has_id_pos then
+           let pat = Pat.var id_pos in
+           let vb = [
+               Vb.mk pat
+                 (Exp.record
+                    [( mknoloc (Ldot(Lident "Pos","start"))
+                     , Exp.ident (mkloc (Lident id_lpos.txt) id.loc))
+                    ;( mknoloc (Ldot(Lident "Pos","end_"))
+                     , Exp.ident (mkloc (Lident id_rpos.txt) id.loc))]
+                    None)]
+           in
+           (fun exp -> Exp.let_ Nonrecursive vb (acts_fn exp))
+         else acts_fn
+       in
+       let acts_fn exp =
+         let loc = exp.pexp_loc in
+         (* add ignore(id) if we only use position *)
+         if not has_id && (has_id_lpos || has_id_rpos) then
+           begin
+             let id = Exp.ident (mkloc (Lident id.txt) id.loc) in
+             [%expr fun [%p pat] -> ignore [%e id]; [%e acts_fn exp]]
+           end
+         else
+           [%expr fun [%p pat] -> [%e acts_fn exp]]
+       in
+       (acts_fn, (has_id_lpos,has_id_rpos,dep,item,loc_e) :: rule)
+  in
+  let (acts_fn, rule) = List.fold_left gn (acts_fn, []) rule in
+  let rule = List.rev rule in
+  let action =
+    try exp_to_grammar ~acts_fn action
+    with
+    | Exit ->
+       let loc = action.pexp_loc in
+       [%expr Pacomb.Grammar.empty [%e acts_fn action]]
+    | Warn att ->
+       let loc = action.pexp_loc in
+       let exp = [%expr Pacomb.Grammar.empty [%e acts_fn action]] in
+       add_attribute exp att
+  in
+  let fn (lpos,rpos,dep,item,loc_e) exp =
+    let loc = merge_loc loc_e exp.pexp_loc in
+    let f = match (lpos,rpos,dep) with
+      | false, false, None -> [%expr Pacomb.Grammar.seq]
+      | true , false, None -> [%expr Pacomb.Grammar.seq_lpos]
+      | false, true , None -> [%expr Pacomb.Grammar.seq_rpos]
+      | true , true , None -> [%expr Pacomb.Grammar.seq_pos]
+      | false, false, Some(_) -> [%expr Pacomb.Grammar.dseq]
+      | true , false, Some(_) -> [%expr Pacomb.Grammar.dseq_lpos]
+      | false, true , Some(_) -> [%expr Pacomb.Grammar.dseq_rpos]
+      | true , true , Some(_) -> [%expr Pacomb.Grammar.dseq_pos]
+    in
+    let exp = match dep with
+      | None     -> exp
+      | Some pat -> [%expr fun [%p pat] -> [%e exp]]
+    in
+    [%expr [%e f] [%e item] [%e exp]]
+  in
+  let rule = List.fold_right fn rule action in
+  let rule =
+    if has_gl_rpos then
+      let loc = rule.pexp_loc in
+      [%expr Pacomb.Grammar.rpos [%e rule]]
+    else rule
+  in
+  let rule =
+    if has_gl_lpos then
+      let loc = rule.pexp_loc in
+      [%expr Pacomb.Grammar.lpos [%e rule]]
+    else rule
+  in
+  match cond with
+  | CondNone -> rule
+  | CondTest (cond) ->
+     let loc = rule.pexp_loc in
+     [%expr if [%e cond] then [%e rule] else Pacomb.Grammar.fail ()]
+  | CondMatch(a0,a1) ->
+     let (_,pat) = exp_to_pattern a1 in
+     let loc = rule.pexp_loc in
+     [%expr match [%e a0] with [%p pat] -> [%e rule] | _ -> Pacomb.Grammar.fail ()]
 
 (* transform an expression into a list of rules with action
    - name_param is an optional arguments for an eventual parameter name
    - fn is a function to modify the action. It adds [Exp.fun _] conctructs *)
-let rec exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
+and exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
   match e with
   (* base case [items => action] *)
   | [%expr [%e? rule] => [%e? action]] ->
-     let (rule,cond) = exp_to_rule rule in
-     let loc_a = action.pexp_loc in
-     let gl_pos = mknoloc ("_pos") in
-     let gl_lpos = mknoloc ("_lpos") in
-     let gl_rpos = mknoloc ("_rpos") in
-     let has_gl_pos = has_ident gl_pos.txt action in
-     let has_gl_lpos = has_gl_pos || has_ident gl_lpos.txt action in
-     let has_gl_rpos = has_gl_pos || has_ident gl_rpos.txt action in
-     let acts_fn =
-       if has_gl_pos then
-         let pat = Pat.var gl_pos in
-         let vb = [
-             Vb.mk pat
-               (Exp.record
-                  [( mknoloc (Ldot(Lident "Pos","start"))
-                   , Exp.ident (mknoloc (Lident gl_lpos.txt)))
-                  ;( mknoloc (Ldot(Lident "Pos","end_"))
-                   , Exp.ident (mknoloc (Lident gl_rpos.txt)))]
-                       None)]
-         in
-         (fun exp -> Exp.let_ Nonrecursive vb (acts_fn exp))
-       else acts_fn
-     in
-     let acts_fn =
-       if has_gl_lpos then
-         (fun exp -> let loc = exp.pexp_loc in
-                     [%expr fun _lpos -> [%e (acts_fn exp)]])
-       else
-         acts_fn
-     in
-     let acts_fn =
-       if has_gl_rpos then
-         (fun exp -> let loc = exp.pexp_loc in
-                     [%expr fun _rpos -> [%e (acts_fn exp)]])
-       else
-         acts_fn
-     in
-     let gn (acts_fn, rule) (name, dep, item, loc_e) = match name with
-       | None    ->
-          let pat = Pat.any () in
-          let acts_fn exp =
-            Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp)
-          in
-          (acts_fn, (false, false, dep, item, loc_e) :: rule)
-       | Some (None, pat) ->
-          let acts_fn exp =
-            Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp)
-          in
-          (acts_fn, (false,false,dep,item,loc_e) :: rule)
-       | Some (Some id, pat) ->
-          let id_pos = mkloc (id.txt ^ "_pos") id.loc in
-          let id_lpos = mkloc (id.txt ^ "_lpos") id.loc in
-          let id_rpos = mkloc (id.txt ^ "_rpos") id.loc in
-          let has_id = has_ident id.txt action in
-          let has_id_pos = has_ident id_pos.txt action in
-          let has_id_lpos = has_id_pos || has_ident id_lpos.txt action in
-          let has_id_rpos = has_id_pos || has_ident id_rpos.txt action in
-          let pat =
-            match has_id_lpos, has_id_rpos with
-            | false, false -> pat
-            | true, false -> Pat.tuple [Pat.var id_lpos; pat]
-            | false, true -> Pat.tuple [pat; Pat.var id_rpos]
-            | true, true -> Pat.tuple [Pat.var id_lpos; pat; Pat.var id_rpos]
-          in
-          let acts_fn =
-            if has_id_pos then
-              let pat = Pat.var id_pos in
-              let vb = [
-                  Vb.mk pat
-                    (Exp.record
-                       [( mknoloc (Ldot(Lident "Pos","start"))
-                        , Exp.ident (mkloc (Lident id_lpos.txt) id.loc))
-                       ;( mknoloc (Ldot(Lident "Pos","end_"))
-                        , Exp.ident (mkloc (Lident id_rpos.txt) id.loc))]
-                       None)]
-
-              in
-              (fun exp -> Exp.let_ Nonrecursive vb (acts_fn exp))
-            else acts_fn
-          in
-          let acts_fn exp =
-            let loc = exp.pexp_loc in
-            (* add ignore(id) if we only use position *)
-            if not has_id && (has_id_lpos || has_id_rpos) then
-              begin
-                let id = Exp.ident (mkloc (Lident id.txt) id.loc) in
-                [%expr fun [%p pat] -> ignore [%e id]; [%e acts_fn exp]]
-              end
-            else
-              [%expr fun [%p pat] -> [%e acts_fn exp]]
-          in
-          (acts_fn, (has_id_lpos,has_id_rpos,dep,item,loc_e) :: rule)
-     in
-     let (acts_fn, rule) = List.fold_left gn (acts_fn, []) rule in
-     let rule = List.rev rule in
-     let action =
-       try exp_to_grammar ~acts_fn action
-       with
-       | Exit ->
-          let loc = action.pexp_loc in
-          [%expr Pacomb.Grammar.empty [%e acts_fn action]]
-       | Warn att ->
-          let loc = action.pexp_loc in
-          let exp = [%expr Pacomb.Grammar.empty [%e acts_fn action]] in
-          add_attribute exp att
-
-     in
-     let fn (lpos,rpos,dep,item,loc_e) exp =
-       let loc = merge_loc loc_e exp.pexp_loc in
-       let f = match (lpos,rpos,dep) with
-         | false, false, None -> [%expr Pacomb.Grammar.seq]
-         | true , false, None -> [%expr Pacomb.Grammar.seq_lpos]
-         | false, true , None -> [%expr Pacomb.Grammar.seq_rpos]
-         | true , true , None -> [%expr Pacomb.Grammar.seq_pos]
-         | false, false, Some(_) -> [%expr Pacomb.Grammar.dseq]
-         | true , false, Some(_) -> [%expr Pacomb.Grammar.dseq_lpos]
-         | false, true , Some(_) -> [%expr Pacomb.Grammar.dseq_rpos]
-         | true , true , Some(_) -> [%expr Pacomb.Grammar.dseq_pos]
-       in
-       let exp = match dep with
-         | None     -> exp
-         | Some pat -> [%expr fun [%p pat] -> [%e exp]]
-       in
-       [%expr [%e f] [%e item] [%e exp]]
-     in
-     let rule = List.fold_right fn rule action in
-     let rule =
-       if has_gl_rpos then
-         let loc = rule.pexp_loc in
-         [%expr Pacomb.Grammar.rpos [%e rule]]
-       else rule
-     in
-     let rule =
-       if has_gl_lpos then
-         let loc = rule.pexp_loc in
-         [%expr Pacomb.Grammar.lpos [%e rule]]
-       else rule
-     in
-     let rule =
-       match cond with
-       | None -> rule
-       | Some cond ->
-          let loc = rule.pexp_loc in
-          [%expr if [%e cond] then [%e rule] else Pacomb.Grammar.fail ()]
-     in
-     [rule]
+     [base_rule acts_fn rule action]
+  | [%expr [%e? rule] ==> [%e? action]] ->
+     let rule = base_rule acts_fn rule action in
+     let loc = e.pexp_loc in
+     [[%expr Pacomb.Grammar.eval [%e rule]]]
   (* inheritance case [prio1 < prio2 < ... < prion] *)
   | [%expr [%e? _] < [%e? _]] when name_param <> None ->
      let rec fn exp = match exp with

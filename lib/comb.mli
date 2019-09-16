@@ -69,6 +69,9 @@ val option: 'a -> Charset.t -> 'a t -> 'a t
     function *)
 val app : 'a t -> ('a -> 'b) -> 'b t
 
+(** forces immediate evaluation of the action just after parsing *)
+val eval : 'a t -> 'a t
+
 (** Parses  as the given  combinator and  give the position  to the left  of the
     parsing input as argument to the action *)
 val left_pos : (Pos.t -> 'a) t -> 'a t

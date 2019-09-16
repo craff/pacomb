@@ -31,31 +31,16 @@ and expr = (a::prod)               => a
          ; (x::expr) '+' (y::prod) => x+.y
          ; (x::expr) '-' (y::prod) => x-.y
 
-(* A subtlety : we want to parse expression, on by one and print the
+(* A subtlety : we want to parse expression, one by one and print the
    result. Pacomb evaluates action after the next token to avoid some useless
    evaluation but still make give_up usable. So we evaluate after newline...
-   But if we where parsing blank after newline, we still would have to wait
-   the input after the newline.
-
-   To solve this, we parse line with no blank, use [Grammar.layout] to accept
-   blank inside expression.
-
-   A simpler solution (used in calc_ext.ml) is to read the input line
-   by line and parse each line using [Grammar.parse_string].
+   To solve this, it is possible to require immediate evaluation.
 *)
 
-let config =
-  Lex.{ default_layout_config with
-        new_blanks_before = true
-      ; new_blanks_after = true}
-
-(* we define the characters to be ignored, here space only *)
-let blank = Lex.blank_charset (Charset.singleton ' ')
-
-(* The parsing calling expression and changing the blank,
+(* The parsing calling expression, with immediate evaluation (==>)
    printing the result and the next prompt. *)
-let%parser [@layout blank ~config] top =
-  (e::expr) => Printf.printf "%f\n=> %!" e
+let%parser top =
+  (e::expr) ==> Printf.printf "%f\n=> %!" e
 
 let%parser rec exprs = () => () ; exprs top '\n' => ()
 

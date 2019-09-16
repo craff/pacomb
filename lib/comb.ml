@@ -405,6 +405,9 @@ let alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t = fun cs1 g1 cs2 g2 ->
 let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k ->
     g env (app k fn)
 
+let eval : 'a t -> 'a t = fun g env k ->
+  g env (ink (fun env v -> ignore (Lazy.force v); call k env v))
+
 (** Combinator to test the input before parsing with a grammar *)
 let test_before : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a t -> 'a t =

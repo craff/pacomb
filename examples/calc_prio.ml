@@ -18,18 +18,10 @@ let%parser rec
             ; (p=Sum ) (x::expr Sum ) '+' (y::expr Prod) => x+.y
             ; (p=Sum ) (x::expr Sum ) '-' (y::expr Prod) => x-.y
 
-let config =
-  Lex.{ default_layout_config with
-        new_blanks_before = true
-      ; new_blanks_after = true}
-
-(* we define the characters to be ignored, here space only *)
-let blank = Lex.blank_charset (Charset.singleton ' ')
-
-(* The parsing calling expression and changing the blank,
+(* The parsing calling expression, with immediate evaluation (==>)
    printing the result and the next prompt. *)
-let%parser [@layout blank ~config] top =
-  (e::expr Sum) => Printf.printf "%f\n=> %!" e
+let%parser top =
+  (e::expr Sum) ==> Printf.printf "%f\n=> %!" e
 
 let%parser rec exprs = () => () ; exprs top '\n' => ()
 

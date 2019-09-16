@@ -60,6 +60,7 @@ type 'a grammar =
                                            (** caches the grammar *)
    | Test : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool) * bool *
               'a t -> 'a grdf              (** test, before (true)  or after *)
+   | Eval : 'a t -> 'a grdf                (** force evaluation *)
    | Tmp  : 'a grdf                        (** used as initial value for
                                                recursive grammar. *)
 
@@ -84,6 +85,7 @@ type 'a grammar =
    | ECache : ('a -> 'a -> 'a) option * 'a grne -> 'a grne
    | ETest : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool) * bool *
               'a grne -> 'a grne
+   | EEval : 'a grne -> 'a grne
    | ETmp  : 'a grne
 
 (** grammar renaming *)
@@ -132,6 +134,7 @@ let print_grammar ?(def=true) ch s =
       | ECache(_,g)    -> is_empty g
       | ETest(_,_,g)   -> is_empty g
       | ELayout(_,g,_) -> is_empty g
+      | EEval(g)       -> is_empty g
       | _              -> false
     in
     match g with
@@ -159,7 +162,8 @@ let print_grammar ?(def=true) ch s =
     | ELPos(_,g)    -> pg prio ch g
     | ECache(_,g)   -> pg prio ch g
     | ETest(_,_,g)  -> pg prio ch g
-    | ELayout(_,g,_) -> pg prio ch g
+    | ELayout(_,g,_)-> pg prio ch g
+    | EEval(g)      -> pg prio ch g
     | ETmp          -> pr "TMP"
 
   and print_grdf : type a. prio -> out_channel -> a grdf -> unit =
@@ -201,6 +205,7 @@ let print_grammar ?(def=true) ch s =
     | Cache(_,g)   -> pg prio ch g
     | Test(_,_,g)  -> pg prio ch g
     | Layout(_,g,_)-> pg prio ch g
+    | Eval(g)      -> pg prio ch g
     | Tmp          -> pr "TMP"
 
   and print_negr : type a. prio -> out_channel -> a grammar -> unit =
@@ -315,6 +320,9 @@ let error ?name m = mkg ?name (Err m)
 
 let cache ?name ?merge g =
   mkg ?name (if g.d = Fail then Fail else Cache(merge,g))
+
+let eval ?name g =
+  mkg ?name (if g.d = Fail then Fail else Eval(g))
 
 let test ?name f b g = mkg ?name (if g.d = Fail then Fail else Test(f,b,g))
 
@@ -449,6 +457,10 @@ let ne_cache merge g1 = match g1 with
   | EFail -> EFail
   | _     -> ECache(merge,g1)
 
+let ne_eval g1 = match g1 with
+  | EFail -> EFail
+  | _     -> EEval(g1)
+
 let ne_test f b g1 = match g1 with
   | EFail -> EFail
   | _     -> ETest(f,b,g1)
@@ -521,6 +533,7 @@ let factor_empty g =
                        (* FIXME #14: Loose position *)
     | Layout(_,g,_) -> fn g; g.e
     | Cache(_,g)    -> fn g; g.e
+    | Eval(g)        -> fn g; g.e
     | Test(_,_,g)   -> fn g;
                        if g.e <> [] then
                          failwith "illegal test on grammar accepting empty";
@@ -564,6 +577,7 @@ let factor_empty g =
     | LPos(pk,g1) -> hn g1; ne_lpos ?pk (get g1)
     | RPos(g1) -> hn g1; ne_rpos (get g1)
     | Cache(m,g1) -> hn g1; ne_cache m (get g1)
+    | Eval(g1) -> hn g1; ne_eval (get g1)
     | Test(f,b,g1) -> hn g1; ne_test f b (get g1)
     | Layout(b,g,cfg) -> hn g; ne_layout b (get g) cfg
     | Tmp           -> failwith "grammar compiled before full definition"
@@ -625,6 +639,9 @@ let rec elim_left_rec : type a. ety list -> a grammar -> unit = fun above g ->
          let (_, _, cs) = fn above g1 in
          (* grammar with cache can be recursive *)
          (g, fail (), if cs = NoLr then NoLr else HasCache)
+      | EEval(g1) ->
+         let (g1,s,cs) = fn above g1 in
+         (ne_eval g1, eval s, cs)
       | ERPos(g1) ->
          let (g1, s1, cs) = fn above g1 in
          (ne_rpos g1, rpos s1, cs)
@@ -712,6 +729,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
     | ERPos g -> fn g
     | ELPos (_,g) -> fn g
     | ECache (_,g) -> fn g
+    | EEval(g) -> fn g
     | ETest (_,_,g) -> fn g
     | ELayout(_,g,cfg) -> if cfg.old_blanks_before
                              && not cfg.new_blanks_before
@@ -757,6 +775,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   | ELPos(None,g) -> left_pos (compile_ne g)
   | ELPos(Some pk,g) -> read_pos pk (compile_ne g)
   | ECache(merge,g) -> cache ?merge (compile_ne g)
+  | EEval(g) -> eval (compile_ne g)
   | ETest(f,true,g) -> test_before f (compile_ne g)
   | ETest(f,false,g) -> test_after f (compile_ne g)
   | ELayout(b,g,cfg) -> change_layout ~config:cfg b (compile_ne g)
