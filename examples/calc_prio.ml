@@ -21,16 +21,19 @@ let%parser rec
 (* The parsing calling expression, with immediate evaluation (==>)
    printing the result and the next prompt. *)
 let%parser top =
-  (e::expr Sum) ==> Printf.printf "%f\n=> %!" e
+  (e::expr Sum) => Printf.printf "%f\n=> %!" e
 
-let%parser rec exprs = () => () ; exprs top '\n' => ()
+let%parser rec exprs = () => () ; exprs top '\n' ==> ()
+
+(* blanks *)
+let blank = Lex.blank_charset (Charset.singleton ' ')
 
 let _ =
   try
     while true do
       let f () =
         Printf.printf "=> %!"; (* initial prompt *)
-        parse_channel exprs Lex.noblank stdin;
+        parse_channel exprs blank stdin;
         raise End_of_file
       in
       (* [Pos] module provides a function to handle exception with

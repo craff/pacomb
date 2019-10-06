@@ -49,22 +49,22 @@ let config =
         new_blanks_before = true
       ; new_blanks_after = true}
 
-(* we define the characters to be ignored, here space only *)
-let blank = Lex.blank_charset (Charset.singleton ' ')
-
 (* The parsing calling expression and changing the blank,
    printing the result and the next prompt. *)
-let%parser [@layout blank ~config] top =
+let%parser top =
   (e::expr) => Printf.printf "%f\n=> %!" e
 
-let%parser rec exprs = () => () ; exprs top '\n' => ()
+let%parser rec exprs = () => () ; exprs top '\n' ==> ()
+
+(* we define the characters to be ignored, here space only *)
+let blank = Lex.blank_charset (Charset.singleton ' ')
 
 let _ =
   try
     while true do
       let f () =
         Printf.printf "=> %!"; (* initial prompt *)
-        parse_channel ~utf8:Utf8.UTF8 exprs Lex.noblank stdin;
+        parse_channel ~utf8:Utf8.UTF8 exprs blank stdin;
         raise End_of_file
       in
       (* [Pos] module provides a function to handle exception with
