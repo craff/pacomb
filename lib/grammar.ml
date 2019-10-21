@@ -114,7 +114,7 @@ let prl pr sep ch l =
 type prio = Atom | Seq | Alt
 type any_grammar = G : 'a grammar -> any_grammar
 
-let print_grammar ?(def=true) ch s =
+let print_grammar ?(no_other=false) ?(def=true) ch s =
   let adone = ref [] in
   let todo = ref [] in
   let do_def g =
@@ -255,9 +255,26 @@ let print_grammar ?(def=true) ch s =
          | [] -> print_grne Alt ch s.ne
          | _  -> Printf.printf "(() | %a)" (print_grne Alt) s.ne
        in
-       if def then pr (print_grdf Alt) s.d else pr pne s
+       if def then pr (print_grdf Alt) s.d else pr pne s;
+       if no_other then todo := []
 
   done
+
+let print_grne : type a. out_channel -> a grne -> unit =
+  fun ch ne ->
+  let g =
+    { e = []
+    ; d = Tmp
+    ; n = ""
+    ; k = Assoc.new_key ()
+    ; recursive = false
+    ; phase = Defined
+    ; ne
+    ; compiled = ref Comb.assert_false
+    ; charset = None
+    }
+  in
+  print_grammar ~no_other:true ~def:false ch g
 
 (** Interface to constructors.  propagate Fail because it is tested by
    elim_left_rec for the Lr suffix *)
