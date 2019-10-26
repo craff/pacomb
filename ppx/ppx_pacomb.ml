@@ -91,7 +91,10 @@ let rec exp_to_pattern e =
   | [%expr lazy [%e? e]] ->
      let (name, pat) = exp_to_pattern e in
      (name, [%pat? lazy [%p pat]])
-  | [%expr let open [%m? { pmod_desc = Pmod_ident m }] in [%e? e]] ->
+(* FIXME: the next line works wirh ocaml 4.08.1 and 4.09.0, but not with
+   4.07.1 ??? *)
+(*  | [%expr let open [%m? { pmod_desc = Pmod_ident m }] in [%e? e]] ->*)
+  | { pexp_desc = Pexp_open({popen_expr = { pmod_desc = Pmod_ident m }}, e)} ->
      let (name, pat) = exp_to_pattern e in
      (name, Pat.open_ ~loc m pat)
   | { pexp_desc = Pexp_construct(c,a) } ->
