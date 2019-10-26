@@ -1,9 +1,15 @@
+let mkloc = Location.mkloc
+let mknoloc = Location.mknoloc
+open Ppxlib
 open Asttypes
 open Parsetree
-open Ast_mapper
 open Ast_helper
 open Longident
 open Location
+
+(* Someone above is overriding these ?*)
+let (=) = Stdlib.(=)
+let (<>) = Stdlib.(<>)
 
 let cache_att =
   let open Ppxlib in
@@ -48,16 +54,17 @@ let add_attribute exp att =
    that if it returns false then it does not occur *)
 let has_ident id e =
   let found = ref false in
-  let mapper =
-    { default_mapper with
-      expr = (fun mapper exp ->
+  let iter =
+    object
+      inherit Ast_traverse.iter as super
+      method! expression exp =
         match exp.pexp_desc with
-        | Pexp_ident { txt = (Lident id')} when id' = id ->
-           found := true; exp
-        | _ -> default_mapper.expr mapper exp)
-    }
+        | Pexp_ident { txt = Lident id' } when id' = id ->
+           found := true;
+        | _ -> super#expression exp
+    end
   in
-  let _ = mapper.expr mapper e in
+  let _ = iter#expression e in
   !found
 
 (* transform an expression in a pattern
@@ -84,10 +91,9 @@ let rec exp_to_pattern e =
   | [%expr lazy [%e? e]] ->
      let (name, pat) = exp_to_pattern e in
      (name, [%pat? lazy [%p pat]])
-(* | [%expr let open [%m? m] in [%e? e]] ->*)
-  | { pexp_desc = Pexp_open(_,m,e)} ->
+  | [%expr let open [%m? { pmod_desc = Pmod_ident m }] in [%e? e]] ->
      let (name, pat) = exp_to_pattern e in
-     (name, Pat.open_ ~loc m  pat)
+     (name, Pat.open_ ~loc m pat)
   | { pexp_desc = Pexp_construct(c,a) } ->
      (None, Pat.construct c (match a with
                      | None -> None
@@ -172,7 +178,7 @@ let rec exp_to_rule e =
                as cond,
       (Nolabel,a3)::rest) ->
      let (rule,_) = exp_to_rule (Exp.apply a3 rest) in
-     let cond = if (sym = "=|") then CondMatch(a0,a1) else CondTest(cond) in
+     let cond = if sym = "=|" then CondMatch(a0,a1) else CondTest(cond) in
      (rule, cond)
   | Pexp_construct({txt = Lident "()"; loc}, None) ->
      ([None, None, [%expr Pacomb.Grammar.empty ()], loc_e], CondNone)
@@ -522,7 +528,7 @@ let vb_to_parser rec_ vb =
          in
          let exp =
            [%expr
-               [%e Exp.ident (Location.mkloc (Lident name.txt) name.loc)]
+               [%e Exp.ident (mkloc (Lident name.txt) name.loc)]
                [%e tuple]]
          in
          let exp =
@@ -548,12 +554,12 @@ let vb_to_parser rec_ vb =
         match param with
         | None ->
            [%expr Pacomb.Grammar.set_grammar
-             [%e Exp.ident (Location.mkloc (Lident name.txt) name.loc)]
+             [%e Exp.ident (mkloc (Lident name.txt) name.loc)]
              [%e rules]]
         | Some (_,pn,pat,_) ->
            let pat = Pat.alias pat (mknoloc pn) in
            [%expr
-             [%e Exp.ident (Location.mkloc (Lident (set name)) name.loc)]
+             [%e Exp.ident (mkloc (Lident (set name)) name.loc)]
              (fun [%p pat] -> [%e rules])]
       in
       [Vb.mk ~loc (Pat.any ()) exp]
