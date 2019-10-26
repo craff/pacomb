@@ -276,6 +276,8 @@ let print_grne : type a. out_channel -> a grne -> unit =
   in
   print_grammar ~no_other:true ~def:false ch g
 
+let _ = print_grne
+
 (** Interface to constructors.  propagate Fail because it is tested by
    elim_left_rec for the Lr suffix *)
 let fail ?name () = mkg ?name Fail
