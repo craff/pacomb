@@ -176,8 +176,10 @@ let rec exp_to_rule e =
   | Pexp_apply({ pexp_desc =
       Pexp_apply({ pexp_desc =
         Pexp_ident
-          { txt = Lident("="|"<"|">"|"<="|">="|"<>"|"=="|"!="|"<<="|">>="|"==="|
-                         "not"|"&&"|"||"|"=|" as sym)}}, [(Nolabel,a0);(Nolabel,a1)])}
+          { txt = Lident("="|"<"|">"|"<="|">="|"<>"
+                         |"=="|"!="|"<<="|">>="|"==="
+                         |"not"|"&&"|"||"|"=|" as sym)}}
+               , [(Nolabel,a0);(Nolabel,a1)])}
                as cond,
       (Nolabel,a3)::rest) ->
      let (rule,_) = exp_to_rule (Exp.apply a3 rest) in
@@ -347,7 +349,8 @@ let rec base_rule acts_fn rule action =
   | CondMatch(a0,a1) ->
      let (_,pat) = exp_to_pattern a1 in
      let loc = rule.pexp_loc in
-     [%expr match [%e a0] with [%p pat] -> [%e rule] | _ -> Pacomb.Grammar.fail ()]
+     [%expr match [%e a0] with [%p pat] -> [%e rule]
+                             | _ -> Pacomb.Grammar.fail ()]
 
 (* transform an expression into a list of rules with action
    - name_param is an optional arguments for an eventual parameter name

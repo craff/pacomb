@@ -6,7 +6,8 @@ let blank = Regexp.blank_regexp "\\(\\([#][^\n]*\\)\\|[ \r\t\026]+\\)*"
    (* bug: "\\([ \r\t\026]\\|\\(\\(#[^\n]*\\)\\)*" *)
 
 (* Parser for hexadecimal integers *)
-let%parser char = (i::RE"[0-9A-Fa-F]+") => Uchar.of_int (int_of_string ("0x" ^ i))
+let%parser char =
+  (i::RE"[0-9A-Fa-F]+") => Uchar.of_int (int_of_string ("0x" ^ i))
 
 let%parser sep = "÷" => true ; "×" => false
 

@@ -67,7 +67,6 @@ let test4 = fixpoint (fun r -> alt [empty 0; char_b; seq r char_a (+)])
 
 let test5 = fixpoint (fun r ->
                 alt [empty 0; seq r char_a (+); seq r char_b (+)])
-
 let star g = fixpoint (fun r -> alt [seq r g (+); empty 0])
 
 let plus g sep =
@@ -122,6 +121,7 @@ let test11 =
         ;seq gbc (seq char_b char_c (fun _ _ -> ())) (fun _ _ -> ())
         ;seq gac (seq char_a char_c (fun _ _ -> ())) (fun _ _ -> ())])
 
+
 let test12 =
   let ab = declare_grammar "AB" in
   let ac = declare_grammar "AC" in
@@ -170,6 +170,7 @@ let test13c =
                                           (fun x y -> Bin(x,y))]))
 
 let test14 = term (Lex.int ())
+
 let test15 = term (Lex.float ())
 let test16 = term (Lex.char_lit ())
 let test17 = term (Lex.string_lit ())
@@ -192,8 +193,11 @@ let _ = assert (parse_string test1 "" = 0)
 let _ = assert (parse_string test2 (na 10) = 10)
 let _ = assert (parse_string test2 "" = 0)
 let _ = assert (parse_string test2 "ababa" = 5)
-let _ = assert (parse_string test3 (na 10) = 10)
+let _ = Printf.printf "coucou 1\n%!"
 let _ = assert (parse_string test3 "" = 0)
+let _ = Printf.printf "coucou 2\n%!"
+let _ = assert (parse_string test3 (na 10) = 10)
+let _ = Printf.printf "coucou 3\n%!"
 let _ = assert (parse_string test4 (na 10) = 10)
 let _ = assert (parse_string test4 "" = 0)
 let _ = assert (parse_string test4 "baaa" = 4)

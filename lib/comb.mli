@@ -97,6 +97,17 @@ val lr : 'a t -> 'a key -> 'a t -> 'a t
 (** Same as above, but also store the position *)
 val lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t
 
+(** combinator and types for left recursion *)
+type mlr_left =
+  LNil : mlr_left
+| LCns : 'a key * 'a t * mlr_left -> mlr_left
+
+type mlr_right =
+  RNil : mlr_right
+| RCns : 'a key * 'b key * 'b t * mlr_right -> mlr_right
+
+val mlr : ?lpos:Pos.t key -> mlr_left -> mlr_right -> 'a key -> 'a t
+
 (** combinator to  access the value stored by  lr. It must be uses  as prefix of
     [c2] in [lr c1 c2].  For instance, the coding  of [let rec r = seq c1 (seq r
     c2)] is [let k = Assoc.new_key () in lr c1 k (seq (read_tbl k) c2)]. Here we

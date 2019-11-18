@@ -474,6 +474,69 @@ let lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t =
     in
     g env (ink klr)
 
+(** type to represent the left prefix of a mutually recursive grammar.
+    the key is the type of the grammar for each left prefix. *)
+type mlr_left =
+  LNil : mlr_left
+| LCns : 'a key * 'a t * mlr_left -> mlr_left
+
+(** type of the suffix to be repeted in a mutually recursive grammar.
+    the first key is the key present in the grammar at the left most position
+    the second key is the key associated to the result *)
+type mlr_right =
+  RNil : mlr_right
+| RCns : 'a key * 'b key * 'b t * mlr_right -> mlr_right
+
+(** select the useful right prefix to continue parsing, and return
+    the result reusing the type mlr_left *)
+let select : type a. mlr_right -> a key -> mlr_left = fun l k ->
+  let rec fn : mlr_right -> mlr_left -> mlr_left =
+    fun l acc ->
+    match l with
+    | RNil -> acc
+    | RCns(k',kr,g,r) ->
+       match k.eq k'.tok with
+         | Eq  -> fn r (LCns(kr,g,acc))
+         | NEq -> fn r acc
+  in
+  fn l LNil
+
+type mlr_res =
+  Res : 'a key * 'a lazy_t -> mlr_res
+
+let mlr : type a. ?lpos:Pos.t key -> mlr_left -> mlr_right -> a key -> a t =
+  fun ?lpos gl gr fkey env k ->
+  let pos = match lpos with
+    | None   -> Pos.phantom
+    | Some _ -> Pos.get_pos env.current_buf env.current_pos
+  in
+  let rec g0 : mlr_left -> mlr_res t = function
+    | LNil -> fail
+    | LCns(key,g,r) ->
+       let g env k =
+         g env (ink(fun env v ->
+                    let v = lazy (Res(key,v)) in call k env v))
+       in
+       (** FIXME: use a charset and balance the list *)
+       alt Charset.full g Charset.full (g0 r)
+  in
+  let rec klr env (lazy (Res(key,v))) =
+    begin
+      match fkey.eq key.tok with
+      | Eq  -> add_queue env (Cont(env,k,v));
+      | NEq -> ()
+    end;
+    let lr = Assoc.add key v env.lr in
+    let lr = match (lpos:Pos.t key option) with
+      | None -> lr
+      | Some pkey -> Assoc.add pkey (lazy pos) lr
+    in
+    let env0 = { env with lr } in
+    let mlr = select gr key in (** TODO, precompute all select *)
+    g0 mlr env0 (ink klr)
+  in
+  g0 gl env (ink klr)
+
 (** combinator to access the value stored by lr*)
 let read_tbl : 'a key -> 'a t = fun key env k ->
     let v = try Assoc.find key env.lr with Not_found -> assert false in

@@ -16,7 +16,8 @@ type 'a t = 'a grammar
 (** [print_grammar ch g] prints the grammar [g] of the given output channel.  if
     [def=false] (the  default is [true])  it will print the  transformed grammar
     prior to compilation. *)
-val print_grammar : ?no_other:bool -> ?def:bool -> out_channel -> 'a grammar -> unit
+val print_grammar : ?no_other:bool -> ?def:bool -> out_channel ->
+                    'a grammar -> unit
 
 (** [fail ()] is a grammar that parses nothing (always fails) *)
 val fail : ?name:string -> unit -> 'a grammar
