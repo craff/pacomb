@@ -193,11 +193,8 @@ let _ = assert (parse_string test1 "" = 0)
 let _ = assert (parse_string test2 (na 10) = 10)
 let _ = assert (parse_string test2 "" = 0)
 let _ = assert (parse_string test2 "ababa" = 5)
-let _ = Printf.printf "coucou 1\n%!"
 let _ = assert (parse_string test3 "" = 0)
-let _ = Printf.printf "coucou 2\n%!"
 let _ = assert (parse_string test3 (na 10) = 10)
-let _ = Printf.printf "coucou 3\n%!"
 let _ = assert (parse_string test4 (na 10) = 10)
 let _ = assert (parse_string test4 "" = 0)
 let _ = assert (parse_string test4 "baaa" = 4)
