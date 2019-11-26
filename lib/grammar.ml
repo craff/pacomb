@@ -529,12 +529,14 @@ let factor_empty g =
     | Alt(gs) -> List.iter fn gs;
                    let gn acc g = g.e @ acc in
                    List.fold_left gn [] gs
-    | Appl(g,f) -> fn g; List.map f g.e
+    | Appl(g,f) -> fn g; List.fold_left (fun acc x ->
+                             try f x :: acc
+                             with Lex.NoParse | Give_up _ -> acc) [] g.e
     | Seq(g1,g2) -> fn g1; fn g2;
                     List.fold_left (fun acc x ->
                         List.fold_left (fun acc y ->
                             try y x :: acc
-                            with NoParse -> acc) acc g2.e)
+                            with NoParse | Give_up _ -> acc) acc g2.e)
                       [] g1.e
     | DSeq(g1,g2) -> fn g1;
                        List.fold_left (fun acc (x,x') ->
@@ -543,13 +545,17 @@ let factor_empty g =
                              fn g2;
                              List.fold_left (fun acc y ->
                                  try y x' :: acc
-                                 with NoParse -> acc) acc g2.e
-                         with NoParse -> acc)
+                                 with NoParse | Give_up _ -> acc) acc g2.e
+                         with NoParse | Give_up _ -> acc)
                          [] g1.e
     | Rkey _        -> []
-    | LPos(_,g1)    -> fn g1; List.map (fun x -> x Pos.phantom) g1.e
+    | LPos(_,g1)    -> fn g1; List.fold_left (fun acc x ->
+                                  try x Pos.phantom :: acc
+                                  with Lex.NoParse | Give_up _ -> acc) [] g1.e
                        (* FIXME #14: Loose position *)
-    | RPos(g1)      -> fn g1; List.map (fun x -> x Pos.phantom) g1.e
+    | RPos(g1)      -> fn g1; List.fold_left (fun acc x ->
+                                  try x Pos.phantom :: acc
+                                  with Lex.NoParse | Give_up _ -> acc) [] g1.e
                        (* FIXME #14: Loose position *)
     | Layout(_,g,_) -> fn g; g.e
     | Cache(_,g)    -> fn g; g.e
