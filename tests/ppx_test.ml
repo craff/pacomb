@@ -107,7 +107,7 @@ let _ = tests g3 [("", 0); ("ab",1); ("dc",-1); ("ef", 0)]
 let _ = tests g1 [("cdefefcfedcabd",-2)]
 
 (* test parameters *)
-let%parser rec g g0 n = (n=0) (empty ())         => 0
+let%parser rec g g0 n = (n=0) ()                 => 0
                       ; (n>0) (x::g g0 (n-1)) g0 => x+1
 let%parser _ =
   for i = 0 to 10 do
@@ -115,7 +115,7 @@ let%parser _ =
     test_fail (g ('a' => ()) i) (String.make (i+1) 'a')
   done
 
-let%parser rec g g0 n = (n=0) (empty ())         => 0
+let%parser rec g g0 n = (n=0) ()                 => 0
                       ; (n>0) g0 (x::g g0 (n-1)) => x+1
 let%parser _ =
   for i = 0 to 10 do
@@ -123,7 +123,7 @@ let%parser _ =
     test_fail (g ('a' => ()) i) (String.make (i+1) 'a')
   done
 
-let%parser rec g ~g:g0 ?(n=0) () = (n=0) (empty ())       => 0
+let%parser rec g ~g:g0 ?(n=0) () = (n=0) ()               => 0
                       ; (n>0) g0 (x::g ~g:g0 ~n:(n-1) ()) => x+1
 let%parser _ =
   test (g ~g:('a' => ()) ()) (String.make 0 'a') 0;
