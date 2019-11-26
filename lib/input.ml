@@ -78,7 +78,6 @@ let byte_pos (lazy b) p = b.boff + p
 (* Get the utf8 column number corresponding to the given position. *)
 let utf8_col_num context data i =
   let rec find num pos =
-    Printf.printf "utf8_col_num: %d %d\n%!" pos num;
     if pos < i then
       let cc = Char.code data.[pos] in
       let code i =
