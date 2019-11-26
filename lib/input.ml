@@ -3,9 +3,9 @@ type context = Utf8.context
 type line =
   { is_eof       : bool   (* Has the end of the buffer been reached? *)
   ; lnum         : int    (* Line number (startig at 1)              *)
-  ; loff         : int    (* Offset to the line ( utf8 of bytes )    *)
+  ; loff         : int    (* Offset to the line ( utf8 or bytes )    *)
   ; boff         : int    (* Offset to the line ( bytes )            *)
-  ; coff         : int    (* Offset to the column                    *)
+  ; coff         : int    (* Offset to the column ( utf8 or bytes )  *)
   ; llen         : int    (* Length of the buffer                    *)
   ; data         : string (* Contents of the buffer                  *)
   ; mutable next : buffer (* Following line                          *)
@@ -78,19 +78,20 @@ let byte_pos (lazy b) p = b.boff + p
 (* Get the utf8 column number corresponding to the given position. *)
 let utf8_col_num context data i =
   let rec find num pos =
+    Printf.printf "utf8_col_num: %d %d\n%!" pos num;
     if pos < i then
       let cc = Char.code data.[pos] in
       let code i =
         let n = match i with
           1 -> cc land 0b0111_1111
-        | 2 -> (cc land (0b0001_1111) lsl 6) land
+        | 2 -> (cc land (0b0001_1111) lsl 6) lor
                  (Char.code data.[pos+1] land 0b0011_1111)
-        | 3 -> (cc land (0b0000_1111) lsl 12) land
-                 ((Char.code data.[pos+1] land 0b0011_1111) lsl 6)  land
+        | 3 -> (cc land (0b0000_1111) lsl 12) lor
+                 ((Char.code data.[pos+1] land 0b0011_1111) lsl 6)  lor
                    (Char.code data.[pos+2] land 0b0011_1111)
-        | 4 -> (cc land (0b0000_0111) lsl 18) land
-                 ((Char.code data.[pos+1] land 0b0011_1111) lsl 12) land
-                   ((Char.code data.[pos+2] land 0b0011_1111) lsl 6)  land
+        | 4 -> (cc land (0b0000_0111) lsl 18) lor
+                 ((Char.code data.[pos+1] land 0b0011_1111) lsl 12) lor
+                   ((Char.code data.[pos+2] land 0b0011_1111) lsl 6)  lor
                      (Char.code data.[pos+3] land 0b0011_1111)
         | _ -> assert false
         in
