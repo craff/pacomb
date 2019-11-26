@@ -293,11 +293,8 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
     (** the final continuation evaluating and storing the result,
        continue parsing if [all] is [true] *)
     let k env x =
-      (try
-         res := (x,env)::!res; (** evaluatin of x is done later *)
-         raise Exit
-       with Lex.NoParse   -> fun () -> next env
-          | Lex.Give_up m -> fun () -> next_msg m env) ();
+      res := (x,env)::!res; (** evaluation of x is done later *)
+      raise Exit
     in
     try
       let queue = env.queue in
@@ -329,7 +326,10 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
       assert false
     with Not_found | Exit ->
       (** parsing is finished: we evaluate the semantics *)
-      List.map (fun (x,env) -> (Lazy.force x, env)) !res
+      List.fold_left (fun res (x,env) ->
+          (try (Lazy.force x, env) :: res
+           with Lex.Give_up m -> record_pos_msg m env; res
+              | Lex.NoParse -> record_pos env; res)) [] !res
 
 (** {2 the combinators } *)
 
@@ -406,7 +406,10 @@ let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k ->
     g env (app k fn)
 
 let eval : 'a t -> 'a t = fun g env k ->
-  g env (ink (fun env v -> ignore (Lazy.force v); call k env v))
+  g env (ink (fun env v ->
+             try ignore (Lazy.force v); call k env v
+             with Lex.NoParse -> next env
+                | Lex.Give_up m -> next_msg m env))
 
 (** Combinator to test the input before parsing with a grammar *)
 let test_before : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
