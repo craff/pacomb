@@ -504,7 +504,7 @@ let select : type a. mlr_right -> a key -> mlr_left = fun l k ->
 type mlr_res =
   Res : 'a key * 'a lazy_t -> mlr_res
 
-let mlr : type a. ?lpos:Pos.t key -> mlr_left -> mlr_right -> a key -> a t =
+let mlr : type a. ?lpos:Pos.t Assoc.key -> mlr_left -> mlr_right -> a key -> a t =
   fun ?lpos gl gr fkey env k ->
   let pos = match lpos with
     | None   -> Pos.phantom
@@ -527,9 +527,9 @@ let mlr : type a. ?lpos:Pos.t key -> mlr_left -> mlr_right -> a key -> a t =
       | NEq -> ()
     end;
     let lr = Assoc.add key v env.lr in
-    let lr = match (lpos:Pos.t key option) with
+    let lr = match lpos with
       | None -> lr
-      | Some pkey -> Assoc.add pkey (lazy pos) lr
+      | Some pkey -> Assoc.add pkey pos lr
     in
     let env0 = { env with lr } in
     let mlr = select gr key in (** TODO, precompute all select *)

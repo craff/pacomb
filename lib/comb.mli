@@ -106,7 +106,7 @@ type mlr_right =
   RNil : mlr_right
 | RCns : 'a key * 'b key * 'b t * mlr_right -> mlr_right
 
-val mlr : ?lpos:Pos.t key -> mlr_left -> mlr_right -> 'a key -> 'a t
+val mlr : ?lpos:Pos.t Assoc.key -> mlr_left -> mlr_right -> 'a key -> 'a t
 
 (** combinator to  access the value stored by  lr. It must be uses  as prefix of
     [c2] in [lr c1 c2].  For instance, the coding  of [let rec r = seq c1 (seq r

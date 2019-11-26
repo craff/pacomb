@@ -11,7 +11,7 @@ type _ token = private ..
 
 (** Type of a key for a value of type ['a]. It contains a unique token and the
     corresponding (very efficient) equality test. *)
-type 'a key = { tok : 'a token ; eq : 'b. 'b token -> ('a, 'b) eq }
+type 'a key = { tok : 'a token ; uid:int; eq : 'b. 'b token -> ('a, 'b) eq }
 
 (** [new_key ()] generates a new unique key for a value of type ['a]. *)
 val new_key : unit -> 'a key
@@ -21,6 +21,9 @@ type t
 
 (** [empty] is the empty association list. *)
 val empty : t
+
+(** compare keys by uid *)
+val compare : 'a key -> 'b key -> int
 
 (** [add k v l] inserts a new binding of [k] to [v] at the head of [l]. *)
 val add : 'a key -> 'a -> t -> t
@@ -41,3 +44,5 @@ val mem : 'a key -> t -> bool
 (** [remove k l] removes the latest inserted binding of the key [k] in [l]. If
     there is no such binding, then {!exception:Not_found} is raised. *)
 val remove : 'a key -> t -> t
+
+val append : t -> t -> t

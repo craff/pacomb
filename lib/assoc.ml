@@ -4,12 +4,16 @@ type ('a, 'b) eq =
   | Eq  : ('a, 'a) eq
   | NEq : ('a, 'b) eq
 
-type 'a key = { tok : 'a token ; eq : 'b. 'b token -> ('a, 'b) eq }
+type 'a key = { tok : 'a token ; uid : int; eq : 'b. 'b token -> ('a, 'b) eq }
 
+let key_count = ref 0
 let new_key : type a. unit -> a key = fun () ->
   let module M = struct type _ token += T : a token end in let open M in
   let eq : type b. b token -> (a, b) eq = function T -> Eq | _ -> NEq in
-  { tok = T ; eq }
+  let uid = !key_count in incr key_count;
+  { tok = T ; uid; eq }
+
+let compare k1 k2 = compare k1.uid k2.uid
 
 type t =
   | Nil  :                    t
@@ -45,3 +49,8 @@ let rec remove : type a. a key -> t -> t = fun k l ->
   match l with
   | Nil        -> raise Not_found
   | Cns(j,v,l) -> match k.eq j.tok with Eq  -> l | NEq -> Cns(j,v,remove k l)
+
+let rec append : t -> t -> t = fun l1 l2 ->
+  match l1 with
+  | Nil        -> l2
+  | Cns(j,v,l) -> Cns(j,v,append l l2)
