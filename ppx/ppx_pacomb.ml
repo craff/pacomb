@@ -181,8 +181,8 @@ let rec exp_to_rule e =
                          |"not"|"&&"|"||"|"=|" as sym)}}
                , [(Nolabel,a0);(Nolabel,a1)])}
                as cond,
-      (Nolabel,a3)::rest) ->
-     let (rule,_) = exp_to_rule (Exp.apply a3 rest) in
+      (Nolabel,a3)::rest)  ->
+     let (rule,_) = exp_to_rule (if rest <> [] then Exp.apply a3 rest else a3) in
      let cond = if sym = "=|" then CondMatch(a0,a1) else CondTest(cond) in
      (rule, cond)
   | Pexp_construct({txt = Lident "()"; loc}, None) ->
