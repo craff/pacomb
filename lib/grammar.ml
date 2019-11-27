@@ -20,7 +20,7 @@ type 'a grammar =
   ; mutable compiled : 'a Comb.t ref
   (** the combinator for the grammar. One needs a ref for recursion.  valid from
                               phase Compiled *)
-  ; mutable charset : Charset.t option
+  ; mutable charset : (int * Charset.t) option
  (** cache for the first charset. Set only if used by compilation. *)
   }
 
@@ -496,7 +496,7 @@ let ne_layout b g cfg =
     - store this in the corresponding fields of g *)
 let factor_empty g =
   let get g =
-    if g.recursive then ERef g else
+    if g.recursive || g.cached <> NoCache then ERef g else
       begin
         assert (g.ne <> ETmp);
         g.ne
@@ -800,6 +800,9 @@ let elim_left_rec : type a. a grammar -> unit = fun g ->
 (** compute the characters set accepted at the beginning of the input *)
 let first_charset : type a. a grne -> Charset.t = fun g ->
 
+  let target = ref 0 in
+  let changed = ref true in
+
   let rec fn : type a. a grne -> bool * Charset.t = fun g ->
     match g with
     | EFail -> (false, Charset.empty)
@@ -842,16 +845,28 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
     | ETmp -> assert false
 
   and gn : type a. a grammar -> bool * Charset.t = fun g ->
-    assert g.recursive;
+    assert (g.recursive || g.cached <> NoCache);
     match g.charset with
-    | Some c -> (false, c)
-    | None ->
-       g.charset <- Some Charset.empty;
+    | Some (n,c) when n >= !target -> (false, c)
+    | _ ->
+       let old = match g.charset with
+         | None -> Charset.empty
+         | Some (_, c) -> c
+       in
+       g.charset <- Some (!target, old);
        let (shift, r) = fn g.ne in
        assert (not shift);
-       g.charset <- Some r;
+       g.charset <- Some (!target, r);
+       if r <> old then changed := true;
        (shift, r)
-  in snd (fn g)
+  in
+  let res = ref Charset.empty in
+  while !changed do
+    incr target;
+    changed := false;
+    res := snd (fn g)
+  done;
+  !res
 
 let split_list l =
   let rec fn acc1 acc2 =
@@ -951,8 +966,9 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
            left rec elimination, the loop may be detected at other position
            in the tree *)
     let get g =
+      Printf.printf "getting %s\n%!" g.n;
       let cne = g.compiled in
-        if g.recursive || g.phase = Compiling then
+        if g.recursive || g.phase = Compiling || g.cached <> NoCache then
         Comb.deref cne
       else !cne
     in
