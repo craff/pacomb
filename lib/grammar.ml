@@ -966,7 +966,6 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
            left rec elimination, the loop may be detected at other position
            in the tree *)
     let get g =
-      Printf.printf "getting %s\n%!" g.n;
       let cne = g.compiled in
         if g.recursive || g.phase = Compiling || g.cached <> NoCache then
         Comb.deref cne
