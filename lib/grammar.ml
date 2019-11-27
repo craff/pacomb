@@ -694,7 +694,7 @@ let get_pk : ety list -> pos_ptr option =
             begin
               match p with
               | None ->
-                 x := Uf.Root { r with lpos = Some (Assoc.new_key ()) };
+                 Uf.set_root x { r with lpos = Some (Assoc.new_key ()) };
               | Some _ -> ()
             end;
             Some x
@@ -774,7 +774,7 @@ let elim_left_rec : type a. a grammar -> unit = fun g ->
                   let ({left; right; lpos; names; keys}, x) = Uf.find ptr in
                   let left = LCns(g.k,g',left) in
                   let right = merge_elr_mgr_right g.k s right in
-                  x := Root {left; right; lpos; names; keys};
+                  Uf.set_root x {left; right; lpos; names; keys};
                   g.ne <- ELr(g.k, x);
                   match above with
                   | [] | E(_, true, _) :: _ ->
