@@ -18,6 +18,13 @@
   (libraries unix pacomb)
   (action (run ./ppx_test.exe)))
 
+(test
+  (name dseq_test)
+  (modules dseq_test)
+  (preprocess (pps pacomb.ppx))
+  (libraries unix pacomb)
+  (action (run ./dseq_test.exe)))
+
 (executable
   (name big_expr)
   (modules big_expr)
