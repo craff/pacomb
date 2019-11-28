@@ -1,7 +1,7 @@
 open Parsing
 
 let _ =
-  if Unix.((fstat (descr_of_in_channel Pervasives.stdin)).st_kind = S_REG)
+  if (Unix.fstat (Unix.descr_of_in_channel stdin)).Unix.st_kind = Unix.S_REG
   then
       try
         let lexbuf = Lexing.from_channel stdin in
