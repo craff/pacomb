@@ -6,6 +6,9 @@ type ('a, 'b) eq =
 
 type 'a key = { tok : 'a token ; uid : int; eq : 'b. 'b token -> ('a, 'b) eq }
 
+(** To store keys in lists *)
+type any_key = K : 'a key -> any_key [@@unboxed]
+
 let key_count = ref 0
 let new_key : type a. unit -> a key = fun () ->
   let module M = struct type _ token += T : a token end in let open M in

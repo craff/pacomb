@@ -60,6 +60,9 @@ val dseq: ('a * 'b) t -> ('a -> ('b -> 'c) t)  -> 'c t
     empty input *)
 val alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t
 
+(** same as above but with a list of alternative. *)
+val alts : (Charset.t * 'a t) list -> 'a t
+
 (** [option a ~cs  c] is an optimisation for [alt (empty a)  ~cs c].  In fact it
     is better to use [alt] with grammar  not accepting empty and use [option] to
     deal with an empty case *)
@@ -97,15 +100,26 @@ val lr : 'a t -> 'a key -> 'a t -> 'a t
 (** Same as above, but also store the position *)
 val lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t
 
-(** combinator and types for left recursion *)
+(** type to represent the left prefix of a mutually recursive grammar.
+    the key represents the produced grammar for each left prefix. *)
 type mlr_left =
   LNil : mlr_left
-| LCns : 'a key * 'a t * mlr_left -> mlr_left
+| LCns : 'a key * Charset.t * 'a t * mlr_left -> mlr_left
 
+(** type of the suffix to be repeted in a mutually recursive grammar.
+    the first key represents the grammar that parsed the input before
+    the second key represents the produced grammar.
+
+    Somehow, mlr_right is a matrix R, the two keys being the index of
+    the coefficient and mlr_left is a vector L. Parsing, will somehow use
+    L R^n for n large enough;
+*)
 type mlr_right =
   RNil : mlr_right
-| RCns : 'a key * 'b key * 'b t * mlr_right -> mlr_right
+| RCns : 'a key * 'b key * Charset.t * 'b t * mlr_right -> mlr_right
 
+(** The combinator itself. The optionnal argument indicated that we need
+    the position before parsing *)
 val mlr : ?lpos:Pos.t Assoc.key -> mlr_left -> mlr_right -> 'a key -> 'a t
 
 (** combinator to  access the value stored by  lr. It must be uses  as prefix of

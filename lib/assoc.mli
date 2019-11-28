@@ -13,6 +13,9 @@ type _ token = private ..
     corresponding (very efficient) equality test. *)
 type 'a key = { tok : 'a token ; uid:int; eq : 'b. 'b token -> ('a, 'b) eq }
 
+(** To store keys in lists *)
+type any_key = K : 'a key -> any_key [@@unboxed]
+
 (** [new_key ()] generates a new unique key for a value of type ['a]. *)
 val new_key : unit -> 'a key
 

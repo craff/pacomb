@@ -1,38 +1,60 @@
 (** {1 Parser combinator library} *)
 
-(** Combinators are a standard approach  to parsing in functional language.  The
-    major advantage of  combinators is that they allow  manipulating grammars as
-    first class values.  However, they generally suffer from  two major defects.
+(** Combinators are a standard approach to parsing in functional language.  The
+   major advantage of combinators is that they allow manipulating grammars as
+   first class values.  However, they generally suffer from two major defects.
+   We start this file by a global description of the original feature of this
+   library.
 
-    - Incomplete semantics.  A grammar  "(a|b)c" may fail  to backtrack  and try
-      "bc" if parsing  for "ac" fails in "c". This  is traditionally solved with
-      continuation: combinators must be given the  function that will be used to
-      parse the remaining input.
+    - Incomplete semantics.  A grammar "(a|b)c" may fail to backtrack and try
+   "bc" if parsing for "ac" fails in "c". This is traditionally solved with
+   continuation: combinators must be given the function that will be used to
+   parse the remaining input. In general, parsing combinator returning value of
+   type ['a] with continuation will have type [env -> (env -> 'a -> bot) -> bot]
+   where [env] is the type maintaining the data necessary for parsing (like the
+   current input stream) and [bot] is then type of [false]. ['a cont = 'a -> env
+   -> bot] is thefore the continuation type.
 
-    - Exponential semantics.  The parsing problem for  context-free grammars can
-      be solved  in polynomial time  (O(n³) implementation are  often proposed).
-      As combinator  backtracks, they usually lead to an  exponential behaviour.
-      This is solved here by a [cache] combinator, that avoids parsing twice the
-      same part of the input with the same grammar.
+   - Exponential semantics.  The parsing problem for context-free grammars can
+   be solved in polynomial time (O(n³) implementation are often proposed).  As
+   combinator backtracks, they usually lead to an exponential behaviour.  This
+   is solved here by a [cache] combinator, that avoids parsing twice the same
+   part of the input with the same grammar.
 
-    - backtracking is also a problem, because we need to go back in the input to
-      try other  alternatives. This means  that the  whole input must  remain in
-      memory.  This is  solved  by terminals  returning  immediately instead  of
-      calling the continuation and a "scheduler" will store the continuation and
-      call the  error function  (we use continuations  and errors).  This forces
-      parsing  all terminals  in parallel.  This also  gives a  very nice  cache
-      combinator.
+   - backtracking  is also a problem, because we need to go back in the input to
+   try  other alternatives.   This means  that the  whole input  must remain  in
+   memory.  This is solved by terminals returning immediately instead of calling
+   the continuation. A "scheduler" manages the continuations and the alternative
+   branches for  parsing. This means  that instead of [bot],  we use a  type ['a
+   res]  with  two  constructors,  one for  continuation,  one  for  alternative
+   parsing.  A global  queue  stored  in all  environment  is  maintened by  the
+   scheduler, and  the next action  is taken  from the top  of the queue  by the
+   scheduler. The ordering in the queue is a lexicographic ordering on the input
+   position and definition dependance (if A  calls B, the continuation of B must
+   be called before the continuation of A). The former ensure that all terminals
+   are parsed in parallel, and therefore that  the beginning of the input can be
+   collected by  the GC.   The latter  is necessay for  the cache  combinator to
+   work.
 
-    - A last problem arise in many technics that cover ambiguous grammars: right
-      recursive grammar will  try to compute the action for  all accepted prefix
-      of the input,  often leading to quadratic parsing time.  This is solved by
-      delaying the  evaluation of the  semantics, but not  too much so  that the
-      user can call the [give_up] function to reject some parses from the action
-      code.  *)
+   - In many  technics that cover  ambiguous  grammars: right  recursive grammar
+   will try to  compute the action for  all accepted prefix of  the input, often
+   leading to quadratic parsing time.  This is solved by delaying the evaluation
+   of the semantics,  but not too much  so that the user can  call the [give_up]
+   function to reject some parses from the action code. More generaly, to ensure
+   O(1)for most step of parsing, we use two specific type to represent the value
+   returned by parsing and value transforming these
+
+   -  Specific combinators (lr, lr_pos  and mlr) are provided  to transform left
+   recursive grammar  that loops with  combinator into non left  recursive ones.
+
+    - A  blank  fonction  is used  (ad  it can  be  changed  during parsing)  to
+   compensate  the  scannerless  nature  of  combinators  and  deal  with  blank
+   characteres.
+*)
 
 (** {2 main types } *)
 
-(** Environment holding information require for parsing. *)
+(** Environment holding information required for parsing. *)
 type env =
   { blank_fun         : Lex.blank
   (** Function used to ignore blanks. *)
@@ -47,60 +69,66 @@ type env =
   ; pos_before_blanks : Lex.pos
   (** Position in [buf_before_blanks] before reading the blanks. *)
   ; lr                : Assoc.t
-  (** Association table for the lr combinator *)
+  (** Association table for the lr, lr_pos and mlr combinators *)
   ; cache_order       : int * int
   (** Information used  to order cache parsing, the first  [int] is the position
       where we started to parse the  cached grammar, the second int is increased
       when we parse a cached grammar that was called at same position by another
       cached grammar. *)
   ; queue : heap ref
+  (** the  heap holding continuation  and alternative branch for  parsing. All
+      environments share the same heap.  *)
   }
 
-(** We use priority queues using a heap, to have a logarithmic complexity to
+(** We  use priority queues  using a heap, to  have a logarithmic  complexity to
    choose the next action in the scheduler *)
 and heap =
-  E | N of res * heap * heap * int
+  | E                            (** empty heap *)
+  | N of res * heap * heap * int (** node heap, holding the heap size *)
 
 (**  type  of result  used  by  the scheduler  to  progress  in the  parsing  in
-    parallel. It has  only one constructor representing a  continuation. It must
-    be  used instead  of calling  immediatly the  continuation is  the scheduler
-    needs to order parsing. This is in two cases:
-
-    - we progress in the input (solely in the lexeme and layout combinator)
-    - we have constraints to respect for ordering cache (solely in cache) *)
+    parallel. *)
  and res =
    | Cont : env * 'a cont * 'a Lazy.t -> res
+   (**  Cont(env,k,x)  the value  and  environment  resulting from  parsing  the
+      beginning of the  input and the continuation to finish  parsing It must be
+      used instead of calling immediatly  the continuation because the scheduler
+      needs to order parsing. *)
    | Gram : env * 'a t * 'a cont -> res
+   (** This contructor represents an alternative branch of parsing, with both a
+   grammar and a continuation *)
+
  (** Type  of a  parsing continuation. A  value of type  ['a cont]  represents a
-    function waiting for a parsing environment, an error function and a value of
-    type  ['a] to  continue  parsing.  To avoid  quadratic  behavior with  right
-    recursion, this is splitted in two parts:
+    function  waiting for  a parsing  environment and  a value  of type  ['a] to
+    continue parsing.  To avoid quadratic behavior with right recursion, this is
+    splitted in two parts:
 
     - a transformer of type [('a,'b) trans] representing a function from ['a] to
-      ['b]
+    ['b]
 
-    - a continuation  that expect a  lzay value,  evaluation is retarded  to the
-      parsing of the next lexeme.
+    - a continuation  that expect a  lazy value,  evaluation is retarded  to the
+    parsing of the next lexeme.
 
-    - A special continuation [P] is used whe we need to store the position to
-      the right.
+    - A special continuation [P] is used when we need to store the position when
+    we will call the continuation.
 
-    With this type for continuation, we have to benefit:
+    With this type for continuation, we have two benefits:
 
-    - most combinator can transform the continuation in O(1) time without
-      introducing a nested closure.
+    - most  combinator  can transform  the  continuation  in O(1)  time  without
+    introducing a nested closure.
 
-    - evaluation of action being retarded to the ext lexeme, prefix of
-      right recursive grammar also transform the continuation in O(1).
-*)
+    - evaluation of action being retarded to the next lexeme, prefix of right
+    recursive grammar also transform the continuation in O(1).  *)
  and 'a cont =
    | C : (env -> 'b Lazy.t -> res) * ('a,'b) trans -> 'a cont
    | P : (env -> 'b Lazy.t -> res) * ('a,'b) trans * Pos.t ref -> 'a cont
  (** [P] is used when the position when calling the continuation (right position
        of some grammar) is needed. *)
 
- (** [('a,'b) args]  is the type of a transformer from a value of type ['a] to a
-    value of type ['b]. *)
+ (** [('a,'b) args] is the type of a transformer from a value of type ['a] to a
+    value of type ['b]. To keep amortized O(1) semantics of eval_lrgs, we mark
+    in the constructor the presence of Lrg below in the structure using XXX'
+    constructor*)
  and (_,_) trans =
    | Idt : ('a,'a) trans
    (** Identity transformer *)
@@ -147,16 +175,16 @@ let has_lrg : type a b.(a,b) trans -> bool = function
 let rec eval : type a b. a -> (a,b) trans -> b = fun x tr ->
     match tr with
     | Idt        -> x
+    | Lrg (tr,y) -> eval (x (Lazy.force y)) tr
     | Arg (tr,y) -> eval (x y) tr
     | Arg'(tr,y) -> eval (x y) tr
-    | Lrg (tr,y) -> eval (x (Lazy.force y)) tr
     | Pos (tr,p) -> eval (x !p) tr
     | Pos'(tr,p) -> eval (x !p) tr
     | App (tr,f) -> eval (f x) tr
     | App'(tr,f) -> eval (f x) tr
 
 (** transforsms [Lrg] into [Arg] inside a continuation, to trigger [give_up]
-    soon enough, that is after net read *)
+    soon enough, that is after a read *)
 let eval_lrgs : type a. a cont -> a cont = fun k ->
   let rec fn : type a b. (a,b) trans -> (a,b) trans = fun t ->
     match t with
@@ -171,7 +199,7 @@ let eval_lrgs : type a. a cont -> a cont = fun k ->
   | P(k,tr,rp) -> P(k,fn tr,rp)
 
 (** function calling a  continuation. It does not evaluate any  action. It is of
-    crucial importane that this function be in O(1) before calling [k]. *)
+    crucial importance that this function be in O(1) before calling [k]. *)
 let call : type a.a cont -> env -> a Lazy.t -> res =
   fun k env x ->
     match k with
@@ -215,16 +243,18 @@ let posk : type a. a cont -> (Pos.pos -> a) cont = fun k ->
 
 (** {2 Error managment} *)
 
-(** [next env  err] updates the current maximum position  [env.max_pos] and then
-    calls the [err] function. *)
+(** record the current position, before a parsing error *)
 let record_pos env =
   let (pos_max, _, _, _) = !(env.max_pos) in
   let pos = Input.byte_pos env.current_buf env.current_pos in
   if pos > pos_max  then
     env.max_pos := (pos, env.current_buf, env.current_pos, ref [])
 
+(** [next env] updates the current maximum position [env.max_pos] and
+   raise [Exit] to return to the scheduler. *)
 let next : env -> res  = fun env -> record_pos env; raise Exit
 
+(** same as abobe, but recording error messages *)
 let record_pos_msg msg env =
   let (pos_max, _, _, msgs) = !(env.max_pos) in
   let pos = Input.byte_pos env.current_buf env.current_pos in
@@ -265,7 +295,7 @@ let add_queue env res =
   env.queue := insert res !(env.queue)
 
 (** Extract  from the  heap. Does  not keep  balancing, but  the depth  may only
-   decrease to it remains logarithmic *)
+   decrease so it remains amortized logarithmic *)
 let extract : heap -> res * heap = fun h ->
   match h with
   | E -> raise Not_found
@@ -290,8 +320,7 @@ let extract : heap -> res * heap = fun h ->
 let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
     (** a reference holding the final result *)
     let res = ref [] in
-    (** the final continuation evaluating and storing the result,
-       continue parsing if [all] is [true] *)
+    (** the final continuation evaluating and storing the result *)
     let k env x =
       res := (x,env)::!res; (** evaluation of x is done later *)
       raise Exit
@@ -401,10 +430,30 @@ let alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t = fun cs1 g1 cs2 g2 ->
     | (false, true ) -> g2 env k
     | (true , true ) -> add_queue env (Gram(env,g2,k)); g1 env k
 
+let split_list l =
+  let rec fn acc1 acc2 =
+    function [] -> acc1, acc2
+           | x::l -> fn (x::acc2) acc1 l
+  in
+  fn [] [] l
+
+let alts : type a. (Charset.t * a t) list -> a t = fun l ->
+  let rec fn = function
+     | [] -> (Charset.empty, fail)
+     | [(cs,g)] -> (cs, g)
+     | l -> let (l1,l2) = split_list l in
+            let (cs1,c1) = fn l1 in
+            let (cs2,c2) = fn l2 in
+            (Charset.union cs1 cs2, alt cs1 c1 cs2 c2)
+  in snd (fn l)
+
+
 (** Application of a semantic function to alter a combinator. *)
 let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k ->
     g env (app k fn)
 
+(** combinator that  forces immediate evaluation of the action,  for instance if
+   the semantics update a table *)
 let eval : 'a t -> 'a t = fun g env k ->
   g env (ink (fun env v ->
              try ignore (Lazy.force v); call k env v
@@ -478,17 +527,22 @@ let lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t =
     g env (ink klr)
 
 (** type to represent the left prefix of a mutually recursive grammar.
-    the key is the type of the grammar for each left prefix. *)
+    the key represents the produced grammar for each left prefix. *)
 type mlr_left =
   LNil : mlr_left
-| LCns : 'a key * 'a t * mlr_left -> mlr_left
+| LCns : 'a key * Charset.t * 'a t * mlr_left -> mlr_left
 
 (** type of the suffix to be repeted in a mutually recursive grammar.
-    the first key is the key present in the grammar at the left most position
-    the second key is the key associated to the result *)
+    the first key represents the grammar that parsed the input before
+    the second key represents the produced grammar.
+
+    Somehow, mlr_right is a matrix R, the two keys being the index of
+    the coefficient and mlr_left is a vector L. Parsing, will somehow use
+    L R^n for n large enough;
+*)
 type mlr_right =
   RNil : mlr_right
-| RCns : 'a key * 'b key * 'b t * mlr_right -> mlr_right
+| RCns : 'a key * 'b key * Charset.t * 'b t * mlr_right -> mlr_right
 
 (** select the useful right prefix to continue parsing, and return
     the result reusing the type mlr_left *)
@@ -497,48 +551,68 @@ let select : type a. mlr_right -> a key -> mlr_left = fun l k ->
     fun l acc ->
     match l with
     | RNil -> acc
-    | RCns(k',kr,g,r) ->
+    | RCns(k',kr,cs,g,r) ->
        match k.eq k'.tok with
-         | Eq  -> fn r (LCns(kr,g,acc))
+         | Eq  -> fn r (LCns(kr,cs,g,acc))
          | NEq -> fn r acc
   in
   fn l LNil
 
+(** semantic value when parsing mutually left recursive grammar.
+    contain the key identifying the grammar, the semantics and
+    the grammar to ocntinue parsing if possible *)
 type mlr_res =
-  Res : 'a key * 'a lazy_t -> mlr_res
+  Res : 'a key * 'a lazy_t * mlr_res t -> mlr_res
 
-let mlr : type a. ?lpos:Pos.t Assoc.key -> mlr_left -> mlr_right -> a key -> a t =
-  fun ?lpos gl gr fkey env k ->
-  let pos = match lpos with
-    | None   -> Pos.phantom
-    | Some _ -> Pos.get_pos env.current_buf env.current_pos
-  in
-  let rec g0 : mlr_left -> mlr_res t = function
-    | LNil -> fail
-    | LCns(key,g,r) ->
+(** precompilation of mutualy left recursive grammars *)
+let compile_mlr : mlr_left -> mlr_right -> mlr_res t = fun gl gr ->
+  let adone = ref [] in
+  let rec g1 : mlr_left -> (Charset.t * mlr_res t) list = function
+    | LNil -> []
+    | LCns(key,cs,g,r) ->
+       let l = get key in
        let g env k =
          g env (ink(fun env v ->
-                    let v = lazy (Res(key,v)) in call k env v))
+                    let v = lazy (Res(key,v,Lazy.force l)) in call k env v))
        in
-       (** FIXME: use a charset and balance the list *)
-       alt Charset.full g Charset.full (g0 r)
+       (** FIXME: balance the list *)
+       (cs, g) :: g1 r
+
+  and g0 : mlr_left -> mlr_res t = fun l -> alts (g1 l)
+
+  and get : type a. a key -> mlr_res t Lazy.t = fun k ->
+    try List.assq (Assoc.K k) !adone
+    with Not_found ->
+      let g = lazy (g0 (select gr k)) in
+      adone := (Assoc.K k, g) :: !adone ;
+      g
   in
-  let rec klr env (lazy (Res(key,v))) =
-    begin
-      match fkey.eq key.tok with
-      | Eq  -> add_queue env (Cont(env,k,v));
-      | NEq -> ()
-    end;
-    let lr = Assoc.add key v env.lr in
-    let lr = match lpos with
-      | None -> lr
-      | Some pkey -> Assoc.add pkey pos lr
-    in
-    let env0 = { env with lr } in
-    let mlr = select gr key in (** TODO, precompute all select *)
-    g0 mlr env0 (ink klr)
-  in
-  g0 gl env (ink klr)
+  g0 gl
+
+(* the main combinator for mutually left recursive grammars *)
+let mlr : type a. ?lpos:Pos.t Assoc.key -> mlr_left -> mlr_right -> a key -> a t =
+  fun ?lpos gl gr fkey ->
+    let g = compile_mlr gl gr in
+    fun env k ->
+      let pos = match lpos with
+        | None   -> Pos.phantom
+        | Some _ -> Pos.get_pos env.current_buf env.current_pos
+      in
+      let rec klr env (lazy (Res(key,v,g'))) =
+        begin
+          match fkey.eq key.tok with
+          | Eq  -> add_queue env (Cont(env,k,v));
+          | NEq -> ()
+        end;
+        let lr = Assoc.add key v env.lr in
+        let lr = match lpos with
+          | None -> lr
+          | Some pkey -> Assoc.add pkey pos lr
+        in
+        let env0 = { env with lr } in
+        g' env0 (ink klr)
+      in
+      g env (ink klr)
 
 (** combinator to access the value stored by lr*)
 let read_tbl : 'a key -> 'a t = fun key env k ->

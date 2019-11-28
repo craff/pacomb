@@ -43,14 +43,12 @@ type 'a grammar =
    RNil : mgr_right
  | RCns : 'a key * 'b key * 'b grammar * mgr_right -> mgr_right
 
- and any_key = K : 'a Assoc.key -> any_key [@@unboxed]
-
  (** type for all information about mutuall recursive grammars *)
  and mgr = { left : mgr_left
            ; right : mgr_right
            ; lpos : Pos.t Assoc.key option
            ; names : string list
-           ; keys : any_key list }
+           ; keys : Assoc.any_key list }
 
  (** Grammar constructors at definition *)
  and 'a grdf =
@@ -218,7 +216,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
   and print_negr : type a. prio -> out_channel -> a grammar -> unit =
   fun prio ch g ->
     let pr x = Printf.fprintf ch x in
-    if List.memq (K g.k) !adone then Printf.fprintf ch "%s" g.n
+    if List.memq (Assoc.K g.k) !adone then Printf.fprintf ch "%s" g.n
     else if do_def g then
       begin
         adone := K g.k :: !adone;
@@ -236,7 +234,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
   and print_dfgr : type a. prio -> out_channel -> a grammar -> unit =
   fun prio ch g ->
     let pr x = Printf.fprintf ch x in
-    if List.memq (K g.k) !adone then Printf.fprintf ch "%s" g.n
+    if List.memq (Assoc.K g.k) !adone then Printf.fprintf ch "%s" g.n
     else if do_def g then
       begin
         adone := K g.k :: !adone;
@@ -868,13 +866,6 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
   done;
   !res
 
-let split_list l =
-  let rec fn acc1 acc2 =
-    function [] -> acc1, acc2
-           | x::l -> fn (x::acc2) acc1 l
-  in
-  fn [] [] l
-
 (** compilation of a grammar to combinators *)
 let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   match g with
@@ -916,12 +907,15 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
        | _ ->
           let rec fn = function
             | LNil -> Comb.LNil
-            | LCns(k,g,l) -> Comb.LCns(k,compile_ne g, fn l)
+            | LCns(k,g,l) -> Comb.LCns(k,first_charset g,
+                                       compile_ne g, fn l)
           in
           let c = ref 0 in
           let rec gn = function
             | RNil -> Comb.RNil
-            | RCns(k,k',g,l) -> incr c; Comb.RCns(k,k',compile_ne g.ne, gn l)
+            | RCns(k,k',g,l) -> incr c;
+                                Comb.RCns(k,k',first_charset g.ne,
+                                          compile_ne g.ne, gn l)
           in
           Comb.mlr ?lpos:r.lpos (fn r.left) (gn r.right) k
      end
@@ -945,17 +939,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
 
  and compile_alt : type a. a grne list -> a Comb.t = fun gs ->
   let l = List.map (fun g -> (first_charset g, compile_ne g)) gs in
-  alts l
-
- and alts : type a. (Charset.t * a Comb.t) list -> a Comb.t = fun l ->
-  let rec fn = function
-     | [] -> (Charset.empty, Comb.fail)
-     | [(cs,g)] -> (cs, g)
-     | l -> let (l1,l2) = split_list l in
-            let (cs1,c1) = fn l1 in
-            let (cs2,c2) = fn l2 in
-            (Charset.union cs1 cs2, Comb.alt cs1 c1 cs2 c2)
-   in snd (fn l)
+  Comb.alts l
 
  and compile : type a. bool -> a grammar -> a Comb.t =
   fun ne g ->
@@ -993,7 +977,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
          if g.ne = EFail then Comb.empty x
          else Comb.option x (first_charset g.ne) cne
       | l ->
-         let ce = alts (List.map (fun x -> Charset.full, Comb.empty x) l) in
+         let ce = Comb.alts (List.map (fun x -> Charset.full, Comb.empty x) l) in
          Comb.alt Charset.full ce (first_charset g.ne) cne
     in
     c
