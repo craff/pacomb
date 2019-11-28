@@ -91,7 +91,7 @@ let rec exp_to_pattern e =
   | [%expr lazy [%e? e]] ->
      let (name, pat) = exp_to_pattern e in
      (name, [%pat? lazy [%p pat]])
-(* FIXME: the next line works wirh ocaml 4.08.1 and 4.09.0, but not with
+(* NOTE: the next line works wirh ocaml 4.08.1 and 4.09.0, but not with
    4.07.1 ??? *)
 (*  | [%expr let open [%m? { pmod_desc = Pmod_ident m }] in [%e? e]] ->*)
   | { pexp_desc = Pexp_open({popen_expr = { pmod_desc = Pmod_ident m }}, e)} ->
@@ -182,7 +182,9 @@ let rec exp_to_rule e =
                , [(Nolabel,a0);(Nolabel,a1)])}
                as cond,
       (Nolabel,a3)::rest)  ->
-     let (rule,_) = exp_to_rule (if rest <> [] then Exp.apply a3 rest else a3) in
+     let (rule,_) =
+       exp_to_rule (if rest <> [] then Exp.apply a3 rest else a3)
+     in
      let cond = if sym = "=|" then CondMatch(a0,a1) else CondTest(cond) in
      (rule, cond)
   | Pexp_construct({txt = Lident "()"; loc}, None) ->

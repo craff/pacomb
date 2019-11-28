@@ -575,7 +575,6 @@ let compile_mlr : mlr_left -> mlr_right -> mlr_res t = fun gl gr ->
          g env (ink(fun env v ->
                     let v = lazy (Res(key,v,Lazy.force l)) in call k env v))
        in
-       (** FIXME: balance the list *)
        (cs, g) :: g1 r
 
   and g0 : mlr_left -> mlr_res t = fun l -> alts (g1 l)
@@ -590,7 +589,8 @@ let compile_mlr : mlr_left -> mlr_right -> mlr_res t = fun gl gr ->
   g0 gl
 
 (* the main combinator for mutually left recursive grammars *)
-let mlr : type a. ?lpos:Pos.t Assoc.key -> mlr_left -> mlr_right -> a key -> a t =
+let mlr : type a. ?lpos:Pos.t Assoc.key ->
+               mlr_left -> mlr_right -> a key -> a t =
   fun ?lpos gl gr fkey ->
     let g = compile_mlr gl gr in
     fun env k ->

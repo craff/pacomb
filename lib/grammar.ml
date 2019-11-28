@@ -21,7 +21,7 @@ type 'a grammar =
   (** the combinator for the grammar. One needs a ref for recursion.  valid from
                               phase Compiled *)
   ; mutable charset : (int * Charset.t) option
- (** cache for the first charset. Set only if used by compilation. *)
+  (** cache for the first charset. Set only if used by compilation. *)
   }
 
  (** abreviation *)
@@ -102,7 +102,8 @@ type 'a grammar =
 let give_name n g = { g with n }
 
 (** helper to construct the initial ['a grammar] record *)
-let mkg : ?name:string -> ?recursive:bool -> ?cached:'a cache -> 'a grdf -> 'a grammar =
+let mkg : ?name:string -> ?recursive:bool -> ?cached:'a cache ->
+          'a grdf -> 'a grammar =
   fun ?(name="...") ?(recursive=false) ?(cached=NoCache) d ->
     let k = Assoc.new_key () in
     { e = []; d; n = name; k; recursive; cached
@@ -716,9 +717,8 @@ let elim_left_rec : type a. a grammar -> unit = fun g ->
                             ([],ENil) gs
          in
          (ne_alt gs, ss)
-      | ELr(_,_)   -> assert false
-      | ERkey _ ->
-         assert false; (* handled in gn *)
+      | ELr(_,_)    -> assert false
+      | ERkey _     -> assert false
       | EAppl(g1,f) ->
          let (g1,s) = fn above g1 in
          (ne_appl g1 f, map_elr (fun g -> appl g f) s)
@@ -951,7 +951,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
            in the tree *)
     let get g =
       let cne = g.compiled in
-        if g.recursive || g.phase = Compiling || g.cached <> NoCache then
+        if g.recursive || g.phase = Compiling then
         Comb.deref cne
       else !cne
     in
@@ -977,7 +977,9 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
          if g.ne = EFail then Comb.empty x
          else Comb.option x (first_charset g.ne) cne
       | l ->
-         let ce = Comb.alts (List.map (fun x -> Charset.full, Comb.empty x) l) in
+         let ce =
+           Comb.alts (List.map (fun x -> Charset.full, Comb.empty x) l)
+         in
          Comb.alt Charset.full ce (first_charset g.ne) cne
     in
     c
