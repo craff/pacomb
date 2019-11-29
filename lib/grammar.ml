@@ -21,7 +21,8 @@ type 'a grammar =
   (** the combinator for the grammar. One needs a ref for recursion.  valid from
                               phase Compiled *)
   ; mutable charset : (int * Charset.t) option
-  (** cache for the first charset. Set only if used by compilation. *)
+  (** cache for the first charset. Set only if used by compilation.
+      the int is used to reach the fixpoint as in EmptyComputed below*)
   }
 
  (** abreviation *)
@@ -31,21 +32,21 @@ type 'a grammar =
 
  (** The various transformation phase before until compilation to combinators *)
  and phase = Defined | EmptyComputed of int | EmptyRemoved
-             | LeftRecEliminated | Compiling | Compiled
+           | LeftRecEliminated | Compiling | Compiled
 
  (** type for the left prefix as in Comb *)
- and mgr_left =
-   LNil : mgr_left
- | LCns : 'a key * 'a grne * mgr_left -> mgr_left
+ and mlr_left =
+   LNil : mlr_left
+ | LCns : 'a key * 'a grne * mlr_left -> mlr_left
 
  (** type for the right prefix as in Comb *)
- and mgr_right =
-   RNil : mgr_right
- | RCns : 'a key * 'b key * 'b grammar * mgr_right -> mgr_right
+ and mlr_right =
+   RNil : mlr_right
+ | RCns : 'a key * 'b key * 'b grammar * mlr_right -> mlr_right
 
  (** type for all information about mutuall recursive grammars *)
- and mgr = { left : mgr_left
-           ; right : mgr_right
+ and mlr = { left : mlr_left
+           ; right : mlr_right
            ; lpos : Pos.t Assoc.key option
            ; names : string list
            ; keys : Assoc.any_key list }
@@ -62,8 +63,8 @@ type 'a grammar =
                                            (** sequence *)
    | DSeq : ('a * 'b) t * ('a -> ('b -> 'c) t) -> 'c grdf
                                            (** dependant sequence *)
-   | Rkey : 'a key -> 'a grdf
-   | LPos : mgr Uf.t option * (Pos.t -> 'a) t -> 'a grdf
+   | Rkey : 'a key -> 'a grdf              (** access to the lr table *)
+   | LPos : mlr Uf.t option * (Pos.t -> 'a) t -> 'a grdf
                                            (** read the postion before parsing,
                                                the key is present, the position
                                                is stored in the lr table *)
@@ -87,16 +88,20 @@ type 'a grammar =
    | EAppl : 'a grne * ('a -> 'b) -> 'b grne
    | ESeq  : 'a grne * ('a -> 'b) t -> 'b grne
    | EDSeq : ('a * 'b) grne * ('a -> ('b -> 'c) t) -> 'c grne
-   | ELr   : 'a key * mgr Uf.t -> 'a grne
    | ERkey : 'a key -> 'a grne
    | ERef  : 'a t -> 'a grne
-   | ELPos : mgr Uf.t option * (Pos.t -> 'a) grne -> 'a grne
+   | ELPos : mlr Uf.t option * (Pos.t -> 'a) grne -> 'a grne
    | ERPos : (Pos.t -> 'a) grne -> 'a grne
    | ELayout : blank * 'a grne * layout_config -> 'a grne
    | ETest : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool) * bool *
               'a grne -> 'a grne
    | EEval : 'a grne -> 'a grne
    | ETmp  : 'a grne
+   (** only new constructor, introduced by elimination of left recursion.
+       the key give the grammar we actually parse and the mlr information
+       is stored in a union find data structure to allow merging grammar
+       when we discover they are mutually left dependant *)
+   | ELr   : 'a key * mlr Uf.t -> 'a grne
 
 (** grammar renaming *)
 let give_name n g = { g with n }
@@ -110,6 +115,8 @@ let mkg : ?name:string -> ?recursive:bool -> ?cached:'a cache ->
     ; compiled = ref Comb.assert_false
     ; charset = None; phase = Defined; ne = ETmp }
 
+(** cache is added as information in the grammar record because when
+    a grammar is cached, elimination of left recursion is useless *)
 let cache ?name ?merge g =
   let name = match name with None -> g.n | Some n -> n in
   { g with cached = Cache merge; n = name }
@@ -631,17 +638,17 @@ let rec merge_elr : 'a grammar elr -> 'a grammar elr -> 'a grammar elr =
      else if c > 0 then ECns(k2,g2,merge_elr l1 l2')
      else ECns(k1,alt [g1; g2],merge_elr l1' l2')
 
-let rec merge_elr_mgr_right
-        : type a. a key -> a grammar elr -> mgr_right -> mgr_right =
+let rec merge_elr_mlr_right
+        : type a. a key -> a grammar elr -> mlr_right -> mlr_right =
   fun k l1 l2 ->
   match l1 with
   | ENil            -> l2
   | ECns(k1,g1,l1') ->
      let _ = factor_empty g1 in
-     RCns(k1, k, g1, merge_elr_mgr_right k l1' l2)
+     RCns(k1, k, g1, merge_elr_mlr_right k l1' l2)
 
 (** A type to store list of grammar keys *)
-type ety = E : 'a key * bool * mgr Uf.t -> ety
+type ety = E : 'a key * bool * mlr Uf.t -> ety
 
 let rec cat_left l1 l2 = match l1 with
   | LNil -> l2
@@ -656,7 +663,7 @@ let cat_lpos p1 p2 =
   | (Some _, _) -> p1
   | (_     , _) -> p2
 
-let cat_mgr {left=l1;right=r1;lpos=p1;names=n1;keys=k1}
+let cat_mlr {left=l1;right=r1;lpos=p1;names=n1;keys=k1}
             {left=l2;right=r2;lpos=p2;names=n2;keys=k2} =
   { left  = cat_left l1 l2
   ; right = cat_right r1 r2
@@ -667,7 +674,7 @@ let cat_mgr {left=l1;right=r1;lpos=p1;names=n1;keys=k1}
 
 let find_ety : type a. a key -> ety list -> bool = fun k l ->
   let open Assoc in
-  let rec fn : ety list -> mgr Uf.t = function
+  let rec fn : ety list -> mlr Uf.t = function
     | [] -> raise Not_found
     | E (k',cached,x) :: l ->
        if cached then raise Not_found;
@@ -675,7 +682,7 @@ let find_ety : type a. a key -> ety list -> bool = fun k l ->
        | Eq  -> x
        | NEq -> if List.memq (K k) (fst (Uf.find x)).keys then x else
                   let y = fn l in
-                  Uf.union cat_mgr x y;
+                  Uf.union cat_mlr x y;
                   y
   in
   try
@@ -684,7 +691,7 @@ let find_ety : type a. a key -> ety list -> bool = fun k l ->
   with
     Not_found -> false
 
-type pos_ptr = mgr Uf.t
+type pos_ptr = mlr Uf.t
 
 let get_pk : ety list -> pos_ptr option =
   function [] -> None
@@ -771,7 +778,7 @@ let elim_left_rec : type a. a grammar -> unit = fun g ->
                | _ ->
                   let ({left; right; lpos; names; keys}, x) = Uf.find ptr in
                   let left = LCns(g.k,g',left) in
-                  let right = merge_elr_mgr_right g.k s right in
+                  let right = merge_elr_mlr_right g.k s right in
                   Uf.set_root x {left; right; lpos; names; keys};
                   g.ne <- ELr(g.k, x);
                   match above with
@@ -880,7 +887,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   | ELr(k,x) ->
      begin
        let (r, _) = Uf.find x in
-       let rec fn : type a. a key -> a grne list -> mgr_left -> a grne list =
+       let rec fn : type a. a key -> a grne list -> mlr_left -> a grne list =
          fun k acc l -> match l with
          | LNil -> acc
          | LCns(k',g,l) ->
