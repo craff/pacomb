@@ -135,7 +135,7 @@ val test_before : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a t -> 'a t
 
 (** Allow to test the blank characteres after a grammar and more *)
-val test_after : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+val test_after : ('a -> Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a t -> 'a t
 
 (** Access to a reference to a combinator, used by Grammar.compile for recursive

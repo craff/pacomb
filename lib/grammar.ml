@@ -71,11 +71,14 @@ type 'a grammar =
    | RPos : (Pos.t -> 'a) t -> 'a grdf     (** read the postion after parsing *)
    | Layout : blank * 'a t * layout_config -> 'a grdf
                                            (** changes the blank function *)
-   | Test : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool) * bool *
-              'a t -> 'a grdf              (** test, before (true)  or after *)
+   | Test : 'a test * 'a t -> 'a grdf      (** test, before or after *)
    | Eval : 'a t -> 'a grdf                (** force evaluation *)
    | Tmp  : 'a grdf                        (** used as initial value for
                                                recursive grammar. *)
+
+ and 'a test =
+   | Before of (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+   | After of ('a -> Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
 
  (** Type after elimination of empty  and for later phase.  same constructors as
      above prefixed  by E,  The left branch  does not go  trough the  'a grammar
@@ -93,8 +96,7 @@ type 'a grammar =
    | ELPos : mlr Uf.t option * (Pos.t -> 'a) grne -> 'a grne
    | ERPos : (Pos.t -> 'a) grne -> 'a grne
    | ELayout : blank * 'a grne * layout_config -> 'a grne
-   | ETest : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool) * bool *
-              'a grne -> 'a grne
+   | ETest : 'a test * 'a grne -> 'a grne
    | EEval : 'a grne -> 'a grne
    | ETmp  : 'a grne
    (** only new constructor, introduced by elimination of left recursion.
@@ -151,7 +153,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
       | EAppl(g,_)     -> is_empty g
       | ERPos(g)       -> is_empty g
       | ELPos(_,g)     -> is_empty g
-      | ETest(_,_,g)   -> is_empty g
+      | ETest(_,g)     -> is_empty g
       | ELayout(_,g,_) -> is_empty g
       | EEval(g)       -> is_empty g
       | _              -> false
@@ -178,7 +180,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
     | ERef(g)       -> pv prio ch g
     | ERPos(g)      -> pg prio ch g
     | ELPos(_,g)    -> pg prio ch g
-    | ETest(_,_,g)  -> pg prio ch g
+    | ETest(_,g)    -> pg prio ch g
     | ELayout(_,g,_)-> pg prio ch g
     | EEval(g)      -> pg prio ch g
     | ETmp          -> pr "TMP"
@@ -192,7 +194,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
       | Appl(g,_)        -> is_empty g.d
       | RPos(g)          -> is_empty g.d
       | LPos(_,g)        -> is_empty g.d
-      | Test(_,_,g)      -> is_empty g.d
+      | Test(_,g)        -> is_empty g.d
       | Layout(_,g,_)    -> is_empty g.d
       | _                -> false
     in
@@ -216,7 +218,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
     | Appl(g,_)    -> pg prio ch g
     | RPos(g)      -> pg prio ch g
     | LPos(_,g)    -> pg prio ch g
-    | Test(_,_,g)  -> pg prio ch g
+    | Test(_,g)    -> pg prio ch g
     | Layout(_,g,_)-> pg prio ch g
     | Eval(g)      -> pg prio ch g
     | Tmp          -> pr "TMP"
@@ -351,18 +353,18 @@ let error ?name m = mkg ?name (Err m)
 let eval ?name g =
   mkg ?name (if g.d = Fail then Fail else Eval(g))
 
-let test ?name f b g = mkg ?name (if g.d = Fail then Fail else Test(f,b,g))
+let test ?name f g = mkg ?name (if g.d = Fail then Fail else Test(f,g))
 
-let test_before ?name f g = test ?name f true g
+let test_before ?name f g = test ?name (Before f) g
 
-let test_after ?name f g = test ?name f false g
+let test_after ?name f g = test ?name (After f) g
 
 let no_blank_before g =
   let fn b1 c1 b2 c2 = Input.buffer_equal b1 b2 && c1 = c2 in
   test_before ~name:"no_blank"  fn g
 
 let no_blank_after g =
-  let fn b1 c1 b2 c2 = Input.buffer_equal b1 b2 && c1 = c2 in
+  let fn _ b1 c1 b2 c2 = Input.buffer_equal b1 b2 && c1 = c2 in
   test_after ~name:"no_blank"  fn g
 
 let layout ?name ?(config=default_layout_config) b g =
@@ -487,9 +489,9 @@ let ne_eval g1 = match g1 with
   | EFail -> EFail
   | _     -> EEval(g1)
 
-let ne_test f b g1 = match g1 with
+let ne_test f g1 = match g1 with
   | EFail -> EFail
-  | _     -> ETest(f,b,g1)
+  | _     -> ETest(f,g1)
 
 let ne_layout b g cfg =
   match g with
@@ -563,8 +565,8 @@ let factor_empty g =
                                   with Lex.NoParse | Give_up _ -> acc) [] g1.e
                        (* FIXME #14: Loose position *)
     | Layout(_,g,_) -> fn g; g.e
-    | Eval(g)        -> fn g; g.e
-    | Test(_,_,g)   -> fn g;
+    | Eval(g)       -> fn g; g.e
+    | Test(_,g)     -> fn g;
                        if g.e <> [] then
                          failwith "illegal test on grammar accepting empty";
                        []
@@ -606,7 +608,7 @@ let factor_empty g =
     | LPos(pk,g1) -> hn g1; ne_lpos ?pk (get g1)
     | RPos(g1) -> hn g1; ne_rpos (get g1)
     | Eval(g1) -> hn g1; ne_eval (get g1)
-    | Test(f,b,g1) -> hn g1; ne_test f b (get g1)
+    | Test(f,g1) -> hn g1; ne_test f (get g1)
     | Layout(b,g,cfg) -> hn g; ne_layout b (get g) cfg
     | Tmp           -> failwith "grammar compiled before full definition"
 
@@ -741,9 +743,10 @@ let elim_left_rec : type a. a grammar -> unit = fun g ->
          let (g1, s1) = fn above g1 in
          let pk = get_pk above in
          (ne_lpos g1, map_elr (lpos ?pk) s1)
-      | ETest(f, b, g1) ->
+      | ETest(f, g1) ->
          let (g1, s1) = fn above g1 in
-         (ne_test f b g1, (if b then s1 else map_elr (test f b) s1))
+         (ne_test f g1, (match f with Before _ -> s1
+                                    | After  _ -> map_elr (test f) s1))
       | ELayout(_,g1,_) ->
          let (_, s1) = fn above g1 in
          if s1 <> ENil then
@@ -843,7 +846,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
     | ERPos g -> fn g
     | ELPos (_,g) -> fn g
     | EEval(g) -> fn g
-    | ETest (_,_,g) -> fn g
+    | ETest (_,g) -> fn g
     | ELayout(_,g,cfg) -> if cfg.old_blanks_before
                              && not cfg.new_blanks_before
                           then fn g else (false, Charset.full)
@@ -939,8 +942,8 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
        | _, Some pk -> Comb.read_pos pk (compile_ne g)
      end
   | EEval(g) -> Comb.eval (compile_ne g)
-  | ETest(f,true,g) -> Comb.test_before f (compile_ne g)
-  | ETest(f,false,g) -> Comb.test_after f (compile_ne g)
+  | ETest(Before f,g) -> Comb.test_before f (compile_ne g)
+  | ETest(After f,g) -> Comb.test_after f (compile_ne g)
   | ELayout(b,g,cfg) -> Comb.change_layout ~config:cfg b (compile_ne g)
   | ETmp -> assert false
 

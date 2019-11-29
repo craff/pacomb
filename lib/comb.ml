@@ -467,17 +467,17 @@ let test_before : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
     match test env.buf_before_blanks env.pos_before_blanks
             env.current_buf env.current_pos
     with false -> next env
-       | true -> g env k
+       | true  -> g env k
 
 (** Combinator to test the input after parsing with a grammar *)
-let test_after : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+let test_after : ('a -> Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a t -> 'a t =
   fun test g env k ->
     let k = ink (fun env x ->
-      match test env.buf_before_blanks env.pos_before_blanks
+      match test (Lazy.force x) env.buf_before_blanks env.pos_before_blanks
              env.current_buf env.current_pos
       with false -> next env
-         | true -> call k env x)
+         | true  -> call k env x)
     in
     g env k
 

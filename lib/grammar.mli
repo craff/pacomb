@@ -92,7 +92,7 @@ val test_before : ?name:string
                  -> 'a grammar -> 'a grammar
 
 val test_after : ?name:string
-                 -> (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+                 -> ('a -> Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a grammar -> 'a grammar
 
 (** particular cases of the above testing the absence of blanks. *)
