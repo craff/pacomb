@@ -113,6 +113,8 @@ let rec exp_to_term exp =
      [%expr Pacomb.Grammar.term (Pacomb.Lex.any ())]
   | [%expr CHAR([%e? s])] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.char [%e s] ())]
+  | [%expr CHARSET([%e? s])] ->
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.charset [%e s] ())]
   | {pexp_desc = Pexp_constant (Pconst_string _)} ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.string [%e exp] ())]
   | [%expr STR([%e? s])] ->
