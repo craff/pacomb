@@ -13,25 +13,31 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
-    - name: echo
-      run: echo Testing opam build
     - name: opam install
       run: |
         sudo add-apt-repository ppa:avsm/ppa
         sudo apt update
         sudo apt install opam
         opam init
-    - name: build 4.09.0
+    - name: switch 4.09.0
       run: |
         opam switch create 4.09.0
         eval $(opam env)
         opam install dune stdlib-shims
-        make
-    - name: build 4.04.1
+    - name: switch 4.04.1
       run: |
         opam switch create 4.04.1
         eval $(opam env)
         opam install dune stdlib-shims
+    - name: build 4.09.0
+      run: |
+        opam switch 4.09.0
+        eval $(opam env)
+        make
+    - name: build 4.04.1
+      run: |
+        opam switch 4.04.1
+        eval $(opam env)
         make
     - name: test 4.09.0
       run: |
