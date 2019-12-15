@@ -23,4 +23,14 @@ jobs:
         eval $(opam env)
         opam install dune stdlib-shims ppxlib
         make
-	make tests
+
+  test:
+    runs-on: ubuntu-latest
+
+    dependencies:
+      - build
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: test
+      run: make tests
