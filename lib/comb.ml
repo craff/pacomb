@@ -56,7 +56,7 @@
 
 (** Environment holding information required for parsing. *)
 type env =
-  { blank_fun         : Lex.blank
+  { blank_fun         : Blank.t
   (** Function used to ignore blanks. *)
   ; max_pos           : (int * Lex.buf * Lex.pos * string list ref) ref
   (** Maximum position reached by the parser (for error reporting). *)
@@ -623,8 +623,8 @@ let read_tbl : 'a key -> 'a t = fun key env k ->
 let deref : 'a t ref -> 'a t = fun gref env k -> !gref env k
 
 (** Combinator changing the "blank function". *)
-let change_layout : ?config:Lex.layout_config -> Lex.blank -> 'a t -> 'a t =
-    fun ?(config=Lex.default_layout_config) blank_fun g env k ->
+let change_layout : ?config:Blank.layout_config -> Blank.t -> 'a t -> 'a t =
+    fun ?(config=Blank.default_layout_config) blank_fun g env k ->
     let (s, n, _) as buf=
       if config.old_blanks_before then (env.current_buf, env.current_pos, false)
       else (env.buf_before_blanks, env.pos_before_blanks, true)
@@ -759,7 +759,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
 
 (** function doing the parsing *)
 let gen_parse_buffer
-    : type a. a t -> Lex.blank -> ?blank_after:bool
+    : type a. a t -> Blank.t -> ?blank_after:bool
                   -> Lex.buf -> Lex.pos -> (a * Lex.buf * Lex.pos) list =
   fun g blank_fun ?(blank_after=false) buf0 col0 ->
     (** environment initialisation *)
@@ -787,7 +787,7 @@ let gen_parse_buffer
            else (v, env.buf_before_blanks, env.pos_before_blanks)) r
 
 (** parse for non ambiguous grammars, allows for continue parsing *)
-let partial_parse_buffer : type a. a t -> Lex.blank -> ?blank_after:bool
+let partial_parse_buffer : type a. a t -> Blank.t -> ?blank_after:bool
                                 -> Lex.buf -> Lex.pos -> a * Lex.buf * Lex.pos =
   fun g blank_fun ?(blank_after=false) buf0 col0 ->
     let l = gen_parse_buffer g blank_fun ~blank_after buf0 col0 in
@@ -800,7 +800,7 @@ let partial_parse_buffer : type a. a t -> Lex.blank -> ?blank_after:bool
     input is not parsed in some ways, some value may correspond to only the
     beginning of the input. You should rather use cache/merge anyway.*)
 let parse_all_buffer
-    : type a. a t -> Lex.blank -> Lex.buf -> Lex.pos -> a list =
+    : type a. a t -> Blank.t -> Lex.buf -> Lex.pos -> a list =
   fun g blank_fun buf0 col0 ->
     let l = gen_parse_buffer g blank_fun buf0 col0 in
     List.map (fun (r,_,_) -> r) l

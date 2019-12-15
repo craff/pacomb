@@ -2,7 +2,7 @@ open Pacomb
 open Pos
 open Grammar
 
-let bspace = Lex.blank_charset (Charset.singleton ' ')
+let bspace = Blank.from_charset (Charset.singleton ' ')
 
 let test ?(blank=bspace) g s r =
   assert (parse_string g blank s = r)

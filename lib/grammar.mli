@@ -103,8 +103,8 @@ val no_blank_after : 'a grammar -> 'a grammar
     [g].  The optional parameters allow to  control which blanks are used at the
     boundary.  Both  can be used  in which case the  new blanks are  used second
     before parsing with [g] and first after. *)
-val layout : ?name:string -> ?config:Lex.layout_config
-             -> Lex.blank -> 'a grammar -> 'a grammar
+val layout : ?name:string -> ?config:Blank.layout_config
+             -> Blank.t -> 'a grammar -> 'a grammar
 
 (** usual option/star/plus combinator *)
 val option : ?name:string -> 'a grammar -> 'a option grammar
@@ -165,29 +165,29 @@ val give_name : string -> 'a grammar -> 'a grammar
 
 (** Parse a whole input buffer. the eof combinator is added at
     the end of the given combinator *)
-val parse_buffer : 'a grammar -> Lex.blank -> Lex.buf -> Lex.pos -> 'a
+val parse_buffer : 'a grammar -> Blank.t -> Lex.buf -> Lex.pos -> 'a
 
 (** Partial parsing.  Beware, the returned  position is not the maximum position
     that can  be reached  by the grammar  it the grammar  is ambiguous.  In this
     case, a message is printed on  stderr. The charset is the character accepted
     at  the  end of  input.  Mainly  useful  with  'eof' when  [blank_after]  is
     [true]. *)
-val partial_parse_buffer : 'a grammar -> Lex.blank -> ?blank_after:bool ->
+val partial_parse_buffer : 'a grammar -> Blank.t -> ?blank_after:bool ->
                            Lex.buf -> Lex.pos -> 'a * Lex.buf * Lex.pos
 
 (** Returns all possible parse trees.  Usefull for natural languages but also to
     debug ambiguity in a supposed non ambiguous grammar. *)
-val parse_all_buffer : 'a grammar -> Lex.blank -> Lex.buf -> Lex.pos -> 'a list
+val parse_all_buffer : 'a grammar -> Blank.t -> Lex.buf -> Lex.pos -> 'a list
 
 (**  Parse a  whole string,  reporting position  according to  utf8 if  optional
     argument [utf8] is given and [Utf8.UTF8 or Utf8.CJK_UTF8] *)
 val parse_string  : ?utf8:Utf8.context -> ?filename:string
-                    -> 'a grammar -> Lex.blank -> string -> 'a
+                    -> 'a grammar -> Blank.t -> string -> 'a
 
 (**  Parse a  whole  input  channel, reporting  postiion  according  to utf8. *)
 val parse_channel : ?utf8:Utf8.context -> ?filename:string
-                    -> 'a grammar -> Lex.blank -> in_channel -> 'a
+                    -> 'a grammar -> Blank.t -> in_channel -> 'a
 
 (**  Parse a  whole  file, reporting  postiion  according  to utf8. *)
 val parse_file : ?utf8:Utf8.context ->
-                    'a grammar -> Lex.blank -> string -> 'a
+                    'a grammar -> Blank.t -> string -> 'a

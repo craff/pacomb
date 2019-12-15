@@ -97,7 +97,7 @@ let parse_char : (char -> char) -> (char, 'a) t -> 'a Grammar.t =
 let word : ?name:string -> ?final_test:(Input.buffer -> Input.pos -> bool)
            -> ?map:(char -> char) -> (char, 'a) t -> 'a Grammar.t =
   fun ?name ?(final_test=fun _ _ -> true) ?(map=fun c -> c) tbl ->
-  Grammar.(layout ?name Lex.noblank
+  Grammar.(layout ?name Blank.none
              (test_after (fun _ _ _ -> final_test) (parse_char map tbl)))
 
 let parse_utf8 : (string -> string) -> (string, 'a) t -> 'a Grammar.t =
@@ -111,5 +111,5 @@ let parse_utf8 : (string -> string) -> (string, 'a) t -> 'a Grammar.t =
 let utf8_word : ?name:string -> ?final_test:(Input.buffer -> Input.pos -> bool)
            -> ?map:(string -> string) -> (string, 'a) t -> 'a Grammar.t =
   fun ?name ?(final_test=fun _ _ -> true) ?(map=fun c -> c) tbl ->
-  Grammar.(layout ?name Lex.noblank
+  Grammar.(layout ?name Blank.none
              (test_after (fun _ _ _ -> final_test) (parse_utf8 map tbl)))

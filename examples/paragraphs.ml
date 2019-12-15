@@ -16,9 +16,9 @@ let blank2 = Regexp.blank_regexp "[ \t\r]*"
    [blank2] only after the paragraph. This way, the minimum number of newline left to
    parse as paragraph separation is 1.  *)
 let%parser
-      [@layout blank1 ~config:Lex.{ default_layout_config with
-                                    new_blanks_after = true
-                                  ; old_blanks_after = false }]
+      [@layout blank1 ~config:Blank.{ default_layout_config with
+                                      new_blanks_after = true
+                                    ; old_blanks_after = false }]
       paragraph = ((p:: ~+ word) => (p, p_pos))
 
 (* paragraph separator, at least one newline *)

@@ -17,7 +17,7 @@ let%parser rec
 
 let top = expr Sum
 
-let blank = Lex.blank_charset (Charset.singleton ' ')
+let blank = Blank.from_charset (Charset.singleton ' ')
 
 let _ =
   try

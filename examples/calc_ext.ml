@@ -197,7 +197,7 @@ let%parser cmd =
          infix_tbl := (id,(p,a)) :: !infix_tbl)
 
 (* blanks *)
-let blank = Lex.blank_charset (Charset.singleton ' ')
+let blank = Blank.from_charset (Charset.singleton ' ')
 
 (* main loop *)
 let _ =

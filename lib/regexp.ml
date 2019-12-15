@@ -110,7 +110,7 @@ and regexp =
 exception Regexp_error of Input.buffer * Input.pos
 
 let from_string : string -> regexp = fun s ->
-  try Grammar.parse_string regexp Lex.noblank s
+  try Grammar.parse_string regexp Blank.none s
   with Pos.Parse_error(b,s,_) -> raise (Regexp_error(b,s))
 
 open Lex
@@ -163,4 +163,4 @@ let regexp : ?name:string -> regexp -> string t = fun ?name r ->
   let r = from_regexp r in
   { r with n = default r.n name }
 
-let blank_regexp s = blank_terminal (regexp (from_string s))
+let blank_regexp s = Blank.from_terminal (regexp (from_string s))

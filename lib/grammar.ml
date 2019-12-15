@@ -70,7 +70,7 @@ type 'a grammar =
                                                the key is present, the position
                                                is stored in the lr table *)
    | RPos : (Pos.t -> 'a) t -> 'a grdf     (** read the postion after parsing *)
-   | Layout : blank * 'a t * layout_config -> 'a grdf
+   | Layout : Blank.t * 'a t * Blank.layout_config -> 'a grdf
                                            (** changes the blank function *)
    | Test : 'a test * 'a t -> 'a grdf      (** test, before or after *)
    | Eval : 'a t -> 'a grdf                (** force evaluation *)
@@ -96,7 +96,7 @@ type 'a grammar =
    | ERef  : 'a t -> 'a grne
    | ELPos : mlr Uf.t option * (Pos.t -> 'a) grne -> 'a grne
    | ERPos : (Pos.t -> 'a) grne -> 'a grne
-   | ELayout : blank * 'a grne * layout_config -> 'a grne
+   | ELayout : Blank.t * 'a grne * Blank.layout_config -> 'a grne
    | ETest : 'a test * 'a grne -> 'a grne
    | EEval : 'a grne -> 'a grne
    | ETmp  : 'a grne
@@ -368,7 +368,7 @@ let no_blank_after g =
   let fn _ b1 c1 b2 c2 = Input.buffer_equal b1 b2 && c1 = c2 in
   test_after ~name:"no_blank"  fn g
 
-let layout ?name ?(config=default_layout_config) b g =
+let layout ?name ?(config=Blank.default_layout_config) b g =
   mkg ?name (if g.d = Fail then Fail else Layout(b,g,config))
 
 (** function to define mutually recursive grammar:
@@ -1008,33 +1008,33 @@ let add_eof g = seq g (term (eof (fun x -> x)))
 
 (* NOTE: cs with blank_after = false makes no sense ? *)
 let partial_parse_buffer
-    : type a. a t -> Lex.blank -> ?blank_after:bool
+    : type a. a t -> Blank.t -> ?blank_after:bool
                   -> Lex.buf -> Lex.pos -> a * Lex.buf * Lex.pos =
   fun g blank_fun ?(blank_after=false) buf0 col0 ->
     let g = compile g in
     Comb.partial_parse_buffer g blank_fun ~blank_after buf0 col0
 
 let parse_buffer
-    : type a. a t -> Lex.blank -> Lex.buf -> Lex.pos -> a =
+    : type a. a t -> Blank.t -> Lex.buf -> Lex.pos -> a =
   fun g blank_fun buf col ->
     let g = add_eof g in
     let (v,_,_) = partial_parse_buffer g blank_fun buf col in v
 
 let parse_all_buffer
-    : type a. a t -> Lex.blank -> Lex.buf -> Lex.pos -> a list =
+    : type a. a t -> Blank.t -> Lex.buf -> Lex.pos -> a list =
   fun g blank_fun buf0 col0 ->
     let g = compile (add_eof g) in
     Comb.parse_all_buffer g blank_fun buf0 col0
 
 let parse_string
     : type a. ?utf8:Utf8.context -> ?filename:string ->
-              a t -> Lex.blank -> string -> a =
+              a t -> Blank.t -> string -> a =
   fun ?(utf8=Utf8.ASCII) ?filename g b s ->
     parse_buffer g b (Input.from_string ~utf8 ?filename s) Input.init_pos
 
 let parse_channel
     : type a. ?utf8:Utf8.context -> ?filename:string ->
-              a t -> Lex.blank -> in_channel -> a =
+              a t -> Blank.t -> in_channel -> a =
   fun ?(utf8=Utf8.ASCII) ?filename g b ic ->
     parse_buffer g b (Input.from_channel ~utf8 ?filename ic) Input.init_pos
 

@@ -15,7 +15,7 @@ let _ = Arg.parse spec
           "test.exe [options]"
 
 let parse_string c =
-  parse_string c (Lex.blank_charset (Charset.singleton ' '))
+  parse_string c (Blank.from_charset (Charset.singleton ' '))
 
 let assert_fail f =
   try ignore (f ()); assert false with Pos.Parse_error _ -> ()
@@ -97,7 +97,7 @@ let test9 = dseq (appl test8 (fun x -> (x, ())))
                     else seq (fn (x - 1)) char_a (fun x _ () -> x () + 1)
                        in fn)
 
-let test10 = seq char_a (layout Lex.noblank (seq char_a char_b (+))) (+)
+let test10 = seq char_a (layout Blank.none (seq char_a char_b (+))) (+)
 
 let test11 =
   fixpoint ~name:"AB" (fun ab ->
@@ -330,7 +330,7 @@ let _ = assert (parse_string test18 "a" = ())
 
 let parse_all_string g s =
   let s = Input.from_string s in
-  parse_all_buffer g Lex.noblank s Input.init_pos
+  parse_all_buffer g Blank.none s Input.init_pos
 
 let nas p =
   let rec fn p =

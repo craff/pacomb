@@ -22,7 +22,7 @@ let gamma_gen n =
   gen n;
   Buffer.contents b
 
-let parse_string c = parse_string c (Lex.blank_charset (Charset.singleton ' '))
+let parse_string c = parse_string c (Blank.from_charset (Charset.singleton ' '))
 
 let char_a = term(Lex.char 'a' 1)
 let char_b = term(Lex.char 'b' 1)

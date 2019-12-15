@@ -11,7 +11,7 @@
     This modules  provide combinator  to create terminals  that the  parser will
     call.
 
-    It also provide functions to eliminate "blank" characteres. *)
+ *)
 
 (** {2 Types and exception} *)
 
@@ -19,9 +19,6 @@
     [Input.pos]. *)
 type buf = Input.buffer
 type pos = Input.pos
-
-(** A blank function is just a function progressing in a buffer *)
-type blank = buf -> pos -> buf * pos
 
 (** Type of terminal function, similar to blank, but with a returned value *)
 type 'a lexeme = buf -> pos -> 'a * buf * pos
@@ -175,20 +172,6 @@ val grapheme : ?name:string -> string -> 'a -> 'a t
      char *)
 val keyword : ?name:string -> string -> (char -> bool) -> 'a -> 'a t
 
-(** {2 Functions managing blanks} *)
-
-(** Use when you have no blank chars *)
-val noblank : blank
-
-(** Blank from a charset *)
-val blank_charset : Charset.t -> blank
-
-(** Blank from a terminal *)
-val blank_terminal : 'a t -> blank
-
-(** Blank with standard spaces and line starting with [s] *)
-val blank_line : ?cs:Charset.t -> string -> blank
-
 (** Test wether a terminal accept the  empty string. Such a terminal are illegal
    in a grammar, but may be used in combinator below to create terminals *)
 val accept_empty : 'a t -> bool
@@ -196,21 +179,6 @@ val accept_empty : 'a t -> bool
 (** Test constructor for the test constructor in [Grammar] *)
 val test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool
 val blank_test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool
-
-type layout_config =
-  { old_blanks_before : bool
-  (** Ignoring blanks with the old blank function before parsing? *)
-  ; new_blanks_before : bool
-  (** Then ignore blanks with the new blank function (before parsing)? *)
-  ; new_blanks_after  : bool
-  (** Use the new blank function one last time before resuming old layout? *)
-  ; old_blanks_after  : bool
-  (** Use then the old blank function one last time as well? *) }
-
-(** Default configuration,  parsing with the old blanks before  (i.e., the field
-    [old_blanks_before] is  [true]), and the  new blanks after (i.e.,  the field
-    [old_blanks_after] is also [true]). The other two fields are [false]. *)
-val default_layout_config : layout_config
 
 (** where to put it ... *)
 val default : 'a -> 'a option -> 'a

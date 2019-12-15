@@ -32,7 +32,7 @@ let test pos l0 =
       | [x]::l -> (x,true)::fn l
       | (x::l1)::l -> (x,false)::fn (l1::l)
     in
-    let l = parse_string ~utf8:Utf8.UTF8 break Lex.noblank s in
+    let l = parse_string ~utf8:Utf8.UTF8 break Blank.none s in
     let l = List.map (fun s -> Utf8.to_list s) l in
     let l = fn l in
     if l <> l0 then

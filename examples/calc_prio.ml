@@ -26,7 +26,7 @@ let%parser top =
 let%parser rec exprs = () => () ; exprs top '\n' ==> ()
 
 (* blanks *)
-let blank = Lex.blank_charset (Charset.singleton ' ')
+let blank = Blank.from_charset (Charset.singleton ' ')
 
 let _ =
   try

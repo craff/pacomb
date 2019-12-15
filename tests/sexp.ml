@@ -18,7 +18,7 @@ let%parser rec sexp
 and sexps = () => []
           ; (l::sexps) (e::sexp) => e::l
 
-let blank = Lex.blank_charset (Charset.from_string " \t\n\r")
+let blank = Blank.from_charset (Charset.from_string " \t\n\r")
 
 let _ =
   let e = handle_exception (parse_channel sexp blank) stdin in

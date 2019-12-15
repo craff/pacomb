@@ -12,7 +12,7 @@ type 'a t
 
 (** Partial parsing.  Beware, the returned position is not  the maximum position
     that can be reached by the grammar.  *)
-val partial_parse_buffer : 'a t -> Lex.blank -> ?blank_after:bool ->
+val partial_parse_buffer : 'a t -> Blank.t -> ?blank_after:bool ->
         Lex.buf -> Lex.pos -> 'a * Lex.buf * Lex.pos
 
 (** Returns all possible parse trees.  Usefull for natural languages but also to
@@ -20,7 +20,7 @@ val partial_parse_buffer : 'a t -> Lex.blank -> ?blank_after:bool ->
     parsed in some ways, some value may correspond to only the beginning of the
     input. Except when debugging or testing, you should rather use cache/merge
     anyway. *)
-val parse_all_buffer : 'a t -> Lex.blank -> Lex.buf -> Lex.pos -> 'a list
+val parse_all_buffer : 'a t -> Blank.t -> Lex.buf -> Lex.pos -> 'a list
 
 (** {2 combinator constructors, normally not needed by the casual user } *)
 
@@ -144,7 +144,7 @@ val deref : 'a t ref -> 'a t
 
 (** Change the blank  function used to parse with the  given combinator.  we can
     choose which blank to use at the boundary with the optional parameters. *)
-val change_layout : ?config:Lex.layout_config -> Lex.blank -> 'a t -> 'a t
+val change_layout : ?config:Blank.layout_config -> Blank.t -> 'a t -> 'a t
 
 (** Combinator  that caches  a grammar to  avoid exponential  behavior.  parsing
     with the grammar  from each position is memoized to  avoid parsing twice the

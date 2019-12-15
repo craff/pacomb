@@ -41,4 +41,4 @@ val regexp : ?name:string -> regexp -> string Lex.t
 val regexp_grps : ?name:string -> ?grps:int list -> regexp -> string list Lex.t
 
 (** create a blank function from a string representing a regexp *)
-val blank_regexp : string -> Lex.blank
+val blank_regexp : string -> Blank.t

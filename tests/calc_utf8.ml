@@ -45,9 +45,9 @@ and expr = (a::prod)               => a
 *)
 
 let config =
-  Lex.{ default_layout_config with
-        new_blanks_before = true
-      ; new_blanks_after = true}
+  Blank.{ default_layout_config with
+          new_blanks_before = true
+        ; new_blanks_after = true}
 
 (* The parsing calling expression and changing the blank,
    printing the result and the next prompt. *)
@@ -57,7 +57,7 @@ let%parser top =
 let%parser rec exprs = () => () ; exprs top '\n' ==> ()
 
 (* we define the characters to be ignored, here space only *)
-let blank = Lex.blank_charset (Charset.singleton ' ')
+let blank = Blank.from_charset (Charset.singleton ' ')
 
 let _ =
   try

@@ -2,7 +2,7 @@ open Pacomb
 open Pos
 open Grammar
 
-let bspace = Lex.blank_charset (Charset.singleton ' ')
+let bspace = Blank.from_charset (Charset.singleton ' ')
 
 let test ?(blank=bspace) g s r =
   assert (parse_string g blank s = r)
@@ -135,7 +135,7 @@ let%parser _ =
 
 
 (* test grammar under sub expressions or sub modules *)
-let noblank = layout Lex.noblank
+let noblank = layout Blank.none
 let%parser f = (x::(noblank ('a' 'a' => 2))) => x
 
 module%parser H =
