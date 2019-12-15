@@ -306,6 +306,25 @@ let plus : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
         let (x,s,n) = t.f s n in
         fn (f (a ()) x) s n }
 
+(** Parses natura in base 10. ["+42"] is not accepted. *)
+let nat : ?name:string -> unit -> int t = fun ?name () ->
+  { n = default "NAT" name
+  ; c = Charset.from_string "-+0-9"
+  ; f = fun s n ->
+        let r = ref 0 in
+        let (c,s,n) = Input.read s n in
+        if not (c >= '0' && c <= '9') then raise NoParse;
+        r := !r * 10 + (Char.code c - Char.code '0');
+        let rec fn s0 n0 =
+          let (c,s,n) = Input.read s0 n0 in
+          if (c >= '0' && c <= '9') then (
+            r := !r * 10 + (Char.code c - Char.code '0');
+            fn s n)
+          else (s0,n0)
+        in
+        let (s,n) = fn s n in
+        (!r,s,n) }
+
 (** Parses an integer in base 10. ["+42"] is accepted. *)
 let int : ?name:string -> unit -> int t = fun ?name () ->
   { n = default "INT" name

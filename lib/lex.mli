@@ -131,6 +131,10 @@ val plus : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t
     [name] defaults to [sprintf "%S" s]. *)
 val string : ?name:string -> string -> 'a -> 'a t
 
+(** Parses an natural in base 10. ["-42"] and ["-42"] are not accepted.
+    [name] defaults to ["NAT"] *)
+val nat : ?name:string -> unit -> int t
+
 (** Parses an integer in base 10. ["+42"] is accepted.
     [name] defaults to ["INT"] *)
 val int : ?name:string -> unit -> int t
