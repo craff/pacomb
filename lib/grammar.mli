@@ -187,3 +187,7 @@ val parse_string  : ?utf8:Utf8.context -> ?filename:string
 (**  Parse a  whole  input  channel, reporting  postiion  according  to utf8. *)
 val parse_channel : ?utf8:Utf8.context -> ?filename:string
                     -> 'a grammar -> Lex.blank -> in_channel -> 'a
+
+(**  Parse a  whole  file, reporting  postiion  according  to utf8. *)
+val parse_file : ?utf8:Utf8.context ->
+                    'a grammar -> Lex.blank -> string -> 'a

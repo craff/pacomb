@@ -528,6 +528,25 @@ let blank_terminal : 'a t -> blank =
       (s,n)
     with NoParse -> (s,n)
 
+let blank_line : ?cs:Charset.t -> string -> blank =
+  fun ?(cs=Charset.from_string " \t\n\r")  start_comment ->
+    let start_comment = (string start_comment ()).f in
+    fun s n ->
+      let rec fn s n =
+        let (c,s',n') = Input.read s n in
+        if Charset.mem cs c then fn s' n' else
+          try
+            let (_,s,n) = start_comment s n in
+            let rec gn s n =
+              let (c,s',n') = Input.read s n in
+              if c <> '\n' && c <> '\r' then gn s' n'
+              else fn s n
+            in
+            gn s n
+          with NoParse -> (s,n)
+      in
+      fn s n
+
 type layout_config =
   { old_blanks_before : bool
   (** Ignoring blanks with the old blank function before parsing? *)

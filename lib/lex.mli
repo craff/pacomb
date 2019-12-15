@@ -182,6 +182,9 @@ val blank_charset : Charset.t -> blank
 (** Blank from a terminal *)
 val blank_terminal : 'a t -> blank
 
+(** Blank with standard spaces and line starting with [s] *)
+val blank_line : ?cs:Charset.t -> string -> blank
+
 (** Test wether a terminal accept the  empty string. Such a terminal are illegal
    in a grammar, but may be used in combinator below to create terminals *)
 val accept_empty : 'a t -> bool

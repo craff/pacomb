@@ -1035,4 +1035,8 @@ let parse_channel
   fun ?(utf8=Utf8.ASCII) ?filename g b ic ->
     parse_buffer g b (Input.from_channel ~utf8 ?filename ic) Input.init_pos
 
+let parse_file ?(utf8=Utf8.ASCII) g b filename =
+    let ic = open_in filename in
+    parse_channel ~utf8 ~filename g b ic
+
 let lpos ?name g = lpos ?name ?pk:None g
