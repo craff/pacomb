@@ -175,8 +175,8 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
                            (pg Atom) g1 (pv Seq) g2
     | EDSeq(g1,_)   -> pr (if prio < Seq then "(%a ...)" else "%a ...")
                          (pg Atom) g1
-    | ELr(_,_)      -> () (* TODO *)
-    | ERkey _       -> () (* TODO *)
+    | ELr(_,_)      -> () (* FIXME #21 *)
+    | ERkey _       -> () (* FIXME #21 *)
     | EAppl(g,_)    -> pg prio ch g
     | ERef(g)       -> pv prio ch g
     | ERPos(g)      -> pg prio ch g
