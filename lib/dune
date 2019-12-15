@@ -3,7 +3,7 @@
   (public_name pacomb)
   (modules :standard)
   (preprocess (pps pacomb.ppx))
-  (private_modules container hashtbl_eq assoc comb uf))
+  (private_modules container hashtbl_eq assoc comb unionFind))
 
 (documentation
   (package pacomb))

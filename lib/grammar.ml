@@ -1,4 +1,5 @@
 open Lex
+module Uf = UnionFind
 
 type 'a cache = NoCache | Cache of ('a -> 'a -> 'a) option
 
