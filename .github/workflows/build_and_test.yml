@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches:
+    - master
+    - release/*
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: echo
+      run: echo Testing opam build
+    - name: build
+      run: |
+        apt-get install opam
+        opam init
+        opam switch create 4.09.0
+        eval $(opam env)
+        opam install dune stdlib-shims
+        make
+   - name: test
+     run:
+        make tests
