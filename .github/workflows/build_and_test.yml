@@ -17,7 +17,7 @@ jobs:
       run: echo Testing opam build
     - name: build
       run: |
-        apt-get install opam
+        sudo apt-get install opam
         opam init
         opam switch create 4.09.0
         eval $(opam env)
