@@ -6,6 +6,10 @@ on:
     - master
     - release/*
 
+strategy:
+  matrix:
+    ocaml: [4.04.1, 4.09.0]
+
 jobs:
   build:
 
@@ -19,33 +23,15 @@ jobs:
         sudo apt update
         sudo apt install opam
         opam init
-    - name: switch 4.09.0
-      run: |
-        opam switch create 4.09.0
+        opam switch create ${{ matrix.ocaml }}
         eval $(opam env)
-        opam install dune stdlib-shims
-    - name: switch 4.04.1
-      run: |
-        opam switch create 4.04.1
-        eval $(opam env)
-        opam install dune stdlib-shims
-    - name: build 4.09.0
-      run: |
-        opam switch 4.09.0
-        eval $(opam env)
+        opam install dune stdlib-shims ppxlib
         make
-    - name: build 4.04.1
-      run: |
-        opam switch 4.04.1
-        eval $(opam env)
-        make
-    - name: test 4.09.0
-      run: |
-         opam switch 4.09.0
-         eval $(opam env)
-         make tests
-    - name: test 4.04.1
-      run: |
-         opam switch 4.04.1
-         eval $(opam env)
-         make tests
+
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: opam install
+      run: make tests
