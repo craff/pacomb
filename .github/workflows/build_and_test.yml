@@ -23,6 +23,5 @@ jobs:
         eval $(opam env)
         opam install dune stdlib-shims
         make
-   - name: test
-     run:
-        make tests
+    - name: test
+      run: make tests
