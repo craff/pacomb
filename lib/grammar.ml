@@ -570,7 +570,9 @@ let factor_empty g =
                        if g.e <> [] then
                          failwith "illegal test on grammar accepting empty";
                        []
-    | Tmp           -> failwith "grammar compiled before full definition"
+    | Tmp           -> failwith
+                         (Printf.sprintf "grammar %s compiled before full definition" g.n)
+
   in
   let rec hn : type a. a grammar -> unit = fun g ->
     match g.phase with
