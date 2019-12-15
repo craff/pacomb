@@ -56,7 +56,7 @@ license: "MIT"
 
 depends: [
   "ocaml" { >= "4.04.1" }
-  "dune"  { build & >= "1.2.0" }
+  "dune"  { >= "1.9.0" }
   "stdlib-shims"
 ]
 
