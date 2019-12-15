@@ -7,7 +7,7 @@ type ('a, 'b) eq =
 
 (** Type of tokens used to make keys unique, and carrying a type. This type is
     not intended to be extended by the used, hence it is private. *)
-type _ token = private ..
+type _ token = ..
 
 (** Type of a key for a value of type ['a]. It contains a unique token and the
     corresponding (very efficient) equality test. *)

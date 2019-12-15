@@ -55,8 +55,9 @@ authors: [
 license: "MIT"
 
 depends: [
-  "ocaml" { >= "4.04.0" }
+  "ocaml" { >= "4.04.1" }
   "dune"  { build & >= "1.2.0" }
+  "stdlib-shims"
 ]
 
 build: [ [ "dune" "build" "-p" name "-j" jobs ] ]

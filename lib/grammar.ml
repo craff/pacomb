@@ -572,7 +572,9 @@ let factor_empty g =
                          failwith "illegal test on grammar accepting empty";
                        []
     | Tmp           -> failwith
-                         (Printf.sprintf "grammar %s compiled before full definition" g.n)
+                         (Printf.sprintf
+                            "grammar %s compiled before full definition"
+                            g.n)
 
   in
   let rec hn : type a. a grammar -> unit = fun g ->

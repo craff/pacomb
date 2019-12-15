@@ -553,8 +553,8 @@ let select : type a. mlr_right -> a key -> mlr_left = fun l k ->
     | RNil -> acc
     | RCns(k',kr,cs,g,r) ->
        match k.eq k'.tok with
-         | Eq  -> fn r (LCns(kr,cs,g,acc))
-         | NEq -> fn r acc
+         | Assoc.Eq  -> fn r (LCns(kr,cs,g,acc))
+         | Assoc.NEq -> fn r acc
   in
   fn l LNil
 
@@ -601,8 +601,8 @@ let mlr : type a. ?lpos:Pos.t Assoc.key ->
       let rec klr env (lazy (Res(key,v,g'))) =
         begin
           match fkey.eq key.tok with
-          | Eq  -> add_queue env (Cont(env,k,v));
-          | NEq -> ()
+          | Assoc.Eq  -> add_queue env (Cont(env,k,v));
+          | Assoc.NEq -> ()
         end;
         let lr = Assoc.add key v env.lr in
         let lr = match lpos with

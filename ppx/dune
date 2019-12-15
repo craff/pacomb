@@ -4,4 +4,4 @@
   (preprocess (pps ppxlib.metaquot))
   (modules :standard)
   (kind ppx_rewriter)
-  (libraries ppxlib))
+  (libraries ppxlib stdlib-shims))
