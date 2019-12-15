@@ -4,7 +4,8 @@
 + {{:#ppx} OCaml syntax extension}
 + {{:#limitations} Limitation}
 + {!Pacomb.Grammar} The main module to build grammars
-+ {!Pacomb.Lex} lexing and blanks and {!Pacomb.Lex.give_up}
++ {!Pacomb.Lex} lexing and {!Pacomb.Lex.give_up}
++ {!Pacomb.Blank} blanks and layout record
 + {!Pacomb.Pos} positions in file and handling of exceptions
 + {!Pacomb.Input} build input buffer from string, channel, ...
 + {!Pacomb.Charset} an efficient representation of character sets
