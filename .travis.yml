@@ -1,14 +1,26 @@
 language: c
 sudo: required
+
+cache:
+  directories:
+  - $HOME/.opam
+
 install: test -e .travis.opam.sh || wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-opam.sh
+
 script: bash -ex .travis-opam.sh
+
 env:
+  global:
+  - OPAMJOBS="2"
+  - OPAMYES="true"
+  matrix:
   - OCAML_VERSION=4.04
   - OCAML_VERSION=4.05
   - OCAML_VERSION=4.06
   - OCAML_VERSION=4.07
   - OCAML_VERSION=4.08
   - OCAML_VERSION=4.09
+
 os:
   - linux
   - osx
