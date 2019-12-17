@@ -114,13 +114,6 @@ val line_num : buffer -> int
 
 val col_num : buffer -> pos -> int
 
-(** [line_beginning buf] returns the offset of the current line  in  the
-    buffer [buf]. *)
-val line_offset : buffer -> int
-
-(** position in the file *)
-val char_pos : buffer -> pos -> int
-
 (** position in bytes, regardless to utf8 *)
 val byte_pos : buffer -> pos -> int
 
@@ -131,7 +124,8 @@ val normalize : buffer -> pos -> buffer * pos
 (** [filename buf] returns the file name associated to the [buf]. *)
 val filename : buffer -> string
 
-(** [buffer_uid buf] returns a unique identifier for [buf]. *)
+(** [buffer_uid buf]  returns a unique identifier. [Input.read]  does not change
+   the uid. The uid is created when creating the initial buffer. *)
 val buffer_uid : buffer -> int
 
 (** [buffer_eq b1 b2] tests the equality of [b1] and [b2]. *)
@@ -142,7 +136,7 @@ val buffer_compare : buffer -> buffer -> int
 
 (** [buffer_before b1 i1 b2 i2] returns  true if the position [b1, i1] is before
     [b2, i2]. Gives meaningless result if [b1] and [b2] do not refer to the same
-    file. *)
+    file, i.e. do not have the same uid. *)
 val buffer_before : buffer -> int -> buffer -> int -> bool
 
 (** Table  to associate value to  positions in input buffers.  The complexity of

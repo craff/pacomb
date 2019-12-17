@@ -7,9 +7,9 @@ type pos = { name : string  (** file's name *)
            ; phantom : bool (** is the postion a "phantom", i.e. not really
                                 in the file *) }
 
-type interval = { start : pos; end_ : pos }
+type interval = { start : pos Lazy.t; end_ : pos Lazy.t }
 
-type t = pos
+type t = pos Lazy.t
 
 let max_pos p1 p2 =
   if p1.line > p2.line then p1
@@ -17,20 +17,20 @@ let max_pos p1 p2 =
   else if p1.col < p2.col then p2
   else p1
 
-let phantom = { name = ""; line = 0; col  = 0; phantom = true }
+let phantom = lazy { name = ""; line = 0; col  = 0; phantom = true }
 
 (** build a position from an input buffer and a column number *)
-let get_pos : Input.buffer -> Input.pos -> pos = fun b n ->
+let get_pos : Input.buffer -> Input.pos -> t = fun b n ->
   let open Input in
-  { name = filename b;
-    line = line_num b;
-    col = col_num b n;
-    phantom = false
-  }
+  lazy { name = filename b
+       ; line = line_num b
+       ; col = col_num b n
+       ; phantom = false
+       }
 
 type style = OCaml | Short
 
-let print_pos ?(style=OCaml) () ch pos =
+let print_pos ?(style=OCaml) () ch (lazy pos) =
   let open Printf in
   if pos.name = "" then
     let format : (_,_,_) format = match style with
@@ -45,7 +45,8 @@ let print_pos ?(style=OCaml) () ch pos =
     in
     fprintf ch format pos.name pos.line pos.col
 
-let print_interval ?(style=OCaml) () ch { start; end_ } =
+let print_interval ?(style=OCaml) () ch { start = (lazy start)
+                                        ; end_ = (lazy end_) } =
   let open Printf in
   if start.name = "" then
     if start.line = end_.line then

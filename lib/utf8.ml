@@ -3,6 +3,7 @@ type context =
   | UTF8
   | CJK_UTF8
 let width ?(context= UTF8)  c =
+  if Uchar.is_char c then 1 else
   let n = Uchar.to_int c in
   if context = CJK_UTF8
   then

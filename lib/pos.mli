@@ -7,19 +7,19 @@ type pos = { name : string  (** file's name *)
            ; phantom : bool (** is the postion a "phantom", i.e. not really
                                 in the file *) }
 
-type interval = { start : pos; end_ : pos }
+type interval = { start : pos Lazy.t; end_ : pos Lazy.t }
 
 (** Abbreviation *)
-type t = pos
+type t = pos Lazy.t
 
 (** a phantom position, used for grammar accepting the empty input *)
-val phantom : pos
+val phantom : t
 
 (** the max of to position (further in the file *)
 val max_pos : pos -> pos -> pos
 
 (** Get a position from an input buffer and a column number *)
-val get_pos : Input.buffer -> Input.pos -> pos
+val get_pos : Input.buffer -> Input.pos -> t
 
 (** Style for printing positions: *)
 type style = OCaml (** like OCaml *)
@@ -27,7 +27,7 @@ type style = OCaml (** like OCaml *)
 
 (** printting for position *)
 val print_pos
-    : ?style:style -> unit -> out_channel -> pos -> unit
+    : ?style:style -> unit -> out_channel -> t -> unit
 
 (** and interval *)
 val print_interval : ?style:style -> unit -> out_channel -> interval -> unit

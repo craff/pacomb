@@ -81,8 +81,8 @@ let star_pos g =
   let open Pos in
   fixpoint
     (fun r -> rpos(lpos(galt (gseq r g
-                (fun (_,x,_) y lpos rpos -> (lpos.col,x+y,rpos.col)))
-                          (empty (fun lpos rpos -> (lpos.col,0,rpos.col))))))
+       (fun (_,x,_) y (lazy lpos) (lazy rpos) -> (lpos.col,x+y,rpos.col)))
+          (empty (fun (lazy lpos) (lazy rpos) -> (lpos.col,0,rpos.col))))))
 
 let test7 = seq (plus (star_pos (char_a))
                    (term(Lex.char ',' ()))) char_b (fun x _ -> x)

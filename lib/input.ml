@@ -1,19 +1,22 @@
 type context = Utf8.context
 
+type infos =
+  { utf8         : context(* Uses utf8 for positions                 *)
+  ; name         : string (* The name of the buffer (e.g. file name) *)
+  ; uid          : int    (* Unique identifier                       *)
+  }
+
 type line =
-  { is_eof       : bool   (* Has the end of the buffer been reached? *)
-  ; lnum         : int    (* Line number (startig at 1)              *)
-  ; loff         : int    (* Offset to the line ( utf8 or bytes )    *)
+  { lnum         : int    (* Line number (startig at 1)              *)
   ; boff         : int    (* Offset to the line ( bytes )            *)
-  ; coff         : int    (* Offset to the column ( utf8 or bytes )  *)
-  ; llen         : int    (* Length of the buffer                    *)
+  ; coff         : int    (* Offset to the column ( bytes or utf8 )  *)
   ; data         : string (* Contents of the buffer                  *)
   ; mutable next : buffer (* Following line                          *)
-  ; name         : string (* The name of the buffer (e.g. file name) *)
-  ; utf8         : context(* Uses utf8 for positions                 *)
-  ; uid          : int    (* Unique identifier                       *)
-  ; mutable ctnr : Container.t option array}
+  ; mutable ctnr : Container.t option array
                           (* for map table, initialized if used      *)
+  ; infos        : infos  (* infos common to the whole file          *)
+  }
+
 and buffer = line Lazy.t
 
 and pos = int
@@ -26,26 +29,28 @@ let new_uid =
   fun () -> let uid = !c in incr c; uid
 
 (* Emtpy buffer. *)
-let empty_buffer name lnum loff boff =
+let empty_buffer infos lnum boff =
   let rec line = lazy
-    { is_eof = true ; name ; lnum ; loff ; boff; llen = 0; coff = 0
-    ; data = "" ; next = line ; uid = new_uid (); utf8 = ASCII
-    ; ctnr = [||] }
+    { lnum ; boff; coff = 0; data = "" ; next = line ; infos ; ctnr = [||] }
   in line
+
+let is_eof b = b == Lazy.force b.next
+
+let llen b = String.length b.data
 
 (* Test if a buffer is empty. *)
 let rec is_empty (lazy l) pos =
-  if pos < l.llen then false
-  else if pos = 0 then l.is_eof
-  else is_empty l.next (pos - l.llen)
+  if pos < llen l then false
+  else if pos = 0 then is_eof l
+  else is_empty l.next (pos - llen l)
 
 (* Read the character at the given position in the given buffer. *)
 let rec read (lazy l as b) i =
-  if l.is_eof then ('\255', b, 0) else
-  match compare (i+1) l.llen with
+  if is_eof l then ('\255', b, 0) else
+  match compare (i+1) (llen l) with
   | -1 -> (l.data.[i], b     , i+1)
   | 0  -> (l.data.[i], l.next, 0  )
-  | _  -> read l.next (i - l.llen)
+  | _  -> read l.next (i - llen l)
 
 let sub b i len =
   let s = Bytes.create len in
@@ -60,18 +65,15 @@ let sub b i len =
 
 (* Get the character at the given position in the given buffer. *)
 let rec get (lazy l) i =
-  if l.is_eof then '\255' else
-  if i < l.llen then l.data.[i]
-  else get l.next (i - l.llen)
+  if is_eof l then '\255' else
+  if i < llen l then l.data.[i]
+  else get l.next (i - llen l)
 
 (* Get the name of a buffer. *)
-let filename (lazy b) = b.name
+let filename (lazy b) = b.infos.name
 
 (* Get the current line number of a buffer. *)
 let line_num (lazy b) = b.lnum
-
-(* Get the offset of the current line in the full buffer. *)
-let line_offset (lazy b) = b.loff
 
 let byte_pos (lazy b) p = b.boff + p
 
@@ -112,28 +114,30 @@ let utf8_col_num context data i =
 let utf8_len context data = utf8_col_num context data (String.length data)
 
 let col_num (lazy b) p =
-  if b.utf8 <> ASCII then b.coff + utf8_col_num b.utf8 b.data p
+  if b.infos.utf8 <> ASCII then b.coff + utf8_col_num b.infos.utf8 b.data p
     else b.coff + p
-
-let char_pos (lazy b) p =
-  if b.utf8 <> ASCII then b.loff + utf8_col_num b.utf8 b.data p
-    else b.loff + p
 
 (* Ensure that the given position is in the current line. *)
 let rec normalize (lazy b as str) pos =
-  if pos >= b.llen then
-    if b.is_eof then (str, 0)
-    else normalize b.next (pos - b.llen)
+  if pos >= llen b then
+    if is_eof b then (str, 0)
+    else normalize b.next (pos - llen b)
   else (str, pos)
 
 (* Equality of buffers. *)
-let buffer_equal (lazy b1) (lazy b2) = b1.uid = b2.uid
+let buffer_equal (lazy b1) (lazy b2) =
+  b1.infos.uid = b2.infos.uid && b1.lnum = b2.lnum && b1.coff = b2.coff
 
 (* Comparison of buffers. *)
-let buffer_compare (lazy b1) (lazy b2) = b1.uid - b2.uid
+let buffer_compare (lazy b1) (lazy b2) =
+  match b1.lnum - b2.lnum with
+  | 0 -> (match b1.coff - b2.coff with
+          | 0 -> b1.infos.uid - b2.infos.uid
+          | c -> c)
+  | c -> c
 
 (* Get the unique identifier of the buffer. *)
-let buffer_uid (lazy buf) = buf.uid
+let buffer_uid (lazy buf) = buf.infos.uid
 
 module type MinimalInput =
   sig
@@ -203,7 +207,8 @@ module GenericInput(M : MinimalInput) =
 include GenericInput(
   struct
     let from_fun finalise utf8 name get_line file =
-      let rec fn remain name lnum loff boff coff cont =
+      let infos = { utf8; name; uid = new_uid () } in
+      let rec fn remain lnum boff coff cont =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
@@ -214,30 +219,35 @@ include GenericInput(
             let data = if remain <> "" then remain ^ data0 else data0 in
             let llen = String.length data in
             let (remain,data,llen) =
-              if not nl && data0 <> "" && utf8 <> Utf8.ASCII then
+              if not nl && data0 <> "" && infos.utf8 <> Utf8.ASCII then
                 let p = Utf8.prev_grapheme data llen in
                 (String.sub data p (llen - p), String.sub data 0 p, p)
               else
                 ("",data, llen)
             in
-            let len = if utf8 <> Utf8.ASCII then utf8_len utf8 data else llen in
-            let nlnum, ncoff = if nl then (lnum+1, 0) else (lnum, coff + len) in
+            let nlnum, ncoff =
+              if nl then (lnum+1, 0)
+              else
+                let len =
+                  if infos.utf8 <> Utf8.ASCII then utf8_len infos.utf8 data
+                  else llen
+                in (lnum, coff + len)
+            in
             fun () ->
-              { is_eof = false ; lnum ; loff ; boff; coff; llen ; data ; name
-              ; next = lazy (fn remain name nlnum (loff + len)
-                                           (boff + llen) ncoff cont)
-              ; utf8 ; uid = new_uid () ; ctnr = [||] }
+              { lnum ; boff; coff; data ; infos
+              ; next = lazy (fn remain nlnum (boff + llen) ncoff cont)
+              ; ctnr = [||] }
           with End_of_file ->
             finalise file;
-            fun () -> cont name (lnum+1) loff boff
+            fun () -> cont (lnum+1) boff
         end ()
       in
       lazy
         begin
-          let cont name lnum loff boff =
-            Lazy.force (empty_buffer name lnum loff boff)
+          let cont lnum boff =
+            Lazy.force (empty_buffer infos lnum boff)
           in
-          fn "" name 1 0 0 0 cont
+          fn "" 1 0 0 cont
         end
   end)
 
@@ -258,7 +268,8 @@ module type Preprocessor =
 module Make(PP : Preprocessor) =
   struct
     let from_fun finalise utf8 name get_line file =
-      let rec fn remain name lnum loff boff coff st cont =
+      let infos = { utf8; name; uid = new_uid () } in
+      let rec fn remain infos lnum boff coff st cont =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
@@ -269,48 +280,55 @@ module Make(PP : Preprocessor) =
             let data = if remain <> "" then remain ^ data0 else data0 in
             let llen = String.length data in
             let (remain,data) =
-              if not nl && data0 <> "" && utf8 <> Utf8.ASCII then
+              if not nl && data0 <> "" && infos.utf8 <> Utf8.ASCII then
                 let p = Utf8.prev_grapheme data llen in
                 (String.sub data p (llen-p), String.sub data 0 p)
               else
                 ("",data)
             in
-            let (st, name, lnum, res) = PP.update st name lnum data nl in
+            let (st, name, lnum, res) = PP.update st infos.name lnum data nl in
+            let infos =
+              if name <> infos.name then { infos with name } else infos
+            in
             match res with
             | Some data ->
                let llen = String.length data in
-               let len =
-                 if utf8 <> Utf8.ASCII then utf8_len utf8 data else llen
-               in
-               let (nlnum, ncoff) =
-                 if nl then (lnum+1, 0) else (lnum, coff+len)
+               let nlnum, ncoff =
+                 if nl then (lnum+1, 0)
+                 else
+                   let len =
+                     if infos.utf8 <> Utf8.ASCII then utf8_len infos.utf8 data
+                     else llen
+                   in
+                   (lnum, coff + len)
                in
               fun () ->
-                { is_eof = false ; lnum ; loff ; boff; coff; llen ; data ; name
-                ; next = lazy (fn remain name nlnum (loff + len) (boff + llen)
+                { lnum ; boff; coff; data ; infos
+                ; next = lazy (fn remain infos nlnum (boff + llen)
                                  ncoff st cont)
-                ; utf8 ; uid = new_uid () ; ctnr = [||] }
+                ; ctnr = [||] }
             | None ->
-              fun () -> fn remain name lnum loff boff coff st cont
+              fun () -> fn remain infos lnum boff coff st cont
           with End_of_file ->
             finalise file;
-            fun () -> cont name (lnum+1) loff boff st
+            fun () -> cont infos (lnum+1) boff st
         end ()
       in
       lazy
         begin
-          let cont name lnum loff boff st =
-            PP.check_final st name;
-            Lazy.force (empty_buffer name lnum loff boff)
+          let cont infos lnum boff st =
+            PP.check_final st infos.name;
+            Lazy.force (empty_buffer infos lnum boff)
           in
-          fn "" name 1 0 0 0 PP.initial_state cont
+          fn "" infos 1 0 0 PP.initial_state cont
         end
   end
 
 module WithPP(PP : Preprocessor) = GenericInput(Make(PP))
 
-let leq_buf {uid=ident1} i1 {uid=ident2} i2 =
-  (ident1 = ident2 && i1 <= i2) || ident1 < ident2
+let leq_buf {lnum = l1; coff = c1} i1 {lnum =l2; coff = c2} i2 =
+  l1 < l2 ||
+    (l1 = l2 && (c1 < c2 || (c1 = c2 && i1 <= i2)))
 
 let buffer_before b1 i1 b2 i2 = leq_buf (Lazy.force b1) i1 (Lazy.force b2) i2
 
@@ -322,7 +340,7 @@ module Tbl = struct
 
   let ctnr buf pos =
     if buf.ctnr = [||] then
-      buf.ctnr <- Array.make (buf.llen + 1) None;
+      buf.ctnr <- Array.make (llen buf + 1) None;
     let a = buf.ctnr.(pos) in
     match a with
     | None -> let c = Container.create () in buf.ctnr.(pos) <- Some c; c

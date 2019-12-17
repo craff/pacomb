@@ -15,11 +15,10 @@ let%parser rec
         atom = (x::FLOAT)        => x                             (* constant *)
              ; (show_sub=false) '(' (e::expr) ')' => e (*   rule for parenthesis
                                                        when show_sub is false *)
-             ; (show_sub=true) (l::'(') (e::expr) (r::')') =>
-                 let open Pos in                   (* idem with show_sub true *)
-                 Printf.printf "%d-%d: %f\n" l_lpos.col r_rpos.col e;
+             ; (show_sub=true) '(' (e::expr) ')' =>(* idem with show_sub true *)
+                 (Printf.printf "%a: %f\n" (Pos.print_interval ()) _pos e;
                                           (* ^^^^^^ to access position of l   *)
-                 e
+                  e)
 
 (* Here is the grammar for products *)
 and prod = (a::atom)               => a

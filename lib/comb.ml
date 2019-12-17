@@ -235,7 +235,7 @@ let app : type a b. b cont -> (a -> b) -> a cont = fun k f ->
     | C(k,tr)    -> C(k,app tr f)
     | P(k,tr,rp) -> P(k,app tr f,rp)
 
-let posk : type a. a cont -> (Pos.pos -> a) cont = fun k ->
+let posk : type a. a cont -> (Pos.t -> a) cont = fun k ->
   let pos tr rp = if has_lrg tr then Pos'(tr,rp) else Pos(tr,rp) in
   match k with
   | C(k,tr)    -> let rp = ref Pos.phantom in P(k,pos tr rp,rp)
@@ -763,7 +763,7 @@ let gen_parse_buffer
                   -> Lex.buf -> Lex.pos -> (a * Lex.buf * Lex.pos) list =
   fun g blank_fun ?(blank_after=false) buf0 col0 ->
     (** environment initialisation *)
-    let p0 = Input.char_pos buf0 col0 in
+    let p0 = Input.byte_pos buf0 col0  in
     let max_pos = ref (p0, buf0, col0, ref []) in
     let (buf, col) = blank_fun buf0 col0 in
     let env =
