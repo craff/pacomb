@@ -424,31 +424,31 @@ and left_factorise : type a.a t list -> a t list = fun l ->
     | Seq(l1, r1), Seq(l2,r2) ->
        begin
          match eq l1 l2 with
-         | Eq -> common_prefix (PC(l1,acc)) r1 r2
+         | Assoc.Eq -> common_prefix (PC(l1,acc)) r1 r2
          | _  -> recompose acc g1 g2
        end
     | Seq(l1, r1), Appl(g2',f) ->
        begin
          match eq l1 g2' with
-         | Eq -> recompose (PC(l1,acc)) r1 (empty f)
+         | Assoc.Eq -> recompose (PC(l1,acc)) r1 (empty f)
          | _  -> recompose acc g1 g2
        end
     | Seq(l1, r1), _ ->
        begin
          match eq l1 g2 with
-         | Eq -> recompose (PC(l1,acc)) r1 (empty (fun x -> x))
+         | Assoc.Eq -> recompose (PC(l1,acc)) r1 (empty (fun x -> x))
          | _  -> recompose acc g1 g2
        end
     | Appl(g1',f), Seq(l2, r2) ->
        begin
          match eq l2 g1' with
-         | Eq -> recompose (PC(l2,acc)) (empty f) r2
+         | Assoc.Eq -> recompose (PC(l2,acc)) (empty f) r2
          | _  -> recompose acc g1 g2
        end
     | _, Seq(l2, r2) ->
        begin
          match eq l2 g1 with
-         | Eq -> recompose (PC(l2,acc)) (empty (fun x -> x)) r2
+         | Assoc.Eq -> recompose (PC(l2,acc)) (empty (fun x -> x)) r2
          | _  -> recompose acc g1 g2
        end
     | _ -> recompose acc g1 g2
