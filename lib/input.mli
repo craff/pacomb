@@ -112,7 +112,12 @@ val is_empty : buffer -> int -> bool
 (** [line_num buf] returns the current line number of [buf]. *)
 val line_num : buffer -> int
 
+(** [col_num buf n] returns the current line number of [(buf,n)]. *)
 val col_num : buffer -> pos -> int
+
+(** same as above, but lazy, however does not keep pointer to the whole buffer,
+    extract the minimum needed infos *)
+val lazy_col_num : buffer -> pos -> int Lazy.t
 
 (** position in bytes, regardless to utf8 *)
 val byte_pos : buffer -> pos -> int

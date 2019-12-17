@@ -22,11 +22,10 @@ let phantom = lazy { name = ""; line = 0; col  = 0; phantom = true }
 (** build a position from an input buffer and a column number *)
 let get_pos : Input.buffer -> Input.pos -> t = fun b n ->
   let open Input in
-  lazy { name = filename b
-       ; line = line_num b
-       ; col = col_num b n
-       ; phantom = false
-       }
+  let name = filename b in
+  let line = line_num b in
+  let col = lazy_col_num b n in
+  lazy { name ; line ; col = Lazy.force col ; phantom = false }
 
 type style = OCaml | Short
 

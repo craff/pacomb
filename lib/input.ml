@@ -113,9 +113,16 @@ let utf8_col_num context data i =
 
 let utf8_len context data = utf8_col_num context data (String.length data)
 
+let lazy_col_num (lazy b) p =
+  let infos = b.infos in
+  let data = b.data in
+  let coff = b.coff in
+  if infos.utf8 <> ASCII then lazy (coff + utf8_col_num infos.utf8 data p)
+  else Lazy.from_val (coff + p)
+
 let col_num (lazy b) p =
   if b.infos.utf8 <> ASCII then b.coff + utf8_col_num b.infos.utf8 b.data p
-    else b.coff + p
+  else b.coff + p
 
 (* Ensure that the given position is in the current line. *)
 let rec normalize (lazy b as str) pos =
