@@ -201,9 +201,11 @@ val accept_empty : 'a t -> bool
 val test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool
 val blank_test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool
 
-(** equality *)
+(** equality, incomplete in particular for "alt" *)
 val eq : 'a t -> 'b t -> ('a,'b) Assoc.eq
 
+(** If you build custom lexeme, you need to use this to fill the
+    [a] field of the record *)
 val custom : 'a lexeme -> 'a ast
 
 (** where to put it ... *)
