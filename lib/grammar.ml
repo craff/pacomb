@@ -106,6 +106,38 @@ type 'a grammar =
        when we discover they are mutually left dependant *)
    | ELr   : 'a key * mlr Uf.t -> 'a grne
 
+let rec eq : type a b.a grammar -> b grammar -> (a, b) Assoc.eq =
+  fun g1 g2 ->
+    match g1.k.eq g2.k.tok with
+    | Eq -> Eq
+    | NEq ->
+       begin
+         match g1.d, g2.d with
+         | Term t1, Term t2 -> Lex.eq t1 t2
+         | Seq(g11,g12), Seq(g21,g22) ->
+            begin
+              match eq g11 g21, eq g12 g22 with
+              | Eq, Eq -> Eq
+              | _ -> NEq
+            end
+         | LPos(None,g1), LPos(None,g2) ->
+            begin
+              match eq g1 g2 with
+              | Eq -> Eq | _ -> NEq
+            end
+         | RPos(g1), RPos(g2) ->
+            begin
+              match eq g1 g2 with
+              | Eq -> Eq | _ -> NEq
+            end
+         | Eval(g1), Eval(g2) ->
+            begin
+              match eq g1 g2 with
+              | Eq -> Eq | _ -> NEq
+            end
+         | _ -> NEq
+       end
+
 (** grammar renaming *)
 let give_name n g = { g with n }
 
@@ -335,8 +367,6 @@ let lpos ?name ?pk g = mkg ?name (if g.d = Fail then Fail else LPos(pk,g))
 
 let rpos ?name g = mkg ?name (if g.d = Fail then Fail else RPos(g))
 
-let eqg g1 g2 = g1.k.eq g2.k.tok
-
 type (_,_) plist =
   | PE : ('a, 'a) plist
   | PC : 'a t * ('b, 'c) plist -> ('a -> 'b,'c) plist
@@ -392,31 +422,31 @@ and left_factorise : type a.a t list -> a t list = fun l ->
     | _, RPos(g2) -> common_prefix (PR acc) (appl g1 (fun f _ -> f)) g2
     | Seq(l1, r1), Seq(l2,r2) ->
        begin
-         match eqg l1 l2 with
+         match eq l1 l2 with
          | Eq -> common_prefix (PC(l1,acc)) r1 r2
          | _  -> recompose acc g1 g2
        end
     | Seq(l1, r1), Appl(g2',f) ->
        begin
-         match eqg l1 g2' with
+         match eq l1 g2' with
          | Eq -> recompose (PC(l1,acc)) r1 (empty f)
          | _  -> recompose acc g1 g2
        end
     | Seq(l1, r1), _ ->
        begin
-         match eqg l1 g2 with
+         match eq l1 g2 with
          | Eq -> recompose (PC(l1,acc)) r1 (empty (fun x -> x))
          | _  -> recompose acc g1 g2
        end
     | Appl(g1',f), Seq(l2, r2) ->
        begin
-         match eqg l2 g1' with
+         match eq l2 g1' with
          | Eq -> recompose (PC(l2,acc)) (empty f) r2
          | _  -> recompose acc g1 g2
        end
     | _, Seq(l2, r2) ->
        begin
-         match eqg l2 g1 with
+         match eq l2 g1 with
          | Eq -> recompose (PC(l2,acc)) (empty (fun x -> x)) r2
          | _  -> recompose acc g1 g2
        end
@@ -1107,7 +1137,7 @@ let compile g = compile false g
 let grammar_name g = g.n
 
 (** functions to actually use the parser *)
-let add_eof g = seq g (term (eof (fun x -> x)))
+let add_eof g = seq g (appl (term (eof ())) (fun _ x -> x))
 
 (* NOTE: cs with blank_after = false makes no sense ? *)
 let partial_parse_buffer

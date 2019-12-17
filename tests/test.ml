@@ -21,9 +21,9 @@ let assert_fail f =
   try ignore (f ()); assert false with Pos.Parse_error _ -> ()
 
 let seq g1 g2 f = seq g1 (appl g2 (fun y x -> f x y))
-let char_a = term(Lex.char 'a' 1)
-let char_b = term(Lex.char 'b' 1)
-let char_c = term(Lex.char 'c' 1)
+let char_a = term(Lex.appl (fun _ -> 1) (Lex.char 'a'))
+let char_b = term(Lex.appl (fun _ -> 1) (Lex.char 'b'))
+let char_c = term(Lex.appl (fun _ -> 1) (Lex.char 'c'))
 
 let na n = String.make n 'a'
 
@@ -73,7 +73,7 @@ let plus g sep =
   let g' = appl g (fun x -> [x]) in
   fixpoint (fun r -> alt [seq r (seq2 sep g) (fun y x -> x::y); g'])
 
-let test6 = plus (star (char_a)) (term(Lex.char ',' ()))
+let test6 = plus (star (char_a)) (term(Lex.char ','))
 
 let star_pos g =
   let gseq = seq in
@@ -85,7 +85,7 @@ let star_pos g =
           (empty (fun (lazy lpos) (lazy rpos) -> (lpos.col,0,rpos.col))))))
 
 let test7 = seq (plus (star_pos (char_a))
-                   (term(Lex.char ',' ()))) char_b (fun x _ -> x)
+                   (term(Lex.char ','))) char_b (fun x _ -> x)
 
 let test8 = fixpoint
               (fun r -> alt [empty 0
@@ -175,8 +175,8 @@ let test15 = term (Lex.float ())
 let test16 = term (Lex.char_lit ())
 let test17 = term (Lex.string_lit ())
 
-let test18a = alt [empty (); term (Lex.char 'a' ())]
-let test18 = seq (term (Lex.char 'a' ()))
+let test18a = alt [empty (); term (Lex.char 'a')]
+let test18 = seq (term (Lex.char 'a'))
                (seq test18a test18a (fun _ _ -> ()))
                (fun _ _ -> ())
 

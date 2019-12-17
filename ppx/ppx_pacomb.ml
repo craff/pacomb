@@ -108,17 +108,17 @@ let rec exp_to_term exp =
   let loc = exp.pexp_loc in
   match exp with
   | {pexp_desc = Pexp_constant (Pconst_char _)} ->
-     [%expr Pacomb.Grammar.term (Pacomb.Lex.char [%e exp] ())]
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.char [%e exp])]
   | [%expr CHAR] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.any ())]
   | [%expr CHAR([%e? s])] ->
-     [%expr Pacomb.Grammar.term (Pacomb.Lex.char [%e s] ())]
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.char [%e s])]
   | [%expr CHARSET([%e? s])] ->
-     [%expr Pacomb.Grammar.term (Pacomb.Lex.charset [%e s] ())]
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.charset [%e s])]
   | {pexp_desc = Pexp_constant (Pconst_string _)} ->
-     [%expr Pacomb.Grammar.term (Pacomb.Lex.string [%e exp] ())]
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.string [%e exp])]
   | [%expr STR([%e? s])] ->
-     [%expr Pacomb.Grammar.term (Pacomb.Lex.string [%e s] ())]
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.string [%e s])]
   | [%expr NAT] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.nat ())]
   | [%expr INT] ->
@@ -132,11 +132,11 @@ let rec exp_to_term exp =
   | [%expr UTF8] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.any_utf8 ())]
   | [%expr UTF8([%e? c])] ->
-     [%expr Pacomb.Grammar.term (Pacomb.Lex.utf8 [%e c] ())]
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.utf8 [%e c])]
   | [%expr GRAPHEME] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.any_grapheme ())]
   | [%expr GRAPHEME([%e? c])] ->
-     [%expr Pacomb.Grammar.term (Pacomb.Lex.grapheme [%e c] ())]
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.grapheme [%e c])]
   | [%expr EOF] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.eof ())]
   | [%expr RE([%e? s])] ->

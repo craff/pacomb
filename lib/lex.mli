@@ -23,14 +23,40 @@ type pos = Input.pos
 (** Type of terminal function, similar to blank, but with a returned value *)
 type 'a lexeme = buf -> pos -> 'a * buf * pos
 
-(** The previous type encapsulated in a record *)
-type 'a terminal = { n : string    (** name *)
-                   ; f : 'a lexeme (** the terminal itself *)
-                   ; c : Charset.t (** the set of characters accepted
-                                       at the beginning of input *) }
+type _ ast =
+  | Any : char ast
+  | Any_utf8 : Uchar.t ast
+  | Any_grapheme : string ast
+  | Eof : unit ast
+  | Char : char -> unit ast
+  | Grapheme : string -> unit ast
+  | String : string -> unit ast
+  | Nat : int ast
+  | Int : int ast
+  | Float : float ast
+  | CharLit : char ast
+  | StringLit : string ast
+  | Test : (char -> bool) -> char ast
+  | NotTest : (char -> bool) -> unit ast
+  | Seq : 'a t * 'b t * ('a -> 'b -> 'c) * 'c Assoc.key -> 'c ast
+  | Alt : 'a t * 'a t -> 'a ast
+  | Save : 'a t * (string -> 'a -> 'b) * 'b Assoc.key -> 'b ast
+  | Option : 'a * 'a t -> 'a ast
+  | Appl : 'a t * ('a -> 'b) * 'b Assoc.key -> 'b ast
+  | Star : 'a t * (unit -> 'b) * ('b -> 'a -> 'b) * 'b Assoc.key -> 'b ast
+  | Plus : 'a t * (unit -> 'b) * ('b -> 'a -> 'b) * 'b Assoc.key -> 'b ast
+  | Keyword : string * int -> unit ast
+  | Custom : 'a lexeme * 'a Assoc.key -> 'a ast
+
+(** The previous types encapsulated in a record *)
+and 'a terminal = { n : string    (** name *)
+                  ; f : 'a lexeme (** the terminal itself *)
+                  ; a : 'a ast
+                  ; c : Charset.t (** the set of characters accepted
+                                      at the beginning of input *) }
 
 (** Abbreviation *)
-type 'a t = 'a terminal
+and 'a t = 'a terminal
 
 (** exception when failing,
     - can be raised (but not captured) by terminal
@@ -56,12 +82,12 @@ val any : ?name:string -> unit -> char t
 (** Terminal accepting the end of a buffer only.  remark: [eof] is automatically
     added at the end of  a grammar by [Combinator.parse_buffer].
     [name] default is ["EOF"] *)
-val eof : ?name:string -> 'a -> 'a t
+val eof : ?name:string -> unit -> unit t
 
 (** Terminal  accepting a  given char,  remark: [char  '\255'] is  equivalent to
     [eof].
     [name] default is the given charater. *)
-val char : ?name:string -> char -> 'a -> 'a t
+val char : ?name:string -> char -> unit t
 
 (**  Accept a  character  for  which the  test  returns  [true].
     [name]  default to the result of [Charset.show]. *)
@@ -73,12 +99,12 @@ val charset : ?name:string -> Charset.t -> char t
 (** Reject  the input  (raises [Noparse])  if the first  character of  the input
     passed the  test. Does  not read  the character if  the test  fails.
     [name] default to ["^"] prepended to the result of [Charset.show]. *)
-val not_test : ?name:string -> (char -> bool) -> 'a -> 'a t
+val not_test : ?name:string -> (char -> bool) -> unit t
 
 (** Reject the input  (raises [Noparse]) if the first character  of the input is
     in the charset. Does  not read the character if not  in the charset.
     [name] default as in [not_test] *)
-val not_charset : ?name:string -> Charset.t -> 'a -> 'a t
+val not_charset : ?name:string -> Charset.t -> unit t
 
 (** Compose  two terminals in sequence.  [name] default is the  concatenation of
     the two names. *)
@@ -126,7 +152,7 @@ val plus : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t
 (** [string s] Accepts only the given string.
     Raises [Invalid_argument] if [s = ""].
     [name] defaults to [sprintf "%S" s]. *)
-val string : ?name:string -> string -> 'a -> 'a t
+val string : ?name:string -> string -> unit t
 
 (** Parses an natural in base 10. ["-42"] and ["-42"] are not accepted.
     [name] defaults to ["NAT"] *)
@@ -152,25 +178,20 @@ val string_lit : ?name:string -> unit -> string t
     [name] defaults to ["UTF8"] *)
 val any_utf8 : ?name:string -> unit -> Uchar.t t
 
-(** [utf8 c x] parses a specific unicode char and returns [x],
+(** [utf8 c] parses a specific unicode char and returns [()],
     [name] defaults to the string representing the char *)
-val utf8 : ?name:string -> Uchar.t -> 'a -> 'a t
+val utf8 : ?name:string -> Uchar.t -> unit t
 
 (** Parses any utf8 grapheme.
     [name] defaults to ["GRAPHEME"] *)
 val any_grapheme : ?name:string -> unit -> string t
 
-(** [grapheme s x] parses the given utf8 grapheme and return [x].
+(** [grapheme s] parses the given utf8 grapheme and return [()].
     The difference with [string s x] is that if the input starts
     with a grapheme [s'] such that [s] is a strict prefix of [s'],
     parsing will fail.
     [name] defaults to ["GRAPHEME("^s^")"] *)
-val grapheme : ?name:string -> string -> 'a -> 'a t
-
-(** [keyword ~name k cs x = seq ~name (string  k ()) (test f ()) (fun _ _ -> x)]
-     usefull to  accept a  keyword only  when not  followed by  an alpha-numeric
-     char *)
-val keyword : ?name:string -> string -> (char -> bool) -> 'a -> 'a t
+val grapheme : ?name:string -> string -> unit t
 
 (** Test wether a terminal accept the  empty string. Such a terminal are illegal
    in a grammar, but may be used in combinator below to create terminals *)
@@ -179,6 +200,11 @@ val accept_empty : 'a t -> bool
 (** Test constructor for the test constructor in [Grammar] *)
 val test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool
 val blank_test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool
+
+(** equality *)
+val eq : 'a t -> 'b t -> ('a,'b) Assoc.eq
+
+val custom : 'a lexeme -> 'a ast
 
 (** where to put it ... *)
 val default : 'a -> 'a option -> 'a

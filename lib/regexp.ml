@@ -129,7 +129,7 @@ let from_regexp_grps : ?grps:int list -> regexp -> string list Lex.t =
          else r
     in
     let rec fn = function
-      | Chr c -> char c []
+      | Chr c -> appl (fun _ -> []) (char c)
       | Set s -> appl (fun _ -> []) (charset s)
       | Alt l -> alts (List.map fn l)
       | Seq l -> seqs (List.map fn l) (@)

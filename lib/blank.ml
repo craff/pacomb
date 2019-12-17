@@ -29,7 +29,7 @@ let from_terminal : 'a Lex.t -> blank =
 
 let line_comments : ?cs:Charset.t -> string -> blank =
   fun ?(cs=Charset.from_string " \t\n\r")  start_comment ->
-    let start_comment = (Lex.string start_comment ()).f in
+    let start_comment = (Lex.string start_comment).f in
     fun s n ->
       let rec fn s n =
         let (c,s',n') = Input.read s n in

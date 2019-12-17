@@ -24,9 +24,9 @@ let gamma_gen n =
 
 let parse_string c = parse_string c (Blank.from_charset (Charset.singleton ' '))
 
-let char_a = term(Lex.char 'a' 1)
-let char_b = term(Lex.char 'b' 1)
-let char_c = term(Lex.char 'c' 1)
+let char_a = term(Lex.appl (fun _ -> 1) (Lex.char 'a'))
+let char_b = term(Lex.appl (fun _ -> 1) (Lex.char 'b'))
+let char_c = term(Lex.appl (fun _ -> 1) (Lex.char 'c'))
 
 let%parser [@cache] rec g =   () => ()
                        ; 'a' g 'b' => ()

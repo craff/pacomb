@@ -16,13 +16,88 @@ let give_up : ?msg:string -> unit -> 'a = fun ?msg () ->
   match msg with None -> raise NoParse
                | Some s -> raise (Give_up s)
 
-(** Terminal: same as blank with a value returned *)
 type 'a lexeme = buf -> pos -> 'a * buf * pos
-type 'a terminal = { n : string    (** name *)
+
+type _ ast =
+  | Any : char ast
+  | Any_utf8 : Uchar.t ast
+  | Any_grapheme : string ast
+  | Eof : unit ast
+  | Char : char -> unit ast
+  | Grapheme : string -> unit ast
+  | String : string -> unit ast
+  | Nat : int ast
+  | Int : int ast
+  | Float : float ast
+  | CharLit : char ast
+  | StringLit : string ast
+  | Test : (char -> bool) -> char ast
+  | NotTest : (char -> bool) -> unit ast
+  | Seq : 'a t * 'b t * ('a -> 'b -> 'c) * 'c Assoc.key -> 'c ast
+  | Alt : 'a t * 'a t -> 'a ast
+  | Save : 'a t * (string -> 'a -> 'b) * 'b Assoc.key -> 'b ast
+  | Option : 'a * 'a t -> 'a ast
+  | Appl : 'a t * ('a -> 'b) * 'b Assoc.key -> 'b ast
+  | Star : 'a t * (unit -> 'b) * ('b -> 'a -> 'b) * 'b Assoc.key -> 'b ast
+  | Plus : 'a t * (unit -> 'b) * ('b -> 'a -> 'b) * 'b Assoc.key -> 'b ast
+  | Keyword : string * int -> unit ast
+  | Custom : 'a lexeme * 'a Assoc.key -> 'a ast
+
+(** Terminal: same as blank with a value returned *)
+and 'a terminal = { n : string    (** name *)
                    ; f : 'a lexeme (** the terminal itself *)
+                   ; a : 'a ast
                    ; c : Charset.t (** the set of characters accepted
-                                       at the beginning of input *) }
-type 'a t = 'a terminal
+                                       at the beginning of input *)
+                   }
+
+and 'a t = 'a terminal
+
+let custom fn = Custom(fn, Assoc.new_key ())
+
+let rec eq : type a b.a t -> b t -> (a,b) Assoc.eq =
+  fun a b ->
+    let open Assoc in
+    match (a.a, b.a) with
+    | Any, Any -> Eq
+    | Any_utf8, Any_utf8 -> Eq
+    | Any_grapheme, Any_grapheme -> Eq
+    | Eof, Eof -> Eq
+    | Char c1, Char c2 -> if c1 = c2 then Eq else NEq
+    | Grapheme s1, Grapheme s2 -> if s1 = s2 then Eq else NEq
+    | String s1, String s2 -> if s1 = s2 then Eq else NEq
+    | Nat, Nat -> Eq
+    | Int, Int -> Eq
+    | Float, Float -> Eq
+    | CharLit, CharLit -> Eq
+    | StringLit, StringLit -> Eq
+    | Test af, Test bf -> if af == bf then Eq else NEq
+    | NotTest af, NotTest bf -> if af == bf then Eq else NEq
+    | Seq(_,_,_,ak), Seq(_,_,_,bk) -> ak.eq bk.tok
+    | Alt(a1,a2), Alt(b1,b2) ->
+       begin
+         match eq a1 b1, eq a2 b2 with
+         | Eq, Eq -> Eq
+         | _      -> NEq
+       end
+    | Save(_,_,ak), Save(_,_,bk) -> ak.eq bk.tok
+    | Option(ad,a1), Option(bd,b1) ->
+       begin
+         match eq a1 b1 with
+         | Eq -> if ad == bd then Eq else NEq
+         | _ -> NEq
+       end
+    | Appl(_,_,ak), Appl(_,_,bk) -> ak.eq bk.tok
+    | Star(_,_,_,ak), Star(_,_,_,bk) -> ak.eq bk.tok
+    | Plus(_,_,_,ak), Plus(_,_,_,bk) -> ak.eq bk.tok
+    | Keyword(s1,uid1), Keyword(s2,uid2) -> if s1 = s2 && uid1 = uid2 then Eq else NEq
+    | Custom(af,ak), Custom(bf,bk) ->
+       begin
+         match ak.eq bk.tok with
+         | Eq when af == bf -> Eq
+         | _ -> NEq
+       end
+    | _ -> NEq
 
 let s0 = Input.from_string ""
 let s1 = Input.from_string "\255 "(* for eof to passe the test *)
@@ -49,29 +124,33 @@ let blank_test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool =
 let any : ?name:string -> unit -> char t = fun ?(name="ANY") () ->
   { n = name
   ; c = Charset.full
+  ; a = Any
   ; f = fun s n -> let (c,_,_ as res) = Input.read s n
-                   in if c = '\255' then raise NoParse else res}
+                   in if c = '\255' then raise NoParse else res
+  }
 
 (** Terminal accepting then end of a buffer only.
     remark: [eof] is automatically added at the end of a grammar by
     [Combinator.parse_buffer]. *)
-let eof : ?name:string -> 'a -> 'a t = fun ?(name="EOF") x ->
+let eof : ?name:string -> unit -> unit t = fun ?(name="EOF") () ->
   { n = name
   ; c = Charset.singleton '\255'
+  ; a = Eof
   ; f = fun s n -> let (c,s,n) = Input.read s n in
-                   if c = '\255' then (x,s,n) else raise NoParse
+                   if c = '\255' then ((),s,n) else raise NoParse
   }
 
 let sp = Printf.sprintf
 
 (** Terminal accepting a given char, remark: [char '\255'] is equivalent to
     [eof]. *)
-let char : ?name:string -> char -> 'a -> 'a t = fun ?name c x ->
+let char : ?name:string -> char -> unit t = fun ?name c ->
   { n = default (sp "%C" c) name
   ; c = Charset.singleton c
+  ; a = Char c
   ; f = fun s n ->
         let (c',s,n) = Input.read s n in
-        if c = c' then (x,s,n) else raise NoParse
+        if c = c' then ((),s,n) else raise NoParse
   }
 
 let charset_from_test f =
@@ -85,6 +164,7 @@ let charset_from_test f =
 let any_utf8 : ?name:string -> unit -> Uchar.t t = fun ?name () ->
   { n = default "UTF8" name
   ; c = Charset.full
+  ; a = Any_utf8
   ; f = fun s n ->
         let (c1,s,n) = Input.read s n in
         if c1 = '\255' then raise NoParse;
@@ -133,10 +213,11 @@ let any_utf8 : ?name:string -> unit -> Uchar.t t = fun ?name () ->
   }
 
 (** [string s] Accepts only the given string.*)
-let string : ?name:string -> string -> 'a -> 'a t = fun ?name k x ->
+let string : ?name:string -> string -> unit t = fun ?name k ->
   if k = "" then invalid_arg "Lex.string: empty string";
   { n = default (sp "%S" k) name
   ; c = Charset.singleton k.[0]
+  ; a = String k
   ; f = fun s n ->
         let l = String.length k in
         let rec fn i s n =
@@ -146,14 +227,15 @@ let string : ?name:string -> string -> 'a -> 'a t = fun ?name k x ->
             fn (i+1) s n
         in
         let (s,n) = fn 0 s n in
-        (x,s,n) }
+        ((),s,n) }
 
-let utf8 : ?name:string -> Uchar.t -> 'a -> 'a t = fun ?name k x ->
-  string ?name (Utf8.encode k) x
+let utf8 : ?name:string -> Uchar.t -> unit t = fun ?name k ->
+  string ?name (Utf8.encode k)
 
 let any_grapheme : ?name:string -> unit -> string t = fun ?name () ->
   { n = default "GRAPHEME" name
   ; c = Charset.full
+  ; a = Any_grapheme
   ; f = fun s n ->
         let rec fn acc s n =
           try
@@ -170,19 +252,21 @@ let any_grapheme : ?name:string -> unit -> string t = fun ?name () ->
           (String.concat "" (List.rev_map Utf8.encode l),s, n)
         with Invalid_argument _ -> raise NoParse }
 
-let grapheme : ?name:string -> string -> 'a -> 'a t = fun ?name k x ->
+let grapheme : ?name:string -> string -> unit t = fun ?name k ->
   if k = "" then invalid_arg "Lex.grapheme: empty string";
   { n = default ("GRAPHEME("^k^")") name
   ; c = Charset.singleton k.[0]
+  ; a = Grapheme k
   ; f = fun s n ->
         let (k',s,n) = (any_grapheme ()).f s n in
-        if k = k' then (x,s,n) else raise NoParse }
+        if k = k' then ((),s,n) else raise NoParse }
 
 (** Accept a character for which the test returns [true] *)
 let test : ?name:string -> (char -> bool) -> char t = fun ?name f ->
   let cs = charset_from_test f in
   { n = default (Charset.show cs) name
   ; c = charset_from_test f
+  ; a = Test f
   ; f = fun s n ->
         let (c,s,n) = Input.read s n in
         if f c then (c, s, n)
@@ -195,26 +279,28 @@ let charset : ?name:string -> Charset.t -> char t = fun ?name cs ->
 
 (** Reject the input (raises [Noparse]) if the first character of the input
     passed the test. Does not read the character if the test fails. *)
-let not_test : ?name:string -> (char -> bool) -> 'a -> 'a t =
-  fun ?name f a ->
+let not_test : ?name:string -> (char -> bool) -> unit t =
+  fun ?name f ->
   let cs = charset_from_test f in
   { n = default (sp "^%s" (Charset.show cs)) name
   ; c = Charset.complement cs
+  ; a = NotTest f
   ; f = fun s n ->
         let (c,_,_) = Input.read s n in
-        if (f c) then raise NoParse else (a, s, n)
+        if (f c) then raise NoParse else ((), s, n)
   }
 
 (** Reject the input (raises [Noparse]) if the first character of the input
     is in the charset. Does not read the character if not in the charset. *)
-let not_charset : ?name:string -> Charset.t -> 'a -> 'a t =
-  fun ?name cs a -> not_test ?name (Charset.mem cs) a
+let not_charset : ?name:string -> Charset.t -> unit t =
+  fun ?name cs -> not_test ?name (Charset.mem cs)
 
 (** Compose two terminals in sequence *)
 let seq : ?name:string -> 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t =
   fun ?name t1 t2 f ->
   { n = default (sp "%s%s" t1.n t2.n) name
   ; c = if accept_empty t1 then Charset.union t1.c t2.c else t1.c
+  ; a = Seq(t1, t2, f, Assoc.new_key ())
   ; f = fun s n ->
         let (s1,s,n) = t1.f s n in
         let (s2,s,n) = t2.f s n in
@@ -228,6 +314,7 @@ let alt : ?name:string -> 'a t -> 'a t -> 'a t =
   fun ?name t1 t2 ->
   { n = default (sp "(%s)|(%s)" t1.n t2.n) name
   ; c = Charset.union t1.c t2.c
+  ; a = Alt(t1, t2)
   ; f = fun s n ->
         try
           let (_,s1,n1 as r1) = t1.f s n in
@@ -244,6 +331,7 @@ let save : ?name:string -> 'a t -> (string -> 'a -> 'b) -> 'b t =
   fun ?name t1 f ->
   { n = default t1.n name
   ; c = t1.c
+  ; a = Save(t1,f, Assoc.new_key ())
   ; f = fun s n ->
         let (l,s1,n1) = t1.f s n in
         let len = Input.byte_pos s1 n1 - Input.byte_pos s n in
@@ -255,6 +343,7 @@ let option : ?name:string -> 'a -> 'a t -> 'a t =
   fun ?name d t ->
   { n = default (sp "(%s)?" t.n) name
   ; c = Charset.full
+  ; a = Option(d,t)
   ; f = fun s n ->
         try let (x,s,n) = t.f s n in (x,s,n)
         with NoParse -> (d,s,n) }
@@ -264,6 +353,7 @@ let appl : ?name: string -> ('a -> 'b) -> 'a t -> 'b t =
   fun ?name f t ->
   { n = default t.n name
   ; c = t.c
+  ; a = Appl(t, f, Assoc.new_key ())
   ; f = fun s n -> let (x,s,n) = t.f s n in (f x,s,n) }
 
 (** [star t a f] Repetition of a given terminal 0,1 or more times. *)
@@ -271,6 +361,7 @@ let star : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
   fun ?name t a f ->
   { n = default (sp "(%s)*" t.n) name
   ; c = t.c
+  ; a = Star(t,a,f, Assoc.new_key ())
   ; f = fun s n ->
         let rec fn a s n =
           (try
@@ -289,6 +380,7 @@ let plus : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
   fun ?name t a f ->
   { n = default (sp "(%s)*" t.n) name
   ; c = t.c
+  ; a = Plus(t,a,f, Assoc.new_key ())
   ; f = fun s n ->
         let rec fn a s n =
           (try
@@ -307,6 +399,7 @@ let plus : ?name:string -> 'a t -> (unit -> 'b) -> ('b -> 'a -> 'b) -> 'b t =
 let nat : ?name:string -> unit -> int t = fun ?name () ->
   { n = default "NAT" name
   ; c = Charset.from_string "-+0-9"
+  ; a = Nat
   ; f = fun s n ->
         let r = ref 0 in
         let (c,s,n) = Input.read s n in
@@ -326,6 +419,7 @@ let nat : ?name:string -> unit -> int t = fun ?name () ->
 let int : ?name:string -> unit -> int t = fun ?name () ->
   { n = default "INT" name
   ; c = Charset.from_string "-+0-9"
+  ; a = Int
   ; f = fun s n ->
         let r = ref 0 in
         let f = ref (fun x -> x) in
@@ -352,6 +446,7 @@ let int : ?name:string -> unit -> int t = fun ?name () ->
 let float : ?name:string -> unit -> float t = fun ?name () ->
   { n = default "FLOAT" name
   ; c = Charset.from_string "-+0-9."
+  ; a = Float
   ; f = fun s0 n0 ->
         let b = Buffer.create 16 in
         let found_digit = ref false in
@@ -459,6 +554,7 @@ let escaped = fun c s n ->
 let char_lit : ?name:string -> unit -> char t = fun ?name () ->
   { n = default "CHARLIT" name
   ; c = Charset.singleton '\''
+  ; a = CharLit
   ; f = fun s n ->
         let (c,s,n) = Input.read s n in
         if c <> '\'' then raise NoParse;
@@ -484,6 +580,7 @@ let rec skip_newline c s0 n0 =
 let string_lit : ?name:string -> unit -> string t = fun ?name () ->
   { n = default "STRINTLIT" name
   ; c = Charset.singleton '"'
+  ; a = StringLit
   ; f = fun s n ->
         let (c,s,n) = Input.read s n in
         if c <> '"' then raise NoParse;
@@ -515,9 +612,3 @@ let seqs : 'a t list -> ('a -> 'a -> 'a) -> 'a t = fun l f ->
   | [r] -> r
   | r::l -> seq r (fn l) f
   in fn l
-
-
-(** keyword *)
-let keyword : ?name:string -> string -> (char -> bool) -> 'a -> 'a t =
-  fun ?name k f x ->
-    seq ?name (string k ()) (not_test f ()) (fun _ _ -> x)

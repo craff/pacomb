@@ -4,9 +4,13 @@ module type Spec =
     val reserved : string list
   end
 
+let keyword_uid = ref 0
+
 module Make(S : Spec) =
   struct
     let reserved : string list ref = ref S.reserved
+
+    let uid = incr keyword_uid; !keyword_uid
 
     let mem : string -> bool = fun s ->
       List.mem s !reserved
@@ -32,7 +36,8 @@ module Make(S : Spec) =
         if Charset.mem S.id_charset c then Lex.give_up ();
         ((), !str, !pos)
       in
-      Grammar.term { n = s; f = fn ; c = Charset.singleton s.[0] }
+      Grammar.term { n = s; f = fn ; a = Keyword(s,uid);
+                     c = Charset.singleton s.[0] }
 
     let create : string -> unit Grammar.t = fun s ->
       if mem s then invalid_arg "keyword already defined";
