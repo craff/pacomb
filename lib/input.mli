@@ -115,10 +115,6 @@ val line_num : buffer -> int
 (** [col_num buf n] returns the current line number of [(buf,n)]. *)
 val col_num : buffer -> pos -> int
 
-(** same as above, but lazy, however does not keep pointer to the whole buffer,
-    extract the minimum needed infos *)
-val lazy_col_num : buffer -> pos -> int Lazy.t
-
 (** position in bytes, regardless to utf8 *)
 val byte_pos : buffer -> pos -> int
 
@@ -158,4 +154,16 @@ module Tbl : sig
   val clear : 'a t -> unit
 
   val iter : 'a t -> ('a -> unit) -> unit
+end
+
+module Pos : sig
+  (** Type to represent position *)
+  type ipos = pos
+  type pos = { name : string  (** file's name *)
+             ; line  : int    (** line number *)
+             ; col   : int    (** column number *)
+             ; phantom : bool (** is the postion a "phantom", i.e. not really
+                                  in the file *) }
+
+  val get_pos : buffer -> ipos -> pos Lazy.t
 end
