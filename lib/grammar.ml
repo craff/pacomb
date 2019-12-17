@@ -108,6 +108,7 @@ type 'a grammar =
 
 let rec eq : type a b.a grammar -> b grammar -> (a, b) Assoc.eq =
   fun g1 g2 ->
+    let open Assoc in
     match g1.k.eq g2.k.tok with
     | Eq -> Eq
     | NEq ->
