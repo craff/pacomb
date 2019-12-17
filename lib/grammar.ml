@@ -309,24 +309,24 @@ let term ?name (x) =
   let name = match name with None -> x.Lex.n | Some n -> n in
   mkg ~name (Term x)
 
-let alt ?name l =
-  let l = List.filter (fun g -> g.d <> Fail) l in
-  let l = List.map (function { d = Alt(ls) } -> ls | x -> [x]) l in
-  let l = List.flatten l in
-  match l with
-  | [] -> fail ()
-  | [g] -> g
-  | l   -> mkg ?name (Alt(l))
-
-let appl ?name g f = mkg ?name (if g.d = Fail then Fail else Appl(g,f))
+let appl : type a b. ?name:string -> a t -> (a -> b) -> b t =
+  fun ?name g f -> mkg ?name (
+  match g.d with
+  | Fail         -> Fail
+  | Appl(g,f')   -> Appl(g,(fun x -> f (f' x)))
+  | Empty x      -> Empty (f x)
+(*  | Seq(g1,g2)   -> Seq(g1,appl g2 (fun h x -> f (h x)))
+  | LPos(None,g) -> LPos(None, appl g (fun h x -> f (h x)))
+  | RPos(g)      -> RPos(appl g (fun h x -> f (h x)))*)
+  | _            -> Appl(g,f))
 
 let seq ?name g1 g2 = mkg ?name (
   match g1.d,g2.d with
-  | Fail, _ -> Fail
-  | _, Fail -> Fail
-  | Empty x, _ -> Appl(g2, fun y -> y x)
-  | _, Empty y -> Appl(g1, y)
-  | _ -> Seq(g1,g2))
+  | Fail, _    -> Fail
+  | _, Fail    -> Fail
+  | Empty x, _ -> (appl g2 (fun y -> y x)).d
+  | _, Empty y -> (appl g1 y).d
+  | _          -> Seq(g1,g2))
 
 let dseq ?name g1 g2 =
   mkg ?name (if g1.d = Fail then Fail else DSeq(g1,g2))
@@ -334,6 +334,109 @@ let dseq ?name g1 g2 =
 let lpos ?name ?pk g = mkg ?name (if g.d = Fail then Fail else LPos(pk,g))
 
 let rpos ?name g = mkg ?name (if g.d = Fail then Fail else RPos(g))
+
+let eqg g1 g2 = g1.k.eq g2.k.tok
+
+type (_,_) plist =
+  | PE : ('a, 'a) plist
+  | PC : 'a t * ('b, 'c) plist -> ('a -> 'b,'c) plist
+  | PL : ('b, 'c) plist -> (Pos.t -> 'b,'c) plist
+  | PR : ('b, 'c) plist -> (Pos.t -> 'b,'c) plist
+
+let rec alt : type a. ?name:string -> a t list -> a t = fun ?name l ->
+  let l = List.filter (fun g -> g.d <> Fail) l in
+  let l = List.map (function { d = Alt(ls) } -> ls | x -> [x]) l in
+  let l = List.flatten l in
+  match l with
+  | [] -> fail ()
+  | [g] -> g
+  | l   -> mkg ?name (Alt( left_factorise l))
+
+and left_factorise : type a.a t list -> a t list = fun l ->
+  let recompose : type a b.(a,b) plist -> a t -> a t -> b t =
+    fun acc r1 r2 ->
+      let rec fn : type a b. (a,b) plist -> a t -> b t =
+        fun acc r -> match acc with
+        | PE      -> r
+        | PC(g,l) -> fn l (seq g r)
+        | PL l    -> fn l (lpos r)
+        | PR l    -> fn l (rpos r)
+      in
+      let rec test : type a b. (a, b) plist -> unit =
+        function
+        | PC _ -> ()
+        | PL l -> test l
+        | PR l -> test l
+        | PE -> raise Not_found
+      in
+      test acc;
+      fn acc (alt [r1; r2])
+  in
+  let rec common_prefix : type a b. (Assoc.any_key * Assoc.any_key) list -> (a,b) plist -> a t -> a t -> b t
+    = fun adone acc g1 g2 ->
+    if List.exists
+         (fun (Assoc.K ga, Assoc.K gb) ->
+           match ga.eq g1.k.tok, gb.eq g2.k.tok
+           with Eq, Eq -> true
+              | _ -> false)
+         adone
+    then raise Not_found;
+    let adone = (Assoc.K g1.k,Assoc.K g2.k) :: adone in
+    let common_prefix acc g1 g2 = common_prefix adone acc g1 g2 in
+    match (g1.d,g2.d) with
+    | LPos(None,g1), LPos(None,g2) -> common_prefix (PL acc) g1 g2
+    | RPos(g1), RPos(g2) -> common_prefix (PR acc) g1 g2
+    | LPos(None,g1), _ -> common_prefix (PL acc) g1 (appl g2 (fun f _ -> f))
+    | RPos(g1), _ -> common_prefix (PR acc) g1 (appl g2 (fun f _ -> f))
+    | _, LPos(None,g2) -> common_prefix (PL acc) (appl g1 (fun f _ -> f)) g2
+    | _, RPos(g2) -> common_prefix (PR acc) (appl g1 (fun f _ -> f)) g2
+    | Seq(l1, r1), Seq(l2,r2) ->
+       begin
+         match eqg l1 l2 with
+         | Eq -> common_prefix (PC(l1,acc)) r1 r2
+         | _  -> recompose acc g1 g2
+       end
+    | Seq(l1, r1), Appl(g2',f) ->
+       begin
+         match eqg l1 g2' with
+         | Eq -> recompose (PC(l1,acc)) r1 (empty f)
+         | _  -> recompose acc g1 g2
+       end
+    | Seq(l1, r1), _ ->
+       begin
+         match eqg l1 g2 with
+         | Eq -> recompose (PC(l1,acc)) r1 (empty (fun x -> x))
+         | _  -> recompose acc g1 g2
+       end
+    | Appl(g1',f), Seq(l2, r2) ->
+       begin
+         match eqg l2 g1' with
+         | Eq -> recompose (PC(l2,acc)) (empty f) r2
+         | _  -> recompose acc g1 g2
+       end
+    | _, Seq(l2, r2) ->
+       begin
+         match eqg l2 g1 with
+         | Eq -> recompose (PC(l2,acc)) (empty (fun x -> x)) r2
+         | _  -> recompose acc g1 g2
+       end
+    | _ -> recompose acc g1 g2
+  in
+  let rec factor l = match l with
+    | [] -> l
+    | g::l ->
+       let rec fn acc' acc = match acc with
+         | [] -> List.rev (g :: acc')
+         | g'::acc ->
+            try
+              let g = common_prefix [] PE g g' in
+              List.rev_append acc' (g :: acc)
+            with
+              Not_found -> fn (g'::acc') acc
+       in
+       fn [] (factor l)
+  in
+  factor l
 
 let seq1 ?name g1 g2 = seq ?name g1 (appl g2 (fun _ x -> x))
 
@@ -460,7 +563,7 @@ let ne_alt l =
   match l with
   | [] -> EFail
   | [g] -> g
-  | l   -> EAlt(l)
+  | l   -> EAlt l
 
 let ne_appl g f =
   match g with
