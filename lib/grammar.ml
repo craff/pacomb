@@ -315,9 +315,9 @@ let appl : type a b. ?name:string -> a t -> (a -> b) -> b t =
   | Fail         -> Fail
   | Appl(g,f')   -> Appl(g,(fun x -> f (f' x)))
   | Empty x      -> Empty (f x)
-(*  | Seq(g1,g2)   -> Seq(g1,appl g2 (fun h x -> f (h x)))
-  | LPos(None,g) -> LPos(None, appl g (fun h x -> f (h x)))
-  | RPos(g)      -> RPos(appl g (fun h x -> f (h x)))*)
+  (* | Seq(g1,g2)   -> Seq(g1,appl g2 (fun h x -> f (h x))) *)
+  (* | LPos(None,g) -> LPos(None, appl g (fun h x -> f (h x))) *)
+  (* | RPos(g)      -> RPos(appl g (fun h x -> f (h x))) *)
   | _            -> Appl(g,f))
 
 let seq ?name g1 g2 = mkg ?name (
@@ -377,7 +377,7 @@ and left_factorise : type a.a t list -> a t list = fun l ->
     if List.exists
          (fun (Assoc.K ga, Assoc.K gb) ->
            match ga.eq g1.k.tok, gb.eq g2.k.tok
-           with Eq, Eq -> true
+           with Assoc.Eq, Assoc.Eq -> true
               | _ -> false)
          adone
     then raise Not_found;
