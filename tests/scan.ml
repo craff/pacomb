@@ -18,7 +18,7 @@ let files = if !files = [] then ["-"] else !files
 let do_file file =
   let buf =
     if file = "-" then
-      Input.from_channel ~utf8 stdin
+      Input.from_fd ~utf8 Unix.stdin
     else Input.from_file ~utf8 file
   in
   let t0 = Unix.gettimeofday () in
