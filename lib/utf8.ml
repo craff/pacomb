@@ -6544,20 +6544,21 @@ let decode : string -> int -> (Uchar.t * int) =
         if ((cc lsr 6) land 1) = 0
         then raise (invalid_arg "UTF8.decode")
         else
-          if ((cc lsr 5) land 1) = 0
+          let len = String.length s in
+          if ((cc lsr 5) land 1) = 0 && i + 1 < len
           then
             (let i0 = (cc land 0b00011111) lsl 6 in
              let i1 = (Char.code (s.[i + 1])) land 0b00111111 in
              ((Uchar.of_int (i0 lor i1)), 2))
           else
-            if ((cc lsr 4) land 1) = 0
+            if ((cc lsr 4) land 1) = 0 && i + 2 < len
             then
               (let i0 = (cc land 0b00001111) lsl 12 in
                let i1 = ((Char.code (s.[i + 1])) land 0b00111111) lsl 6 in
                let i2 = (Char.code (s.[i + 2])) land 0b00111111 in
                ((Uchar.of_int ((i0 lor i1) lor i2)), 3))
             else
-              if ((cc lsr 3) land 1) = 0
+              if ((cc lsr 3) land 1) = 0 && i + 3 < len
               then
                 (let i0 = (cc land 0b00000111) lsl 18 in
                  let i1 = ((Char.code (s.[i + 1])) land 0b00111111) lsl 12 in
@@ -6571,16 +6572,14 @@ let next : string -> int -> int =
 let prev : string -> int -> int =
   fun s ->
     fun i ->
-      let ps = List.filter (fun i -> i >= 0) [i - 1; i - 2; i - 3; i - 4] in
-      let rec try_until_found l =
-        match l with
-        | [] -> assert false
-        | p::ps ->
-            (try
-               let (_, sz) = decode s p in
-               if (p + sz) <> i then assert false; p
-             with | Invalid_argument _ -> try_until_found ps) in
-      try_until_found ps
+      let rec try_until_found n =
+        if n > 4 then invalid_arg "Utf8.prev" else
+          (try
+             let p = i - n in
+             let (_, sz) = decode s p in
+             if (p + sz) <> i then try_until_found (n+1) else p
+           with Invalid_argument _ -> try_until_found (n+1)) in
+      try_until_found 1
 let fold : ('a -> Uchar.t -> 'a) -> 'a -> string -> 'a =
   fun f ->
     fun ini ->
