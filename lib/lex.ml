@@ -99,15 +99,6 @@ let rec eq : type a b.a t -> b t -> (a,b) Assoc.eq =
        end
     | _ -> NEq
 
-let s0 = Input.from_string ""
-let s1 = Input.from_string "\255 "(* for eof to passe the test *)
-let accept_empty : type a. a t -> bool = fun t ->
-  try ignore(t.f s0 Input.init_pos);
-      try let (_,b,pos) = t.f s1 Input.init_pos in
-          Input.col_num b pos <> 1
-      with NoParse -> true
-  with NoParse -> false
-
 let test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool =
   fun t _ _ buf pos ->
       try let (r,_,_) = t.f buf pos in r
@@ -139,6 +130,15 @@ let eof : ?name:string -> unit -> unit t = fun ?(name="EOF") () ->
   ; f = fun s n -> let (c,s,n) = Input.read s n in
                    if c = '\255' then ((),s,n) else raise NoParse
   }
+
+let s0 = Input.from_string ""
+let eof0 = eof ()
+let accept_empty : type a. a t -> bool = fun t ->
+  match eq t eof0
+  with Eq -> false
+     | _ ->
+        try ignore(t.f s0 Input.init_pos); true
+        with NoParse -> false
 
 let sp = Printf.sprintf
 

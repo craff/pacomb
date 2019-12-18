@@ -39,10 +39,15 @@ val from_file : ?utf8:context -> string -> buffer
     error messages. *)
 val from_channel : ?utf8:context -> ?filename:string -> in_channel -> buffer
 
+(** Same as [Input.from_channel] but uses the preprocessor. *)
+val from_fd : ?utf8:context -> ?filename:string -> Unix.file_descr -> buffer
+
 (** [from_string  ~filename str] returns  a buffer constructed using  the string
     [str]. The optional [filename] is only used as a reference to the channel in
     error messages. *)
 val from_string : ?utf8:context -> ?filename:string -> string -> buffer
+
+val from_rope : context -> string -> Rope.t -> buffer
 
 (** [from_fun finalise utf8 name get data] returns a buffer constructed from the
     object [data] using  the [get] function. The get function  is used to obtain
@@ -50,8 +55,8 @@ val from_string : ?utf8:context -> ?filename:string -> string -> buffer
     when the end of file is reached.  The [name] string is used to reference the
     origin of  the data in  error messages.  Position are reported  according to
     [utf8].  *)
-val from_fun : ('a -> unit) -> context -> string -> ('a -> string * bool)
-               -> 'a -> buffer
+(*val from_fun : ('a -> unit) -> context -> string -> ('a -> string * bool)
+               -> 'a -> buffer*)
 
 (** Exception that can  be raised by a preprocessor in case  of error. The first
     string references the name of the buffer (e.g. the name of the corresponding
@@ -78,8 +83,8 @@ module type Preprocessor =
         ignored or  [Some(data)] which is  the new data.  The new file  name and
         line  number can  be  used  to implement  line  number directives.   The
         function may raise [Preprocessor_error] in case of error. *)
-    val update : state -> string -> int -> string -> bool
-                   -> state * string * int * string option
+    val update :
+      state -> string -> pos -> Rope.t -> state * string * pos * Rope.t option
 
     (** [check_final st name]  check that [st] indeed is a  correct state of the
         preprocessor for  the end  of input of  file [name].  If  it is  not the
@@ -90,12 +95,14 @@ module type Preprocessor =
 (** Functor for building buffers with a preprocessor. *)
 module WithPP : functor (PP : Preprocessor) ->
   sig
-    (** Same as [Input.from_fun] but uses the preprocessor. *)
-    val from_fun : ('a -> unit) -> context -> string -> ('a -> string * bool)
-                     -> 'a -> buffer
+    (** Same as [Input.from_rope] but uses the preprocessor. *)
+    val from_rope : context -> string -> Rope.t -> buffer
 
     (** Same as [Input.from_channel] but uses the preprocessor. *)
     val from_channel : ?utf8:context -> ?filename:string -> in_channel -> buffer
+
+    (** Same as [Input.from_channel] but uses the preprocessor. *)
+    val from_fd : ?utf8:context -> ?filename:string -> Unix.file_descr -> buffer
 
     (** Same as [Input.from_file] but uses the preprocessor. *)
     val from_file : ?utf8:context -> string -> buffer
