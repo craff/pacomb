@@ -79,7 +79,7 @@ let%parser g =
 let _ = tests g [("42+13 a b ",(0,(42,Add,13),5))
                ; ("a 42 * 4 b ",(2,(42,Mul,4),10))
                ; ("a b 42 / 2 ",(0,(42,Div,2),10))]
-let%parser g = 'a' 'b' => Pos.((lf _pos.start).col,(lf _pos.end_).col)
+let%parser g = 'a' 'b' => Pos.((lf _pos).start_col,(lf _pos).end_col)
 let _ = tests g [("a b ",(0,3))]
 
 (* test recursion *)

@@ -7,10 +7,21 @@ type pos = { name : string  (** file's name *)
            ; phantom : bool (** is the postion a "phantom", i.e. not really
                                 in the file *) }
 
-type interval = { start : pos Lazy.t; end_ : pos Lazy.t }
+type interval_aux =
+  { name : string
+  ; start_line : int
+  ; start_col  : int
+  ; end_line   : int
+  ; end_col    : int
+  ; phantom    : bool }
+
+type interval = interval_aux Lazy.t
 
 (** Abbreviation *)
 type t = pos Lazy.t
+
+(** constructor for interval *)
+val interval : t -> t -> interval_aux
 
 (** a phantom position, used for grammar accepting the empty input *)
 val phantom : t

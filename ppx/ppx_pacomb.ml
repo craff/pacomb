@@ -226,14 +226,11 @@ let rec base_rule acts_fn rule action =
   let acts_fn =
     if has_gl_pos then
       let pat = Pat.var gl_pos in
+      let loc = loc_a in
       let vb = [
-          Vb.mk pat
-            (Exp.record
-               [( mknoloc (Ldot(Lident "Pos","start"))
-                , Exp.ident (mknoloc (Lident gl_lpos.txt)))
-               ;( mknoloc (Ldot(Lident "Pos","end_"))
-                , Exp.ident (mknoloc (Lident gl_rpos.txt)))]
-               None)]
+          Vb.mk pat [%expr lazy (Pacomb.Pos.interval
+                        [%e Exp.ident (mknoloc (Lident gl_lpos.txt))]
+                        [%e Exp.ident (mknoloc (Lident gl_rpos.txt))])]]
       in
       (fun exp -> Exp.let_ Nonrecursive vb (acts_fn exp))
     else acts_fn
@@ -282,14 +279,12 @@ let rec base_rule acts_fn rule action =
        let acts_fn =
          if has_id_pos then
            let pat = Pat.var id_pos in
+           let loc = loc_a in
            let vb = [
                Vb.mk pat
-                 (Exp.record
-                    [( mknoloc (Ldot(Lident "Pos","start"))
-                     , Exp.ident (mkloc (Lident id_lpos.txt) id.loc))
-                    ;( mknoloc (Ldot(Lident "Pos","end_"))
-                     , Exp.ident (mkloc (Lident id_rpos.txt) id.loc))]
-                    None)]
+                 [%expr lazy (Pacomb.Pos.interval
+                           [%e Exp.ident (mknoloc (Lident id_lpos.txt))]
+                           [%e Exp.ident (mknoloc (Lident id_rpos.txt))])]]
            in
            (fun exp -> Exp.let_ Nonrecursive vb (acts_fn exp))
          else acts_fn

@@ -3,7 +3,23 @@
 (** Type to represent position *)
 include Input.Pos
 
-type interval = { start : pos Lazy.t; end_ : pos Lazy.t }
+type interval_aux =
+  { name : string
+  ; start_line : int
+  ; start_col  : int
+  ; end_line   : int
+  ; end_col    : int
+  ; phantom    : bool }
+
+type interval = interval_aux Lazy.t
+
+let interval (lazy p1) (lazy p2) =
+  { name = p1.Input.Pos.name
+  ; start_line = p1.line
+  ; start_col  = p1.col
+  ; end_line   = p1.line
+  ; end_col    = p2.col
+  ; phantom    = p1.phantom || p2.phantom }
 
 type t = pos Lazy.t
 
@@ -17,7 +33,7 @@ let phantom = lazy { name = ""; line = 0; col  = 0; phantom = true }
 
 type style = OCaml | Short
 
-let print_pos ?(style=OCaml) () ch (lazy pos) =
+let print_pos ?(style=OCaml) () ch (lazy pos : t) =
   let open Printf in
   if pos.name = "" then
     let format : (_,_,_) format = match style with
@@ -32,35 +48,36 @@ let print_pos ?(style=OCaml) () ch (lazy pos) =
     in
     fprintf ch format pos.name pos.line pos.col
 
-let print_interval ?(style=OCaml) () ch { start = (lazy start)
-                                        ; end_ = (lazy end_) } =
+let print_interval ?(style=OCaml) () ch (lazy pos) =
   let open Printf in
-  if start.name = "" then
-    if start.line = end_.line then
+  if pos.name = "" then
+    if pos.start_line = pos.end_line then
       let format : (_,_,_) format = match style with
         | OCaml -> "line %d, characters %d-%d"
         | Short -> "%d:%d-%d"
       in
-      fprintf ch format start.line start.col end_.col
+      fprintf ch format pos.start_line pos.start_col pos.end_col
     else
       let format : (_,_,_) format = match style with
         | OCaml -> "line %d, character %d - line %d, character %d"
         | Short -> "%d:%d-%d:%d"
       in
-      fprintf ch format start.line start.col end_.line end_.col
+      fprintf ch format pos.start_line
+        pos.start_col pos.end_line pos.end_col
   else
-    if start.line = end_.line then
+    if pos.start_line = pos.end_line then
       let format : (_,_,_) format = match style with
         | OCaml -> "File %S, line %d, characters %d-%d"
         | Short -> "%S:%d:%d-%d"
       in
-      fprintf ch format start.name start.line start.col end_.col
+      fprintf ch format pos.name pos.start_line pos.start_col pos.end_col
     else
       let format : (_,_,_) format = match style with
         | OCaml -> "File %S, line %d, character %d - line %d, character %d"
         | Short -> "%S:%d:%d-%d:%d"
       in
-      fprintf ch format start.name start.line start.col end_.line end_.col
+      fprintf ch format pos.name pos.start_line
+        pos.start_col pos.end_line pos.end_col
 
 let print_buf_pos ?(style=OCaml) () ch (buf,col) =
   print_pos ~style () ch (get_pos buf col)
