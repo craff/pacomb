@@ -6573,11 +6573,11 @@ let prev : string -> int -> int =
   fun s ->
     fun i ->
       let rec try_until_found n =
-        if n > 4 then invalid_arg "Utf8.prev" else
+        let p = i - n in
+        if n > 7 || p < 0 then invalid_arg "Utf8.prev" else
           (try
-             let p = i - n in
-             let (_, sz) = decode s p in
-             if (p + sz) <> i then try_until_found (n+1) else p
+             let _ = decode s p in
+             p
            with Invalid_argument _ -> try_until_found (n+1)) in
       try_until_found 1
 let fold : ('a -> Uchar.t -> 'a) -> 'a -> string -> 'a =

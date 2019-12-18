@@ -5,8 +5,6 @@ cache:
   directories:
   - $HOME/.opam
 
-install: test -e .travis.opam.sh || wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-opam.sh
-
 env:
   global:
   - OPAMJOBS="2"
