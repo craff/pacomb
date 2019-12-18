@@ -35,6 +35,11 @@
   (modules big_sexp)
   (libraries))
 
+(executable
+  (name scan)
+  (modules scan)
+  (libraries unix pacomb))
+
 (test
   (name Break)
   (modules Break)
