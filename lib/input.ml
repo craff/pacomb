@@ -34,7 +34,7 @@ let empty_buffer infos lnum boff =
     { lnum ; boff; coff = 0; data = "" ; next = line ; infos ; ctnr = [||] }
   in line
 
-let is_eof b = b == Lazy.force b.next
+let is_eof b = b.data = ""
 
 let llen b = String.length b.data
 
@@ -46,11 +46,10 @@ let rec is_empty (lazy l) pos =
 
 (* Read the character at the given position in the given buffer. *)
 let rec read (lazy l as b) i =
-  if is_eof l then ('\255', b, 0) else
   match compare (i+1) (llen l) with
   | -1 -> (l.data.[i], b     , i+1)
   | 0  -> (l.data.[i], l.next, 0  )
-  | _  -> read l.next (i - llen l)
+  | _  -> if is_eof l then ('\255', b, 0) else read l.next (i - llen l)
 
 let sub b i len =
   let s = Bytes.create len in
