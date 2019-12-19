@@ -54,6 +54,25 @@
 
 (** {2 main types } *)
 
+(** priority for ordering:
+    (p, (p', d)) : p position at end of parsing
+                   p' position at the beginning of parsing with
+                      the latest cached grammar
+                   d  depth of cached grammar, when two cached grammar
+                      start parsing from the same position, the one
+                      calling the other as a smaller depth
+ *)
+module Prio =
+  struct
+    type t = int * (int * int)
+    let compare (p1,co1) (p2,co2) =
+      match compare p1 p2 with
+      | 0 -> compare co2 co1
+      | c -> c
+  end
+
+module Heap = Heap.Make(Prio)
+
 (** Environment holding information required for parsing. *)
 type env =
   { blank_fun         : Blank.t
@@ -75,15 +94,14 @@ type env =
       where we started to parse the  cached grammar, the second int is increased
       when we parse a cached grammar that was called at same position by another
       cached grammar. *)
-  ; queue : heap ref
+  ; queue : res Heap.t ref
   (** the  heap holding continuation  and alternative branch for  parsing. All
       environments share the same heap.  *)
   }
 
 (** We  use priority queues  using a heap, to  have a logarithmic  complexity to
    choose the next action in the scheduler *)
-and heap = E
-         | N of (int * (int * int)) * res list * heap * heap * int
+
 
 (**  type  of result  used  by  the scheduler  to  progress  in the  parsing  in
     parallel. *)
@@ -269,66 +287,15 @@ let next_msg : string -> env -> res  = fun msg env ->
 (** the scheduler stores what remains to do in a list sorted by position in the
     buffer, and vptr key list (see cache below) here are the comparison function
     used for this sorting *)
-let order_key r =
+let get_prio r =
   match r with
   | Cont(env,_,_)|Gram(env,_,_) ->
      let p = Input.byte_pos env.current_buf env.current_pos in
      (p, env.cache_order)
 
-let compare_prio (p1,co1) (p2,co2) =
-  match compare p1 p2 with
-  | 0 -> compare co2 co1
-  | c -> c
-
-let size = function
-  | E -> 0
-  | N(_,_,_,_,s) -> s
-
-(** insert in a heap at the correct position *)
-let insert : res -> heap -> heap = fun r h ->
-  let ok = order_key r in
-  let rec fn ok l h =
-    match h with
-    | E                 -> N(ok,l,E,E,1)
-    | N(ok',l',h1,h2,s) ->
-       match compare_prio ok ok' with
-       | 0               -> N(ok,l@l',h1,h2,s)
-       | n when n < 0    ->
-          begin
-            if size h1 < size h2 then
-              N(ok,l,fn ok' l' h1, h2, s+1)
-            else
-              N(ok,l,h1,fn ok' l' h2, s+1)
-          end
-       | _               ->
-          begin
-            if size h1 < size h2 then
-              N(ok',l',fn ok l h1, h2, s+1)
-            else
-              N(ok',l',h1,fn ok l h2, s+1)
-          end
-  in
-  fn ok [r] h
-
 let add_queue env res =
-  env.queue := insert res !(env.queue)
+  env.queue := Heap.add (get_prio res) res !(env.queue)
 
-(** Extract  from the  heap. Does  not keep  balancing, but  the depth  may only
-   decrease so it remains amortized logarithmic *)
-let extract : heap -> res * heap = fun h ->
-  let rec fusion h01 h02 = match (h01, h02) with
-    | (E, h) | (h, E) -> h
-    | N(ok,l,h1,h2,s), N(ok',l',h1',h2',s') ->
-       match compare_prio ok ok' with
-       | 0            -> N(ok,l@l',fusion h1 h1',fusion h2 h2',s+s'-1)
-       | n when n < 0 -> N(ok,l,fusion h1 h2,h02,s+s')
-       | _            -> N(ok',l',h01,fusion h1' h2',s+s')
-  in
-  match h with
-  | E                  -> raise Not_found
-  | N(_,[],_,_,_)      -> assert false
-  | N(_,[r],h1,h2,_)   -> (r, fusion h1 h2)
-  | N(ok,r::l,h1,h2,s) -> (r, N(ok,l,h1,h2,s))
 
 (** [scheduler  env g] drives  the parsing, it calls  the combinator [g]  in the
     given environment and when lexeme returns to the scheduler, it continues the
@@ -347,10 +314,10 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
       (** calls to the initial grammar and initialise the table *)
       (try
         let r = g env (ink k) in
-        queue := insert r !queue;  (** to do at further position *)
+        queue := Heap.add (get_prio r) r !queue;  (** to do at further position *)
       with Exit -> ());
       while true do
-        let (todo,t) = extract !queue in
+        let (todo,t) = Heap.remove !queue in
         queue := t;
         try
           let r =
@@ -363,7 +330,7 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
             | Gram(env,g,k) ->
                g env k
           in
-          queue := insert r !queue
+          queue := Heap.add (get_prio r) r !queue
         with
         | Exit -> ()
         | Lex.NoParse -> record_pos env
@@ -787,7 +754,7 @@ let gen_parse_buffer
       { buf_before_blanks = buf0 ; pos_before_blanks = col0
         ; current_buf = buf ; current_pos = col; lr = Assoc.empty
         ; max_pos ; blank_fun ; cache_order = (-1,0)
-        ; queue = ref E }
+        ; queue = ref Heap.empty }
     in
     (** calling the scheduler to start parsing *)
     let r = scheduler env g in

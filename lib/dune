@@ -4,7 +4,7 @@
   (modules :standard)
   (preprocess (pps pacomb.ppx))
   (libraries stdlib-shims)
-  (private_modules container hashtbl_eq assoc comb unionFind))
+  (private_modules container hashtbl_eq assoc comb unionFind heap))
 
 (documentation
   (package pacomb))
