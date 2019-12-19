@@ -90,7 +90,8 @@ let rec eq : type a b.a t -> b t -> (a,b) Assoc.eq =
     | Appl(_,_,ak), Appl(_,_,bk) -> ak.eq bk.tok
     | Star(_,_,_,ak), Star(_,_,_,bk) -> ak.eq bk.tok
     | Plus(_,_,_,ak), Plus(_,_,_,bk) -> ak.eq bk.tok
-    | Keyword(s1,uid1), Keyword(s2,uid2) -> if s1 = s2 && uid1 = uid2 then Eq else NEq
+    | Keyword(s1,uid1), Keyword(s2,uid2) ->
+       if s1 = s2 && uid1 = uid2 then Eq else NEq
     | Custom(af,ak), Custom(bf,bk) ->
        begin
          match ak.eq bk.tok with

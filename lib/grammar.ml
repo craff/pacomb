@@ -403,7 +403,9 @@ and left_factorise : type a.a t list -> a t list = fun l ->
       test acc;
       fn acc (alt [r1; r2])
   in
-  let rec common_prefix : type a b. (Assoc.any_key * Assoc.any_key) list -> (a,b) plist -> a t -> a t -> b t
+  let rec common_prefix
+          : type a b. (Assoc.any_key * Assoc.any_key) list -> (a,b) plist ->
+                 a t -> a t -> b t
     = fun adone acc g1 g2 ->
     if List.exists
          (fun (Assoc.K ga, Assoc.K gb) ->
