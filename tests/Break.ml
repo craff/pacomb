@@ -37,9 +37,10 @@ let test pos l0 =
     let l = fn l in
     if l <> l0 then
       begin
-        Printf.eprintf "break fail at %a\n%!"
-          (Pos.print_pos ()) pos;
+        Printf.eprintf "break fail at %a\n%!" (Pos.print_pos ()) pos;
         List.iter (fun (l,b) -> Printf.eprintf "%x %b " (Uchar.to_int l) b) l;
+        Printf.eprintf " <> ";
+        List.iter (fun (l,b) -> Printf.eprintf "%x %b " (Uchar.to_int l) b) l0;
         Printf.eprintf "\n%!";
         good := false;
         raise Exit

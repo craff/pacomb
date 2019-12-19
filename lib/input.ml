@@ -248,9 +248,10 @@ include GenericInput(
             let (remain,data,llen) =
               if not nl && data0 <> "" && infos.utf8 <> Utf8.ASCII then
                 let p = Utf8.prev_grapheme data llen in
-                (String.sub data p (llen - p), String.sub data 0 p, p)
-              else
-                ("",data, llen)
+                if p > 0 then
+                  (String.sub data p (llen - p), String.sub data 0 p, p)
+                else ("",data, llen)
+              else ("",data, llen)
             in
             let nlnum, ncoff =
               if nl then (lnum+1, 0)
@@ -309,9 +310,10 @@ module Make(PP : Preprocessor) =
             let (remain,data) =
               if not nl && data0 <> "" && infos.utf8 <> Utf8.ASCII then
                 let p = Utf8.prev_grapheme data llen in
-                (String.sub data p (llen-p), String.sub data 0 p)
-              else
-                ("",data)
+                if p > 0 then
+                  (String.sub data p (llen-p), String.sub data 0 p)
+                else ("",data)
+              else ("",data)
             in
             let (st, name, lnum, res) = PP.update st infos.name lnum data nl in
             let infos =
