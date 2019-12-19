@@ -82,9 +82,8 @@ type env =
 
 (** We  use priority queues  using a heap, to  have a logarithmic  complexity to
    choose the next action in the scheduler *)
-and heap =
-  | E                            (** empty heap *)
-  | N of res * heap * heap * int (** node heap, holding the heap size *)
+and heap = E
+         | N of (int * (int * int)) * res list * heap * heap * int
 
 (**  type  of result  used  by  the scheduler  to  progress  in the  parsing  in
     parallel. *)
@@ -270,26 +269,46 @@ let next_msg : string -> env -> res  = fun msg env ->
 (** the scheduler stores what remains to do in a list sorted by position in the
     buffer, and vptr key list (see cache below) here are the comparison function
     used for this sorting *)
-let before r1 r2 =
-  match (r1,r2) with
-  | (Cont(env1,_,_)|Gram(env1,_,_)), (Cont(env2,_,_)|Gram(env2,_,_)) ->
-     let p1 = Input.byte_pos env1.current_buf env1.current_pos in
-     let p2 = Input.byte_pos env2.current_buf env2.current_pos in
-     (p1 < p2) || (p1 = p2 && env1.cache_order > env2.cache_order)
+let order_key r =
+  match r with
+  | Cont(env,_,_)|Gram(env,_,_) ->
+     let p = Input.byte_pos env.current_buf env.current_pos in
+     (p, env.cache_order)
 
-(** Size of the heap, to choose where to insert *)
-let size = function E -> 0 | N(_,_,_,n) -> n
+let compare_prio (p1,co1) (p2,co2) =
+  match compare p1 p2 with
+  | 0 -> compare co2 co1
+  | c -> c
+
+let size = function
+  | E -> 0
+  | N(_,_,_,_,s) -> s
 
 (** insert in a heap at the correct position *)
-let rec insert : res -> heap -> heap = fun r h ->
-  match h with
-  | E -> N(r, E, E, 1)
-  | N(r',h1,h2,s) ->
-     let (r,r') = if before r' r then (r',r) else (r,r') in
-     if size h1 > size h2 then
-       N(r, h1, insert r' h2, s+1)
-     else
-       N(r, insert r' h1, h2, s+1)
+let insert : res -> heap -> heap = fun r h ->
+  let ok = order_key r in
+  let rec fn ok l h =
+    match h with
+    | E                 -> N(ok,l,E,E,1)
+    | N(ok',l',h1,h2,s) ->
+       match compare_prio ok ok' with
+       | 0               -> N(ok,l@l',h1,h2,s)
+       | n when n < 0    ->
+          begin
+            if size h1 < size h2 then
+              N(ok,l,fn ok' l' h1, h2, s+1)
+            else
+              N(ok,l,h1,fn ok' l' h2, s+1)
+          end
+       | _               ->
+          begin
+            if size h1 < size h2 then
+              N(ok',l',fn ok l h1, h2, s+1)
+            else
+              N(ok',l',h1,fn ok l h2, s+1)
+          end
+  in
+  fn ok [r] h
 
 let add_queue env res =
   env.queue := insert res !(env.queue)
@@ -297,21 +316,19 @@ let add_queue env res =
 (** Extract  from the  heap. Does  not keep  balancing, but  the depth  may only
    decrease so it remains amortized logarithmic *)
 let extract : heap -> res * heap = fun h ->
+  let rec fusion h01 h02 = match (h01, h02) with
+    | (E, h) | (h, E) -> h
+    | N(ok,l,h1,h2,s), N(ok',l',h1',h2',s') ->
+       match compare_prio ok ok' with
+       | 0            -> N(ok,l@l',fusion h1 h1',fusion h2 h2',s+s'-1)
+       | n when n < 0 -> N(ok,l,fusion h1 h2,h02,s+s')
+       | _            -> N(ok',l',h01,fusion h1' h2',s+s')
+  in
   match h with
-  | E -> raise Not_found
-  | N(r,h1,h2,s) ->
-     let rec fusion h1 h2 =
-       match h1, h2 with
-       | E, E -> E
-       | _, E -> h1
-       | E, _ -> h2
-       | N(r1,h11,h12,_), N(r2,h21,h22,_) ->
-          if before r1 r2 then
-            N(r1,fusion h11 h12,h2,s-1)
-          else
-            N(r2,h1,fusion h21 h22,s-1)
-     in
-     (r, fusion h1 h2)
+  | E                  -> raise Not_found
+  | N(_,[],_,_,_)      -> assert false
+  | N(_,[r],h1,h2,_)   -> (r, fusion h1 h2)
+  | N(ok,r::l,h1,h2,s) -> (r, N(ok,l,h1,h2,s))
 
 (** [scheduler  env g] drives  the parsing, it calls  the combinator [g]  in the
     given environment and when lexeme returns to the scheduler, it continues the
