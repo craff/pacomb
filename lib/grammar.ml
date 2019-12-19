@@ -48,9 +48,8 @@ type 'a grammar =
  (** type for all information about mutuall recursive grammars *)
  and mlr = { left : mlr_left
            ; right : mlr_right
-           ; lpos : Pos.t Assoc.key option
-           ; names : string list
-           ; keys : Assoc.any_key list }
+           ; lpos : Pos.pos Assoc.key option
+           ; keys : (Assoc.any_key * string) list }
 
  (** Grammar constructors at definition *)
  and 'a grdf =
@@ -167,49 +166,38 @@ let prl pr sep ch l =
   in
   fn ch l
 
-type prio = Atom | Seq | Alt
+type prio = Atom | Seq | PAlt
 type any_grammar = G : 'a grammar -> any_grammar
+
+module AssocLr = Assoc.Make (struct type 'a data = 'a grne list * 'a t list end)
 
 let print_grammar ?(no_other=false) ?(def=true) ch s =
   let adone = ref [] in
   let todo = ref [] in
+  let keys_name = ref [] in
   let do_def g =
     g.recursive ||
       (g.n <> "..." && match g.d with Term _ -> false | _ -> true)
   in
+  let get_name k = List.assq (Assoc.K k) !keys_name in
+
   let rec print_grne : type a. prio -> out_channel -> a grne -> unit =
-  fun prio ch g ->
+    fun prio ch g ->
     let pr x = Printf.fprintf ch x in
     let pg x = print_grne x in
     let pv x = print_negr x in
-    let rec is_empty : type a.a grne -> bool = function
-      | ERkey _        -> true
-      | EAppl(g,_)     -> is_empty g
-      | ERPos(g)       -> is_empty g
-      | ELPos(_,g)     -> is_empty g
-      | ETest(_,g)     -> is_empty g
-      | ELayout(_,g,_) -> is_empty g
-      | EEval(g)       -> is_empty g
-      | _              -> false
-    in
     match g with
     | EFail         -> pr "0"
     | EErr m        -> pr "0(%s)" m
     | ETerm t       -> pr "%s" t.n
-    | EAlt(gs)      -> pr (if prio < Alt then "(%a)" else "%a")
+    | EAlt(gs)      -> pr (if prio < PAlt then "(%a)" else "%a")
                           (prl (pg Seq) " | ") gs
-    | ESeq(ERkey _, g) -> pv prio ch g
-    | ESeq(g1,g2)   -> if is_empty g1 then
-                         pg prio ch g1
-                       else if is_empty g2.ne then
-                         pv prio ch g2
-                       else
-                         pr (if prio < Seq then "(%a %a)" else "%a %a")
+    | ESeq(g1,g2)   -> pr (if prio < Seq then "(%a %a)" else "%a %a")
                            (pg Atom) g1 (pv Seq) g2
     | EDSeq(g1,_)   -> pr (if prio < Seq then "(%a ...)" else "%a ...")
                          (pg Atom) g1
-    | ELr(_,_)      -> () (* FIXME #21 *)
-    | ERkey _       -> () (* FIXME #21 *)
+    | ELr(k,lr)     -> print_lr k lr ch
+    | ERkey k       -> pr "%s" (get_name k)
     | EAppl(g,_)    -> pg prio ch g
     | ERef(g)       -> pv prio ch g
     | ERPos(g)      -> pg prio ch g
@@ -219,32 +207,56 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
     | EEval(g)      -> pg prio ch g
     | ETmp          -> pr "TMP"
 
+  and print_lr : type a. a key -> mlr Uf.t -> out_channel -> unit =
+    fun k lr ch ->
+    let ({left; right; keys; _}, _) = Uf.find lr in
+    List.iter (fun (k,name) ->
+        if not (List.mem_assq k !keys_name)
+        then keys_name := (k, name ^ "_lr") :: !keys_name) keys;
+    let matrix  = ref AssocLr.empty in
+    let get_matrix k = try AssocLr.find k !matrix with Not_found -> ([], []) in
+    let add_matrix k c = matrix := AssocLr.replace k c !matrix in
+    let rec collect_left = function
+      | LNil -> ()
+      | LCns(k,g,l) ->
+         let (left,right) = get_matrix k in
+         add_matrix k (g::left,right);
+         collect_left l
+    in
+    let rec collect_right = function
+      | RNil -> ()
+      | RCns(_,k,g,l) ->
+         let (left,right) = get_matrix k in
+         add_matrix k (left,g::right);
+         collect_right l
+    in
+    collect_left left;
+    collect_right right;
+    let print_one ch k (left,right) =
+      let name = get_name k in
+      let gright = mkg (Alt right) in
+      gright.ne <- EAlt (List.map (fun x -> x.ne) right);
+      Printf.fprintf ch "  %s ::= %a %a*\n"
+        name (print_grne Atom) (EAlt left) (print_negr Atom) gright
+    in
+    let print_matrix ch =
+      AssocLr.iter { f = fun x -> print_one ch x } !matrix
+    in
+    let name = get_name k in
+    Printf.fprintf ch "%s from \n%t" name print_matrix
+
   and print_grdf : type a. prio -> out_channel -> a grdf -> unit =
   fun prio ch g ->
     let pr x = Printf.fprintf ch x in
     let pg x = print_dfgr x in
-    let rec is_empty : type a. a grdf -> bool = function
-      | Rkey _ | Empty _ -> true
-      | Appl(g,_)        -> is_empty g.d
-      | RPos(g)          -> is_empty g.d
-      | LPos(_,g)        -> is_empty g.d
-      | Test(_,g)        -> is_empty g.d
-      | Layout(_,g,_)    -> is_empty g.d
-      | _                -> false
-    in
     match g with
     | Fail         -> pr "0"
     | Err m        -> pr "0(%s)" m
     | Empty _      -> pr "()"
     | Term t       -> pr "%s" t.n
-    | Alt(gs)      -> pr (if prio < Alt then "(%a)" else "%a")
+    | Alt(gs)      -> pr (if prio < PAlt then "(%a)" else "%a")
                         (prl (pg Seq) " | ") gs
-    | Seq(g1,g2)   -> if is_empty g1.d then
-                        pg prio ch g2
-                      else if is_empty g2.d then
-                        pg prio ch g1
-                      else
-                        pr (if prio < Seq then "(%a %a)" else "%a %a")
+    | Seq(g1,g2)   -> pr (if prio < Seq then "(%a %a)" else "%a %a")
                           (pg Atom) g1 (pg Seq) g2
     | DSeq(g1,_)   -> pr (if prio < Seq then "(%a ...)" else "%a ...")
                          (pg Atom) g1
@@ -272,7 +284,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
         let pg x = print_grne x in
         match g.e with
         | [] -> pr "%a" (pg prio) g.ne
-        | _  -> pr "(() | %a)" (pg Alt) g.ne
+        | _  -> pr "(() | %a)" (pg PAlt) g.ne
       end
 
   and print_dfgr : type a. prio -> out_channel -> a grammar -> unit =
@@ -293,6 +305,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
 
   in
   todo := G s :: !todo;
+  adone := K s.k :: !adone;
   while !todo != [] do
     match !todo with
       [] -> assert false
@@ -301,10 +314,10 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
        let pr f x = Printf.fprintf ch "%s ::= %a\n" s.n f x in
        let pne ch s =
          match s.e with
-         | [] -> print_grne Alt ch s.ne
-         | _  -> Printf.printf "(() | %a)" (print_grne Alt) s.ne
+         | [] -> print_grne PAlt ch s.ne
+         | _  -> Printf.printf "(() | %a)" (print_grne PAlt) s.ne
        in
-       if def then pr (print_grdf Alt) s.d else pr pne s;
+       if def then pr (print_grdf PAlt) s.d else pr pne s;
        if no_other then todo := []
 
   done
@@ -806,12 +819,11 @@ let cat_lpos p1 p2 =
   | (Some _, _) -> p1
   | (_     , _) -> p2
 
-let cat_mlr {left=l1;right=r1;lpos=p1;names=n1;keys=k1}
-            {left=l2;right=r2;lpos=p2;names=n2;keys=k2} =
+let cat_mlr {left=l1;right=r1;lpos=p1;keys=k1}
+            {left=l2;right=r2;lpos=p2;keys=k2} =
   { left  = cat_left l1 l2
   ; right = cat_right r1 r2
   ; lpos  = cat_lpos p1 p2
-  ; names = n1 @ n2
   ; keys  = k1 @ k2
   }
 
@@ -823,7 +835,7 @@ let find_ety : type a. a key -> ety list -> bool = fun k l ->
        if cached then raise Not_found;
        match k.eq k'.tok with
        | Eq  -> x
-       | NEq -> if List.memq (K k) (fst (Uf.find x)).keys then x else
+       | NEq -> if List.mem_assq (K k) (fst (Uf.find x)).keys then x else
                   let y = fn l in
                   Uf.union cat_mlr x y;
                   y
@@ -911,7 +923,7 @@ let elim_left_rec : type a. a grammar -> unit = fun g ->
            begin
              g.phase <- LeftRecEliminated;
              let ptr = Uf.root { left = LNil; right = RNil; lpos = None
-                                 ; names = [g.n]; keys = [K g.k] } in
+                                 ; keys = [(K g.k,g.n)] } in
              let cached = g.cached <> NoCache in
              let (g',s) = fn (E (g.k, cached, ptr) :: above) g.ne in
              if cached then assert (s = ENil);
@@ -920,10 +932,10 @@ let elim_left_rec : type a. a grammar -> unit = fun g ->
                | ENil ->
                   (ERef g, ENil) (* non left recursive *)
                | _ ->
-                  let ({left; right; lpos; names; keys}, x) = Uf.find ptr in
+                  let ({left; right; lpos; keys}, x) = Uf.find ptr in
                   let left = LCns(g.k,g',left) in
                   let right = merge_elr_mlr_right g.k s right in
-                  Uf.set_root x {left; right; lpos; names; keys};
+                  Uf.set_root x {left; right; lpos; keys};
                   g.ne <- ELr(g.k, x);
                   match above with
                   | [] | E(_, true, _) :: _ ->

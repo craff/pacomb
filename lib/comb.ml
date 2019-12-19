@@ -73,6 +73,10 @@ module Prio =
 
 module Heap = Heap.Make(Prio)
 
+type 'a key = 'a Assoc.key
+
+module LAssoc = Assoc.Make(struct type 'a data = 'a Lazy.t end)
+
 (** Environment holding information required for parsing. *)
 type env =
   { blank_fun         : Blank.t
@@ -87,7 +91,7 @@ type env =
   (** Input buffer before reading the blanks. *)
   ; pos_before_blanks : Lex.pos
   (** Position in [buf_before_blanks] before reading the blanks. *)
-  ; lr                : Assoc.t
+  ; lr                : LAssoc.t
   (** Association table for the lr, lr_pos and mlr combinators *)
   ; cache_order       : int * int
   (** Information used  to order cache parsing, the first  [int] is the position
@@ -369,7 +373,7 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k ->
       in
       let env =
         { env with buf_before_blanks ; pos_before_blanks
-                   ; current_buf ; current_pos; lr = Assoc.empty }
+                   ; current_buf ; current_pos; lr = LAssoc.empty }
       in
       (** don't call the continuation, return to the scheduler *)
       Cont(env,k, lazy v)
@@ -475,13 +479,10 @@ let left_pos : (Pos.t -> 'a) t -> 'a t = fun g  env k ->
     g env (arg k pos)
 
 (** Read left pos from the lr table. *)
-let read_pos : Pos.t Assoc.key -> (Pos.t -> 'a) t -> 'a t =
+let read_pos : Pos.pos key -> (Pos.t -> 'a) t -> 'a t =
   fun key g env k ->
-    let pos = try Assoc.find key env.lr with Not_found -> assert false in
+    let pos = try LAssoc.find key env.lr with Not_found -> assert false in
     g env (arg k pos)
-
-(** key used by lr below *)
-type 'a key = 'a Lazy.t Assoc.key
 
 (** [lr g  gf] is the combinator used to  eliminate left recursion. Intuitively,
     it parses using  the "grammar" [g gf*].  An equivalent  combinator CANNOT be
@@ -490,7 +491,7 @@ type 'a key = 'a Lazy.t Assoc.key
 let lr : 'a t -> 'a key -> 'a t -> 'a t = fun g key gf env k ->
     let rec klr env v =
       add_queue env (Cont(env,k,v));
-      let lr = Assoc.add key v env.lr in
+      let lr = LAssoc.add key v env.lr in
       let env0 = { env with lr } in
       gf env0 (ink klr)
     in
@@ -498,13 +499,13 @@ let lr : 'a t -> 'a key -> 'a t -> 'a t = fun g key gf env k ->
 
 (** Same as above but incorporating the reading of the left position, stored
     in the lr table too. *)
-let lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> 'a t -> 'a t =
+let lr_pos : 'a t -> 'a key -> Pos.pos key -> 'a t -> 'a t =
   fun g key pkey gf env k ->
     let pos = Pos.get_pos env.current_buf env.current_pos in
     let rec klr env v =
       add_queue env (Cont(env,k,v));
-      let lr = Assoc.add key v env.lr in
-      let lr = Assoc.add pkey pos lr in
+      let lr = LAssoc.add key v env.lr in
+      let lr = LAssoc.add pkey pos lr in
       let env0 = { env with lr } in
       gf env0 (ink klr);
     in
@@ -573,7 +574,7 @@ let compile_mlr : mlr_left -> mlr_right -> mlr_res t = fun gl gr ->
   g0 gl
 
 (* the main combinator for mutually left recursive grammars *)
-let mlr : type a. ?lpos:Pos.t Assoc.key ->
+let mlr : type a. ?lpos:Pos.pos key ->
                mlr_left -> mlr_right -> a key -> a t =
   fun ?lpos gl gr fkey ->
     let g = compile_mlr gl gr in
@@ -588,10 +589,10 @@ let mlr : type a. ?lpos:Pos.t Assoc.key ->
           | Assoc.Eq  -> add_queue env (Cont(env,k,v));
           | Assoc.NEq -> ()
         end;
-        let lr = Assoc.add key v env.lr in
+        let lr = LAssoc.add key v env.lr in
         let lr = match lpos with
           | None -> lr
-          | Some pkey -> Assoc.add pkey pos lr
+          | Some pkey -> LAssoc.add pkey pos lr
         in
         let env0 = { env with lr } in
         g' env0 (ink klr)
@@ -600,7 +601,7 @@ let mlr : type a. ?lpos:Pos.t Assoc.key ->
 
 (** combinator to access the value stored by lr*)
 let read_tbl : 'a key -> 'a t = fun key env k ->
-    let v = try Assoc.find key env.lr with Not_found -> assert false in
+    let v = try LAssoc.find key env.lr with Not_found -> assert false in
     call k env v
 
 (** Combinator under a refrerence used to implement recursive grammars. *)
@@ -752,7 +753,7 @@ let gen_parse_buffer
     let (buf, col) = blank_fun buf0 col0 in
     let env =
       { buf_before_blanks = buf0 ; pos_before_blanks = col0
-        ; current_buf = buf ; current_pos = col; lr = Assoc.empty
+        ; current_buf = buf ; current_pos = col; lr = LAssoc.empty
         ; max_pos ; blank_fun ; cache_order = (-1,0)
         ; queue = ref Heap.empty }
     in

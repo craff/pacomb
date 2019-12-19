@@ -65,12 +65,13 @@ let _ =
       let f () =
         Printf.printf "=> %!"; (* initial prompt *)
         parse_channel ~utf8:Utf8.UTF8 exprs blank stdin;
+        print_grammar ~def:false stdout exprs;
         raise End_of_file
       in
       (* [Pos] module provides a function to handle exception with
          an optional argument to call for error (default is to exit with
          code 1 *)
-      handle_exception ~error:(fun _ -> ()) f ()
+      handle_exception ~error:(fun _ -> ()) f ();
     done
   with
     End_of_file -> ()

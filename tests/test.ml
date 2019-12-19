@@ -468,3 +468,7 @@ let _ =
       i j k s (float s/.float j);
     assert (j = k)
   done
+
+let _ = print_grammar stdout test12
+
+let _ = print_grammar ~def:false stdout test12

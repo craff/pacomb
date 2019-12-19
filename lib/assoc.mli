@@ -48,4 +48,28 @@ val mem : 'a key -> t -> bool
     there is no such binding, then {!exception:Not_found} is raised. *)
 val remove : 'a key -> t -> t
 
+val replace : 'a key -> 'a -> t -> t
+
 val append : t -> t -> t
+
+type iter = { f : 'a. 'a key -> 'a -> unit }
+val iter : iter -> t -> unit
+
+module Make(T:sig type 'a data end) :
+sig
+  type t
+  val empty : t
+
+  val add : 'a key -> 'a T.data -> t -> t
+  val length : t -> int
+  val add_key : 'a T.data -> t -> 'a key * t
+  val find : 'a key -> t -> 'a T.data
+  val mem : 'a key -> t -> bool
+  val remove : 'a key -> t -> t
+  val replace : 'a key -> 'a T.data -> t -> t
+  val append : t -> t -> t
+
+  type iter = { f : 'a. 'a key -> 'a T.data -> unit }
+  val iter : iter -> t -> unit
+
+end
