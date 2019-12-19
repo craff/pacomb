@@ -7,7 +7,13 @@ open Pos
 
 (* The three levels of priorities *)
 type p = Atom | Prod | Sum
-let%parser rec
+
+let string_of_prio = function
+  | Atom -> "A"
+  | Prod -> "P"
+  | Sum  -> "S"
+
+let%parser [@print_param string_of_prio] rec
               (* This includes each priority level in the next one *)
      expr p = Atom < Prod < Sum
             (* all other rule are selected by their priority level *)
@@ -29,6 +35,8 @@ let%parser rec exprs = () => () ; exprs top '\n' ==> ()
 let blank = Blank.from_charset (Charset.singleton ' ')
 
 let _ =
+  Printf.printf "parsing with:\n%a\n%!" (fun ch -> print_grammar ch) exprs;
+  Printf.printf "compiled to:\n%a\n%!" (fun ch -> print_grammar ~def:false ch) exprs;
   try
     while true do
       let f () =

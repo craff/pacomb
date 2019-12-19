@@ -32,6 +32,13 @@ let layout_att =
                Ast_pattern.(single_expr_payload __)
                (fun x -> x))
 
+let print_param_att =
+  let open Ppxlib in
+  Attribute.(declare "print_param"
+               Context.Value_binding
+               Ast_pattern.(single_expr_payload __)
+               (fun x -> x))
+
 let unit_ = let loc = none in [%expr ()]
 
 (* make a location from two *)
@@ -500,7 +507,7 @@ let vb_to_parser rec_ vb =
       | Some _ -> [%expr Pacomb.Grammar.cache [%e rules]]
       | None   -> rules
     in
-    (loc,changed,name,vb.pvb_pat,name_param,rules)
+    (loc,changed,name,vb,name_param,rules)
   in
   let ls = List.map gn vb in
   if not (List.exists (fun (_,changed,_,_,_,_) -> changed) ls)
@@ -511,20 +518,35 @@ let vb_to_parser rec_ vb =
   in
   let set name = "set__grammar__" ^ name.txt in
   let declarations =
-    let gn (loc,changed,(name:string loc),pat,param,_) =
+    let gn (loc,changed,(name:string loc),vb,param,_) =
       assert changed;
       match param with
       | None ->
-         [Vb.mk ~loc pat
-           [%expr Pacomb.Grammar.declare_grammar
-               [%e Exp.constant ~loc:name.loc (Const.string name.txt)]]]
+         let expr = [%expr Pacomb.Grammar.declare_grammar
+                        [%e Exp.constant ~loc:name.loc (Const.string name.txt)]]
+         in
+         let expr =
+           match Ppxlib.Attribute.get print_param_att vb with
+           | Some _ -> add_attribute expr (attribute_of_warning loc "useless @print_param attribute")
+           | None   -> expr
+         in
+         [Vb.mk ~loc vb.pvb_pat expr]
+
       | Some(_,_,_,curry) ->
-         let pat = if curry <> None then Pat.var name else pat in
+         let pat = if curry <> None then Pat.var name else vb.pvb_pat in
+         let gname = Exp.constant ~loc:name.loc (Const.string name.txt) in
+         let expr =
+           match Ppxlib.Attribute.get print_param_att vb with
+           | Some pr ->
+              [%expr Pacomb.Grammar.grammar_family ~param_to_string:[%e pr]
+                  [%e gname]]
+           | None   -> [%expr Pacomb.Grammar.grammar_family [%e gname]]
+         in
          [Vb.mk ~loc (Pat.tuple [pat; Pat.var (mkloc (set name) name.loc)])
-           [%expr Pacomb.Grammar.grammar_family
-               [%e Exp.constant ~loc:name.loc (Const.string name.txt)]]]
+           expr]
+
     in
-    let hn (loc,_,(name:string loc),pat,param,_) =
+    let hn (loc,_,(name:string loc),vb,param,_) =
       match param with
       | Some(_,_,_,Some lbls) ->
          let args =
@@ -547,14 +569,14 @@ let vb_to_parser rec_ vb =
                let pat = Pat.var v in
                Exp.fun_ lbl def pat exp) args exp
          in
-         [Vb.mk  ~loc pat exp]
+         [Vb.mk  ~loc vb.pvb_pat exp]
       | _ -> []
     in
     List.map gn gr @ List.map hn gr
   in
   let orig =
-    let gn (loc,_,_,pat,_,rules) =
-        Vb.mk ~loc pat rules
+    let gn (loc,_,_,vb,_,rules) =
+        Vb.mk ~loc vb.pvb_pat rules
     in
     List.map gn orig
   in

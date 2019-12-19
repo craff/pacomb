@@ -3,10 +3,31 @@ module Uf = UnionFind
 
 type 'a cache = NoCache | Cache of ('a -> 'a -> 'a) option
 
+type name_kind = Given | Created | Inherited
+
+type name = string * name_kind
+
+let gen_name =
+  let c = ref 0 in
+  (fun name ->
+    match name with
+    | None   -> incr c; (Printf.sprintf "?%d" !c, Created)
+    | Some n -> n)
+
+let created = function
+  | None -> None
+  | Some n -> Some(n,Created)
+
+let created2 name upname = match name with
+  | Some n -> Some(n,Created)
+  | None -> if snd upname <> Created then Some (fst upname, Inherited)
+            else None
+
+
 (** Type for a grammar *)
 type 'a grammar =
   { mutable d : 'a grdf   (** the definition of the grammar *)
-  ; n : string            (** name of the grammar *)
+  ; n : name              (** name of the grammar *)
   ; k : 'a Comb.key       (** a key used mainly to detect recursion *)
   ; recursive : bool      (** really means declared first and defined after,
                               using declare/set_grammar *)
@@ -139,21 +160,21 @@ let rec eq : type a b.a grammar -> b grammar -> (a, b) Assoc.eq =
        end
 
 (** grammar renaming *)
-let give_name n g = { g with n }
+let give_name n g = { g with n = (n, Given) }
 
 (** helper to construct the initial ['a grammar] record *)
-let mkg : ?name:string -> ?recursive:bool -> ?cached:'a cache ->
+let mkg : ?name:name -> ?recursive:bool -> ?cached:'a cache ->
           'a grdf -> 'a grammar =
-  fun ?(name="...") ?(recursive=false) ?(cached=NoCache) d ->
+  fun ?name ?(recursive=false) ?(cached=NoCache) d ->
     let k = Assoc.new_key () in
-    { e = []; d; n = name; k; recursive; cached
+    { e = []; d; n = gen_name name; k; recursive; cached
     ; compiled = ref Comb.assert_false
     ; charset = None; phase = Defined; ne = ETmp }
 
 (** cache is added as information in the grammar record because when
     a grammar is cached, elimination of left recursion is useless *)
 let cache ?name ?merge g =
-  let name = match name with None -> g.n | Some n -> n in
+  let name = gen_name (created name) in
   { g with cached = Cache merge; n = name }
 
 (** printing functions, usable for debugging, not yet for documentation
@@ -177,7 +198,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
   let keys_name = ref [] in
   let do_def g =
     g.recursive ||
-      (g.n <> "..." && match g.d with Term _ -> false | _ -> true)
+      (snd g.n <> Created && match g.d with Term _ -> false | _ -> true)
   in
   let get_name k = List.assq (Assoc.K k) !keys_name in
 
@@ -236,14 +257,14 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
       let name = get_name k in
       let gright = mkg (Alt right) in
       gright.ne <- EAlt (List.map (fun x -> x.ne) right);
-      Printf.fprintf ch "  %s ::= %a %a*\n"
+      Printf.fprintf ch "\n  %s ::= %a %a*"
         name (print_grne Atom) (EAlt left) (print_negr Atom) gright
     in
     let print_matrix ch =
       AssocLr.iter { f = fun x -> print_one ch x } !matrix
     in
     let name = get_name k in
-    Printf.fprintf ch "%s from \n%t" name print_matrix
+    Printf.fprintf ch "%s from %t" name print_matrix
 
   and print_grdf : type a. prio -> out_channel -> a grdf -> unit =
   fun prio ch g ->
@@ -272,12 +293,12 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
   and print_negr : type a. prio -> out_channel -> a grammar -> unit =
   fun prio ch g ->
     let pr x = Printf.fprintf ch x in
-    if List.memq (Assoc.K g.k) !adone then Printf.fprintf ch "%s" g.n
+    if List.memq (Assoc.K g.k) !adone then Printf.fprintf ch "%s" (fst g.n)
     else if do_def g then
       begin
         adone := K g.k :: !adone;
         todo := G g :: !todo;
-        pr "%s" g.n
+        pr "%s" (fst g.n)
       end
     else
       begin
@@ -290,12 +311,12 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
   and print_dfgr : type a. prio -> out_channel -> a grammar -> unit =
   fun prio ch g ->
     let pr x = Printf.fprintf ch x in
-    if List.memq (Assoc.K g.k) !adone then Printf.fprintf ch "%s" g.n
+    if List.memq (Assoc.K g.k) !adone then Printf.fprintf ch "%s" (fst g.n)
     else if do_def g then
       begin
         adone := K g.k :: !adone;
         todo := G g :: !todo;
-        pr "%s" g.n
+        pr "%s" (fst g.n)
       end
     else
       begin
@@ -311,7 +332,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
       [] -> assert false
     | G s::l ->
        todo := l;
-       let pr f x = Printf.fprintf ch "%s ::= %a\n" s.n f x in
+       let pr f x = Printf.fprintf ch "%s ::= %a\n" (fst s.n) f x in
        let pne ch s =
          match s.e with
          | [] -> print_grne PAlt ch s.ne
@@ -327,7 +348,7 @@ let print_grne : type a. out_channel -> a grne -> unit =
   let g =
     { e = []
     ; d = Tmp
-    ; n = ""
+    ; n = ("TOP", Given)
     ; k = Assoc.new_key ()
     ; recursive = false
     ; cached = NoCache
@@ -343,20 +364,22 @@ let _ = print_grne
 
 (** Interface to constructors.  propagate Fail because it is tested by
    elim_left_rec for the Lr suffix *)
-let fail ?name () = mkg ?name Fail
+let fail ?name () = let name = created name in mkg ?name Fail
 
-let empty ?name x = mkg ?name (Empty x)
+let empty ?name x = let name = created name in mkg ?name (Empty x)
 
 let cond ?name b = if b then empty ?name () else fail ?name ()
 
 let term ?name (x) =
   if accept_empty x then
     invalid_arg (Printf.sprintf "term: empty terminals %s" x.n);
-  let name = match name with None -> x.Lex.n | Some n -> n in
-  mkg ~name (Term x)
+  let name = created2 name (x.Lex.n,Inherited) in
+  mkg ?name (Term x)
 
 let appl : type a b. ?name:string -> a t -> (a -> b) -> b t =
-  fun ?name g f -> mkg ?name (
+  fun ?name g f ->
+  let name = created2 name g.n in
+  mkg ?name (
   match g.d with
   | Fail         -> Fail
   | Appl(g,f')   -> Appl(g,(fun x -> f (f' x)))
@@ -366,7 +389,8 @@ let appl : type a b. ?name:string -> a t -> (a -> b) -> b t =
   (* | RPos(g)      -> RPos(appl g (fun h x -> f (h x))) *)
   | _            -> Appl(g,f))
 
-let seq ?name g1 g2 = mkg ?name (
+let seq ?name g1 g2 =
+  let name = created name in mkg ?name (
   match g1.d,g2.d with
   | Fail, _    -> Fail
   | _, Fail    -> Fail
@@ -375,11 +399,16 @@ let seq ?name g1 g2 = mkg ?name (
   | _          -> Seq(g1,g2))
 
 let dseq ?name g1 g2 =
+  let name = created name in
   mkg ?name (if g1.d = Fail then Fail else DSeq(g1,g2))
 
-let lpos ?name ?pk g = mkg ?name (if g.d = Fail then Fail else LPos(pk,g))
+let lpos ?name ?pk g =
+  let name = created2 name g.n in
+  mkg ?name (if g.d = Fail then Fail else LPos(pk,g))
 
-let rpos ?name g = mkg ?name (if g.d = Fail then Fail else RPos(g))
+let rpos ?name g =
+  let name = created2 name g.n in
+  mkg ?name (if g.d = Fail then Fail else RPos(g))
 
 type (_,_) plist =
   | PE : ('a, 'a) plist
@@ -389,12 +418,13 @@ type (_,_) plist =
 
 let rec alt : type a. ?name:string -> a t list -> a t = fun ?name l ->
   let l = List.filter (fun g -> g.d <> Fail) l in
-  let l = List.map (function { d = Alt(ls) } -> ls | x -> [x]) l in
+  let l = List.map (function { n = (_,(Created|Inherited))
+                             ; d = Alt(ls) } -> ls | x -> [x]) l in
   let l = List.flatten l in
   match l with
   | [] -> fail ()
   | [g] -> g
-  | l   -> mkg ?name (Alt( left_factorise l))
+  | l   -> let name = created name in mkg ?name (Alt( left_factorise l))
 
 and left_factorise : type a.a t list -> a t list = fun l ->
   let recompose : type a b.(a,b) plist -> a t -> a t -> b t =
@@ -498,26 +528,32 @@ let seq_pos ?name g1 g2 =
   seq ?name (lpos (rpos (appl g1 (fun x rpos lpos -> (lpos, x, rpos)))))
     g2
 
-let error ?name m = mkg ?name (Err m)
+let error ?name m =
+  let name = created name in
+  mkg ?name (Err m)
 
 let eval ?name g =
+  let name = created2 name g.n in
   mkg ?name (if g.d = Fail then Fail else Eval(g))
 
-let test ?name f g = mkg ?name (if g.d = Fail then Fail else Test(f,g))
+let test ?name f g =
+  let name = created2 name g.n in
+  mkg ?name (if g.d = Fail then Fail else Test(f,g))
 
 let test_before ?name f g = test ?name (Before f) g
 
 let test_after ?name f g = test ?name (After f) g
 
-let no_blank_before g =
+let no_blank_before ?name g =
   let fn b1 c1 b2 c2 = Input.buffer_equal b1 b2 && c1 = c2 in
-  test_before ~name:"no_blank"  fn g
+  test_before ?name  fn g
 
-let no_blank_after g =
+let no_blank_after ?name g =
   let fn _ b1 c1 b2 c2 = Input.buffer_equal b1 b2 && c1 = c2 in
-  test_after ~name:"no_blank"  fn g
+  test_after ?name  fn g
 
 let layout ?name ?(config=Blank.default_layout_config) b g =
+  let name = created2 name g.n in
   mkg ?name (if g.d = Fail then Fail else Layout(b,g,config))
 
 (** function to define mutually recursive grammar:
@@ -532,14 +568,14 @@ let set_grammar : type a. a grammar -> a grammar -> unit =
       failwith
         (Printf.sprintf
            "set_grammar: grammar %s already set or not created by set_grammar"
-           g1.n)
+           (fst g1.n))
     ;
     g1.d <- g2.d;
     g1.cached <- g2.cached
 
 let fixpoint : type a. ?name:string -> (a grammar -> a grammar) -> a grammar =
-  fun ?(name="...") g ->
-    let g0 = declare_grammar name in
+  fun ?name g ->
+    let g0 = declare_grammar (gen_name (created name)) in
     set_grammar g0 (g g0);
     g0
 
@@ -559,23 +595,44 @@ let default_option : ?name:string -> 'a -> 'a grammar -> 'a grammar =
   fun ?name d g -> alt ?name [g; empty d]
 
 let star : ?name:string -> 'a grammar -> 'a list grammar = fun ?name g ->
+  let name = match name with None -> if snd g.n <> Created
+                                     then Some(fst g.n ^ "*")
+                                     else None
+                           | _ -> name
+  in
   appl ?name (fixpoint (fun r ->
             alt [empty [];
                  seq r (appl g (fun x l -> x::l))])) List.rev
 
 let plus : ?name:string -> 'a grammar -> 'a list grammar = fun ?name g ->
+  let name = match name with None -> if snd g.n <> Created
+                                     then Some(fst g.n ^ "+")
+                                     else None
+                           | _ -> name
+  in
   appl ?name (fixpoint (fun r ->
             alt [appl g (fun x -> [x]);
                  seq r (appl g (fun x l -> x::l))])) List.rev
 
 let plus_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar =
   fun ?name sep g ->
+    let name = match name with None -> if snd g.n <> Created
+                                       then Some(fst g.n ^ "+" ^ fst sep.n)
+                                       else None
+                             | _ -> name
+    in
     appl ?name (fixpoint (fun r ->
             alt [appl g (fun x -> [x]);
                  seq r (seq sep (appl g (fun x _ l -> x::l)))])) List.rev
 
 let star_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar =
-  fun ?name sep g -> alt ?name [empty []; plus_sep sep g]
+  fun ?name sep g ->
+     let name = match name with None -> if snd g.n <> Created
+                                       then Some(fst g.n ^ "*" ^ fst sep.n)
+                                       else None
+                             | _ -> name
+    in
+    alt ?name [empty []; plus_sep sep g]
 
 (** a function to defined indexed grammars *)
 let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
@@ -584,7 +641,7 @@ let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
   (fun p ->
     try Hashtbl_eq.find tbl p
     with Not_found ->
-      let g = declare_grammar (name^"_"^param_to_string p) in
+      let g = declare_grammar (name^"_"^param_to_string p, Given) in
       Hashtbl_eq.add tbl p g;
       (match !is_set with None -> ()
                         | Some f -> set_grammar g (f p);
@@ -723,7 +780,7 @@ let factor_empty g =
     | Tmp           -> failwith
                          (Printf.sprintf
                             "grammar %s compiled before full definition"
-                            g.n)
+                            (fst g.n))
 
   in
   let rec hn : type a. a grammar -> unit = fun g ->
@@ -923,7 +980,7 @@ let elim_left_rec : type a. a grammar -> unit = fun g ->
            begin
              g.phase <- LeftRecEliminated;
              let ptr = Uf.root { left = LNil; right = RNil; lpos = None
-                                 ; keys = [(K g.k,g.n)] } in
+                                 ; keys = [(K g.k,fst g.n)] } in
              let cached = g.cached <> NoCache in
              let (g',s) = fn (E (g.k, cached, ptr) :: above) g.ne in
              if cached then assert (s = ENil);
@@ -1149,7 +1206,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
 
 let compile g = compile false g
 
-let grammar_name g = g.n
+let grammar_name g = fst g.n
 
 (** functions to actually use the parser *)
 let add_eof g = seq g (appl (term (eof ())) (fun _ x -> x))
@@ -1191,3 +1248,9 @@ let parse_file ?(utf8=Utf8.ASCII) g b filename =
     parse_channel ~utf8 ~filename g b ic
 
 let lpos ?name g = lpos ?name ?pk:None g
+
+let declare_grammar name = declare_grammar (name, Given)
+
+let print_grammar ?(no_other=false) ?(def=true) ch s =
+  let _ = compile s in
+  print_grammar ~no_other ~def ch s

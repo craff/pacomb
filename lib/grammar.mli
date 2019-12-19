@@ -8,6 +8,10 @@ type 'a grammar
 (** An abbreviation *)
 type 'a t = 'a grammar
 
+type name_kind = Given | Created | Inherited
+
+type name = string * name_kind
+
 (** {2 Grammar contructors} *)
 
 (** All  construœqctors can be  given an optional  [name] argument that  is used
@@ -96,8 +100,8 @@ val test_after : ?name:string
                  -> 'a grammar -> 'a grammar
 
 (** particular cases of the above testing the absence of blanks. *)
-val no_blank_before : 'a grammar -> 'a grammar
-val no_blank_after : 'a grammar -> 'a grammar
+val no_blank_before : ?name:string -> 'a grammar -> 'a grammar
+val no_blank_after  : ?name:string -> 'a grammar -> 'a grammar
 
 (** [layout b g] changes the blank  function to parse the input with the grammar
     [g].  The optional parameters allow to  control which blanks are used at the
