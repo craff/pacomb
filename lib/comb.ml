@@ -416,7 +416,7 @@ let simple_alt : 'a t -> 'a t -> 'a t = fun g1 g2 env k ->
   add_queue env (Gram(env,g2,k)); g1 env k
 
 let dispatch = fun tbl mini maxi env k ->
-  let (c,_,_) = Input.read env.current_buf env.current_pos in
+  let c = Input.get env.current_buf env.current_pos in
   let i = Char.code c in
   if i < mini || i > maxi then next env
   else tbl.(Char.code c - mini) env k

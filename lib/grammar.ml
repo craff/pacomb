@@ -1187,8 +1187,8 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   | ETmp -> assert false
 
  and compile_alt : type a. a grne list -> a Comb.t = fun gs ->
-  let l = List.map (fun g -> (first_charset g, compile_ne g)) gs in
-  Comb.alt l
+   let l = List.map (fun g -> (first_charset g, compile_ne g)) gs in
+   Comb.alt l
 
  and compile : type a. bool -> a grammar -> a Comb.t =
   fun ne g ->

@@ -64,9 +64,9 @@ let sub b i len =
 
 (* Get the character at the given position in the given buffer. *)
 let rec get (lazy l) i =
+  if i < llen l then l.data.[i] else
   if is_eof l then '\255' else
-  if i < llen l then l.data.[i]
-  else get l.next (i - llen l)
+  get l.next (i - llen l)
 
 (* Get the name of a buffer. *)
 let filename (lazy b) = b.infos.name
