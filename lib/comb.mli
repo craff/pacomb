@@ -44,7 +44,7 @@ val lexeme : 'a Lex.lexeme -> 'a t
     starts by parsing  using [g1], and then  parses the rest of  the input using
     [g2]. The result of  parsing with [g2] is then apply to  the result of [g1].
  *)
-val seq : 'a t -> ('a -> 'b) t -> 'b t
+val seq : 'a t -> Charset.t -> ('a -> 'b) t -> 'b t
 
 (** [dseq c1 c2] is a dependant sequence, contrary to [seq c1 c2], the
     combinator used to parse after [c1] depends upon the first value returned by

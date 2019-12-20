@@ -1092,6 +1092,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
     | ETmp -> assert false
 
   and gn : type a. a grammar -> bool * Charset.t = fun g ->
+    assert (g.phase >= EmptyRemoved);
     assert (g.recursive || g.cached <> NoCache);
     match g.charset with
     | Some (n,c) when n >= !target -> (false, c)
@@ -1103,8 +1104,11 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
        g.charset <- Some (!target, old);
        let (shift, r) = fn g.ne in
        assert (not shift);
-       g.charset <- Some (!target, r);
-       if r <> old then changed := true;
+       if r <> old then
+         begin
+           g.charset <- Some (!target, r);
+           changed := true;
+         end;
        (shift, r)
   in
   let res = ref Charset.empty in
@@ -1122,9 +1126,16 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   | EErr m -> Comb.error m
   | ETerm(c) -> Comb.lexeme c.f
   | EAlt(gs) -> compile_alt gs
-  | ESeq(g1,g2) -> Comb.seq (compile_ne g1) (compile false g2)
-  | EDSeq(g1,g2) -> Comb.dseq (compile_ne g1)
-                      (fun x -> compile false (g2 x))
+  | ESeq(g1,g2) -> Comb.seq (compile_ne g1)
+                     (if g2.e = [] then first_charset g2.ne else Charset.full)
+                     (compile false g2)
+  | EDSeq(g1,g2) ->
+     let memo = Hashtbl_eq.create 16 in
+     Comb.dseq (compile_ne g1)
+       (fun x -> try Hashtbl_eq.find memo x with Not_found ->
+                   let cg = compile false (g2 x) in
+                   Printf.printf "COMPIlE\n%!";
+                   Hashtbl_eq.add memo x cg; cg)
   | EAppl(g1,f) -> Comb.app (compile_ne g1) f
   | ELr(k,x) ->
      begin

@@ -380,9 +380,20 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k ->
     with Lex.NoParse -> next env
        | Lex.Give_up m -> next_msg m env
 
+(** [test cs env]  returns [true] if and only if the next  character to parse in
+    the environment [env] is in the character set [cs]. *)
+let test cs e = Charset.mem cs (Input.get e.current_buf e.current_pos)
+
 (** Sequence combinator. *)
-let seq : 'a t -> ('a -> 'b) t -> 'b t = fun g1 g2 env k ->
-    g1 env (ink (fun env x -> g2 env (lrg k x)))
+let seq : 'a t -> Charset.t -> ('a -> 'b) t -> 'b t = fun g1 cs g2 ->
+  if Charset.equal cs Charset.full then
+     fun env k ->
+    g1 env
+      (ink (fun env x -> g2 env (lrg k x)))
+ else
+    fun env k ->
+    g1 env
+      (ink (fun env x -> if test cs env then g2 env (lrg k x) else next env))
 
 (** Dependant sequence combinator. *)
 let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
@@ -396,10 +407,6 @@ let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
            fun () -> g env (arg k v2)
          with Lex.NoParse -> fun () -> next env
             | Lex.Give_up m -> fun () -> next_msg m env) ()))
-
-(** [test cs env]  returns [true] if and only if the next  character to parse in
-    the environment [env] is in the character set [cs]. *)
-let test cs e = Charset.mem cs (Input.get e.current_buf e.current_pos)
 
 (** option combinator,  contrary to [alt] apply to [empty],  it uses the charset
     of the  continuation for prediction. Therefore  it is preferable not  to use
