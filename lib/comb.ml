@@ -429,29 +429,30 @@ let dispatch = fun tbl mini maxi env k ->
   else tbl.(Char.code c - mini) env k
 
 let alt : (Charset.t * 'a t) list -> 'a t = fun l ->
-    let rec fn mini maxi i =
-      if i = 256 then (mini, maxi) else
+  match l with [] -> fail | [(_,x)] -> x | _ ->
+  let rec fn mini maxi i =
+    if i = 256 then (mini, maxi) else
       if List.exists (fun (cs, _) -> Charset.mem cs (Char.chr i)) l
       then let mini = min mini i in
            let maxi = max maxi i in
            fn mini maxi (i+1)
       else
         fn mini maxi (i+1)
+  in
+  let mini, maxi = fn 256 (-1) 0 in
+  if maxi < mini then fail else
+    let tbl =
+      Array.init (maxi - mini + 1)
+        (fun i ->
+          let i = i + mini in
+          let l = List.filter (fun (cs,_) -> Charset.mem cs (Char.chr i)) l in
+          let rec fn = function
+            | [] -> fail
+            | [(_,g)] -> g
+            | (_,g)::l -> simple_alt g (fn l)
+          in fn l)
     in
-    let mini, maxi = fn 256 (-1) 0 in
-    if maxi < mini then fail else
-      let tbl =
-        Array.init (maxi - mini + 1)
-          (fun i ->
-            let i = i + mini in
-            let l = List.filter (fun (cs,_) -> Charset.mem cs (Char.chr i)) l in
-            let rec fn = function
-                [] -> fail
-              | [(_,g)] -> g
-              | (_,g)::l -> simple_alt g (fn l)
-            in fn l)
-      in
-      dispatch tbl mini maxi
+    dispatch tbl mini maxi
 
 (** Application of a semantic function to alter a combinator. *)
 let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k ->

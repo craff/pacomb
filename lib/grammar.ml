@@ -1134,7 +1134,6 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
      Comb.dseq (compile_ne g1)
        (fun x -> try Hashtbl_eq.find memo x with Not_found ->
                    let cg = compile false (g2 x) in
-                   Printf.printf "COMPIlE\n%!";
                    Hashtbl_eq.add memo x cg; cg)
   | EAppl(g1,f) -> Comb.app (compile_ne g1) f
   | ELr(k,x) ->
