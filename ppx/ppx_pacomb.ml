@@ -507,6 +507,13 @@ let vb_to_parser rec_ vb =
       | Some _ -> [%expr Pacomb.Grammar.cache [%e rules]]
       | None   -> rules
     in
+    let rules =
+      if rec_ = Nonrecursive && changed then
+        [%expr Pacomb.Grammar.give_name
+            [%e Exp.constant ~loc:name.loc (Const.string name.txt)]
+            [%e rules]]
+      else rules
+    in
     (loc,changed,name,vb,name_param,rules)
   in
   let ls = List.map gn vb in

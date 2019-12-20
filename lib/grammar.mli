@@ -8,7 +8,7 @@ type 'a grammar
 (** An abbreviation *)
 type 'a t = 'a grammar
 
-type name_kind = Given | Created | Inherited
+type name_kind = Created | Inherited | Given
 
 type name = string * name_kind
 

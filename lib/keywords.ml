@@ -36,7 +36,8 @@ module Make(S : Spec) =
         if Charset.mem S.id_charset c then Lex.give_up ();
         ((), !str, !pos)
       in
-      Grammar.term { n = s; f = fn ; a = Keyword(s,uid);
+      let n = Printf.sprintf "%S" s in
+      Grammar.term { n; f = fn ; a = Keyword(s,uid);
                      c = Charset.singleton s.[0] }
 
     let create : string -> unit Grammar.t = fun s ->

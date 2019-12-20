@@ -3,9 +3,17 @@ module Uf = UnionFind
 
 type 'a cache = NoCache | Cache of ('a -> 'a -> 'a) option
 
-type name_kind = Given | Created | Inherited
+type name_kind = Created | Inherited | Given
 
 type name = string * name_kind
+
+let best (_,k1 as n1) (s2,k2 as n2) =
+  match (k1,k2) with
+  | (Given    , _        ) -> n1
+  | (_        , Given    ) -> (s2, Inherited)
+  | (Inherited, _        ) -> n1
+  | (_        , Inherited) -> n2
+  | (Created  , Created  ) -> n1
 
 let gen_name =
   let c = ref 0 in
@@ -16,10 +24,10 @@ let gen_name =
 
 let created = function
   | None -> None
-  | Some n -> Some(n,Created)
+  | Some n -> Some(n,Given)
 
 let created2 name upname = match name with
-  | Some n -> Some(n,Created)
+  | Some n -> Some(n,Given)
   | None -> if snd upname <> Created then Some (fst upname, Inherited)
             else None
 
@@ -27,7 +35,7 @@ let created2 name upname = match name with
 (** Type for a grammar *)
 type 'a grammar =
   { mutable d : 'a grdf   (** the definition of the grammar *)
-  ; n : name              (** name of the grammar *)
+  ; mutable n : name      (** name of the grammar *)
   ; k : 'a Comb.key       (** a key used mainly to detect recursion *)
   ; recursive : bool      (** really means declared first and defined after,
                               using declare/set_grammar *)
@@ -160,7 +168,7 @@ let rec eq : type a b.a grammar -> b grammar -> (a, b) Assoc.eq =
        end
 
 (** grammar renaming *)
-let give_name n g = { g with n = (n, Given) }
+let give_name n g = g.n <- (n, Given); g
 
 (** helper to construct the initial ['a grammar] record *)
 let mkg : ?name:name -> ?recursive:bool -> ?cached:'a cache ->
@@ -196,11 +204,16 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
   let adone = ref [] in
   let todo = ref [] in
   let keys_name = ref [] in
+
   let do_def g =
     g.recursive ||
-      (snd g.n <> Created && match g.d with Term _ -> false | _ -> true)
+      (snd g.n = Given && match g.d with Term _ -> false | _ -> true)
   in
   let get_name k = List.assq (Assoc.K k) !keys_name in
+  let add_name k name =
+    if not (List.mem_assq k !keys_name)
+    then keys_name := (k, name) :: !keys_name
+  in
 
   let rec print_grne : type a. prio -> out_channel -> a grne -> unit =
     fun prio ch g ->
@@ -231,9 +244,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
   and print_lr : type a. a key -> mlr Uf.t -> out_channel -> unit =
     fun k lr ch ->
     let ({left; right; keys; _}, _) = Uf.find lr in
-    List.iter (fun (k,name) ->
-        if not (List.mem_assq k !keys_name)
-        then keys_name := (k, name ^ "_lr") :: !keys_name) keys;
+    List.iter (fun (k, name) -> add_name k (name ^ "_lr")) keys;
     let matrix  = ref AssocLr.empty in
     let get_matrix k = try AssocLr.find k !matrix with Not_found -> ([], []) in
     let add_matrix k c = matrix := AssocLr.replace k c !matrix in
@@ -308,20 +319,49 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
         | _  -> pr "(() | %a)" (pg PAlt) g.ne
       end
 
-  and print_dfgr : type a. prio -> out_channel -> a grammar -> unit =
-  fun prio ch g ->
+  and print_dfgr : type a. ?forced:bool -> prio -> out_channel -> a grammar -> unit =
+    fun ?(forced=false) prio ch g ->
+    let rec fn : type a. name -> a grammar -> unit = fun name g ->
+      (*      if fst g.n = "qident" || fst name = "qident" then Printf.eprintf "coucou %s %b %s %b\n%!" (fst name) (snd name = Given) (fst g.n) (snd g.n = Given);*)
+      let name = best name g.n in
+      if snd name = Given && snd g.n = Given then print_sdfgr forced name prio ch g
+      else (match g.d with
+            | Appl(g,_) -> fn name g
+            | LPos(_,g) -> fn name g
+            | RPos(g)   -> fn name g
+            | Layout(_,g,_) -> fn name g
+            | Test(_,g) -> fn name g
+            | Eval(g) -> fn name g
+            | _ -> print_sdfgr forced name prio ch g)
+    in
+    fn ("????",Created) g
+
+  and print_sdfgr : type a. bool -> name -> prio -> out_channel -> a grammar -> unit =
+    fun forced name0 prio ch g ->
+    let name =
+      if snd name0 <> Created then (add_name (K g.k) (fst name0); fst name0)
+      else try get_name g.k with Not_found -> fst g.n
+    in
+(*    if fst g.n = "qident" || fst name0 = "qident" then
+      Printf.eprintf "COUCOU %s %b %s %b %s\n%!"
+        (fst name0) (snd name0 <> Created) (fst g.n) (snd g.n = Given) (fst name0);*)
     let pr x = Printf.fprintf ch x in
-    if List.memq (Assoc.K g.k) !adone then Printf.fprintf ch "%s" (fst g.n)
-    else if do_def g then
+    if List.memq (Assoc.K g.k) !adone && not forced then Printf.fprintf ch "%s" name
+    else if (snd name0 <> Created || do_def g) && not forced then
       begin
         adone := K g.k :: !adone;
         todo := G g :: !todo;
-        pr "%s" (fst g.n)
+        pr "%s" name
       end
     else
       begin
         let pg x = print_grdf x in
-        pr "%a" (pg prio) g.d
+        if forced then
+          match g.d with
+          | Term _ -> ()
+          | _ -> Printf.fprintf ch "%s ::= %a\n" name (pg prio) g.d
+        else
+          pr "%a" (pg prio) g.d
       end
 
   in
@@ -338,7 +378,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
          | [] -> print_grne PAlt ch s.ne
          | _  -> Printf.printf "(() | %a)" (print_grne PAlt) s.ne
        in
-       if def then pr (print_grdf PAlt) s.d else pr pne s;
+       if def then print_dfgr ~forced:true PAlt ch s else pr pne s;
        if no_other then todo := []
 
   done
@@ -376,27 +416,29 @@ let term ?name (x) =
   let name = created2 name (x.Lex.n,Inherited) in
   mkg ?name (Term x)
 
-let appl : type a b. ?name:string -> a t -> (a -> b) -> b t =
+let appl : type a b. ?name:name -> a t -> (a -> b) -> b t =
   fun ?name g f ->
-  let name = created2 name g.n in
-  mkg ?name (
-  match g.d with
-  | Fail         -> Fail
-  | Appl(g,f')   -> Appl(g,(fun x -> f (f' x)))
-  | Empty x      -> Empty (f x)
-  (* | Seq(g1,g2)   -> Seq(g1,appl g2 (fun h x -> f (h x))) *)
-  (* | LPos(None,g) -> LPos(None, appl g (fun h x -> f (h x))) *)
-  (* | RPos(g)      -> RPos(appl g (fun h x -> f (h x))) *)
-  | _            -> Appl(g,f))
+  let name = gen_name name in
+  let df, name =
+    match g.d with
+    | Fail         -> Fail, best name g.n
+    | Appl(g',f')  -> Appl(g',(fun x -> f (f' x))), best name g.n
+    | Empty x      -> Empty (f x), best name g.n
+    (* | Seq(g1,g2)   -> Seq(g1,appl g2 (fun h x -> f (h x))) *)
+    (* | LPos(None,g) -> LPos(None, appl g (fun h x -> f (h x))) *)
+    (* | RPos(g)      -> RPos(appl g (fun h x -> f (h x))) *)
+    | _            -> Appl(g,f), name
+  in
+  mkg ~name df
 
 let seq ?name g1 g2 =
-  let name = created name in mkg ?name (
+  let name = created name in
   match g1.d,g2.d with
-  | Fail, _    -> Fail
-  | _, Fail    -> Fail
-  | Empty x, _ -> (appl g2 (fun y -> y x)).d
-  | _, Empty y -> (appl g1 y).d
-  | _          -> Seq(g1,g2))
+  | Fail, _    -> mkg ?name Fail
+  | _, Fail    -> mkg ?name Fail
+  | Empty x, _ -> appl ?name g2 (fun y -> y x)
+  | _, Empty y -> appl ?name g1 y
+  | _          -> mkg ?name (Seq(g1,g2))
 
 let dseq ?name g1 g2 =
   let name = created name in
@@ -416,15 +458,15 @@ type (_,_) plist =
   | PL : ('b, 'c) plist -> (Pos.t -> 'b,'c) plist
   | PR : ('b, 'c) plist -> (Pos.t -> 'b,'c) plist
 
-let rec alt : type a. ?name:string -> a t list -> a t = fun ?name l ->
+let rec alt : type a. ?name:name -> a t list -> a t = fun ?name l ->
   let l = List.filter (fun g -> g.d <> Fail) l in
-  let l = List.map (function { n = (_,(Created|Inherited))
+  let l = List.map (function { n = (_,(Given|Inherited))
                              ; d = Alt(ls) } -> ls | x -> [x]) l in
   let l = List.flatten l in
   match l with
   | [] -> fail ()
   | [g] -> g
-  | l   -> let name = created name in mkg ?name (Alt( left_factorise l))
+  | l   -> let name = gen_name name in mkg ~name (Alt( left_factorise l))
 
 and left_factorise : type a.a t list -> a t list = fun l ->
   let recompose : type a b.(a,b) plist -> a t -> a t -> b t =
@@ -589,49 +631,36 @@ let memo g =
 let dseq ?name g1 g2 = dseq ?name g1 (memo g2)
 
 let option : ?name:string -> 'a grammar -> 'a option grammar = fun ?name g ->
+  let name = created name in
   alt ?name [appl g (fun x -> Some x); empty None]
 
 let default_option : ?name:string -> 'a -> 'a grammar -> 'a grammar =
-  fun ?name d g -> alt ?name [g; empty d]
+  fun ?name d g ->
+    let name = created name in
+    alt ?name [g; empty d]
 
 let star : ?name:string -> 'a grammar -> 'a list grammar = fun ?name g ->
-  let name = match name with None -> if snd g.n <> Created
-                                     then Some(fst g.n ^ "*")
-                                     else None
-                           | _ -> name
-  in
+  let name = created2 name (fst g.n ^ "*", snd g.n) in
   appl ?name (fixpoint (fun r ->
             alt [empty [];
                  seq r (appl g (fun x l -> x::l))])) List.rev
 
 let plus : ?name:string -> 'a grammar -> 'a list grammar = fun ?name g ->
-  let name = match name with None -> if snd g.n <> Created
-                                     then Some(fst g.n ^ "+")
-                                     else None
-                           | _ -> name
-  in
+  let name = created2 name (fst g.n ^ "+", snd g.n) in
   appl ?name (fixpoint (fun r ->
             alt [appl g (fun x -> [x]);
                  seq r (appl g (fun x l -> x::l))])) List.rev
 
 let plus_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar =
   fun ?name sep g ->
-    let name = match name with None -> if snd g.n <> Created
-                                       then Some(fst g.n ^ "+" ^ fst sep.n)
-                                       else None
-                             | _ -> name
-    in
+    let name = created2 name (fst g.n ^ "+" ^ fst sep.n, snd g.n) in
     appl ?name (fixpoint (fun r ->
-            alt [appl g (fun x -> [x]);
-                 seq r (seq sep (appl g (fun x _ l -> x::l)))])) List.rev
+                    alt [appl g (fun x -> [x]);
+                         seq r (seq sep (appl g (fun x _ l -> x::l)))])) List.rev
 
 let star_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar =
   fun ?name sep g ->
-     let name = match name with None -> if snd g.n <> Created
-                                       then Some(fst g.n ^ "*" ^ fst sep.n)
-                                       else None
-                             | _ -> name
-    in
+    let name = created2 name (fst g.n ^ "*" ^ fst sep.n, snd g.n) in
     alt ?name [empty []; plus_sep sep g]
 
 (** a function to defined indexed grammars *)
@@ -1248,6 +1277,8 @@ let parse_file ?(utf8=Utf8.ASCII) g b filename =
     parse_channel ~utf8 ~filename g b ic
 
 let lpos ?name g = lpos ?name ?pk:None g
+let appl ?name = appl ?name:(created name)
+let alt ?name = alt ?name:(created name)
 
 let declare_grammar name = declare_grammar (name, Given)
 

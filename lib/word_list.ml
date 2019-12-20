@@ -9,6 +9,8 @@ type ('a,'b) t =
 
 let create () = { leafs = []; next = Hashtbl.create 8 }
 
+let reset t = t.leafs <- []; Hashtbl.clear t.next
+
 let size {leafs; next} =
   let res = ref 0 in
   let rec fn _ {leafs; next} =

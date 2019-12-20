@@ -11,6 +11,9 @@ val create : unit -> ('a,'b) t
 (** Returns the number of bindings in the table *)
 val size : ('a,'b) t -> int
 
+(** empty a table *)
+val reset : ('a,'b) t -> unit
+
 (** [add_ascii  tbl s  v] adds  a binding  from [s]  to [v]  in [tbl],  keep all
     previous bindings.
 
