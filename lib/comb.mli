@@ -92,10 +92,10 @@ type 'a key = 'a Assoc.key
     which is  illegal as it  is left recursive  and loops. The  optional charset
     indicates the characteres accepted by [c2] at the beginning of input. [v] is
     like variable bound in [c2], see [read_tbl] below *)
-val lr : 'a t -> 'a key -> 'a t -> 'a t
+val lr : 'a t -> 'a key -> Charset.t -> 'a t -> 'a t
 
 (** Same as above, but also store the position *)
-val lr_pos : 'a t -> 'a key -> Pos.pos Assoc.key -> 'a t -> 'a t
+val lr_pos : 'a t -> 'a key -> Pos.pos Assoc.key -> Charset.t -> 'a t -> 'a t
 
 (** type to represent the left prefix of a mutually recursive grammar.
     the key represents the produced grammar for each left prefix. *)

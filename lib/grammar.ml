@@ -1160,8 +1160,8 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
                let gs = fn k [] r.left in
                let left = compile_alt gs in
                match r.lpos with
-               | None -> Comb.lr left k (compile_ne g.ne)
-               | Some pk -> Comb.lr_pos left k pk (compile_ne g.ne)
+               | None -> Comb.lr left k (first_charset g.ne) (compile_ne g.ne)
+               | Some pk -> Comb.lr_pos left k pk (first_charset g.ne) (compile_ne g.ne)
           end
        | _ ->
           let rec fn = function

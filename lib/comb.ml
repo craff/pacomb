@@ -429,7 +429,6 @@ let dispatch = fun tbl mini maxi env k ->
   else tbl.(Char.code c - mini) env k
 
 let alt : (Charset.t * 'a t) list -> 'a t = fun l ->
-  match l with [] -> fail | [(_,x)] -> x | _ ->
   let rec fn mini maxi i =
     if i = 256 then (mini, maxi) else
       if List.exists (fun (cs, _) -> Charset.mem cs (Char.chr i)) l
@@ -506,26 +505,34 @@ let read_pos : Pos.pos key -> (Pos.t -> 'a) t -> 'a t =
     it parses using  the "grammar" [g gf*].  An equivalent  combinator CANNOT be
     defined as [seq Charset.full g cs (let rec r = seq cs r cs gf in r)].
 *)
-let lr : 'a t -> 'a key -> 'a t -> 'a t = fun g key gf env k ->
+let lr : 'a t -> 'a key -> Charset.t -> 'a t -> 'a t = fun g key cs gf env k ->
     let rec klr env v =
-      add_queue env (Cont(env,k,v));
-      let lr = LAssoc.add key v env.lr in
-      let env0 = { env with lr } in
-      gf env0 (ink klr)
+      if test cs env then
+        begin
+          add_queue env (Cont(env,k,v));
+          let lr = LAssoc.add key v env.lr in
+          let env0 = { env with lr } in
+          gf env0 (ink klr)
+        end
+      else call k env v
     in
     g env (ink klr)
 
 (** Same as above but incorporating the reading of the left position, stored
     in the lr table too. *)
-let lr_pos : 'a t -> 'a key -> Pos.pos key -> 'a t -> 'a t =
-  fun g key pkey gf env k ->
+let lr_pos : 'a t -> 'a key -> Pos.pos key -> Charset.t -> 'a t -> 'a t =
+  fun g key pkey cs gf env k ->
     let pos = Pos.get_pos env.current_buf env.current_pos in
     let rec klr env v =
-      add_queue env (Cont(env,k,v));
-      let lr = LAssoc.add key v env.lr in
-      let lr = LAssoc.add pkey pos lr in
-      let env0 = { env with lr } in
-      gf env0 (ink klr);
+      if test cs env then
+        begin
+          add_queue env (Cont(env,k,v));
+          let lr = LAssoc.add key v env.lr in
+          let lr = LAssoc.add pkey pos lr in
+          let env0 = { env with lr } in
+          gf env0 (ink klr);
+        end
+      else call k env v
     in
     g env (ink klr)
 
