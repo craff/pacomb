@@ -410,31 +410,41 @@ let option: 'a -> Charset.t -> 'a t -> 'a t = fun x cs1 g1 ->
     call k env (lazy x)
 
 (** Alternatives combinator. *)
-let alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t = fun cs1 g1 cs2 g2 ->
-  fun env k ->
-    match (test cs1 env, test cs2 env) with
-    | (false, false) -> next env
-    | (true , false) -> g1 env k
-    | (false, true ) -> g2 env k
-    | (true , true ) -> add_queue env (Gram(env,g2,k)); g1 env k
 
-let split_list l =
-  let rec fn acc1 acc2 =
-    function [] -> acc1, acc2
-           | x::l -> fn (x::acc2) acc1 l
-  in
-  fn [] [] l
 
-let alts : type a. (Charset.t * a t) list -> a t = fun l ->
-  let rec fn = function
-     | [] -> (Charset.empty, fail)
-     | [(cs,g)] -> (cs, g)
-     | l -> let (l1,l2) = split_list l in
-            let (cs1,c1) = fn l1 in
-            let (cs2,c2) = fn l2 in
-            (Charset.union cs1 cs2, alt cs1 c1 cs2 c2)
-  in snd (fn l)
+let simple_alt : 'a t -> 'a t -> 'a t = fun g1 g2 env k ->
+  add_queue env (Gram(env,g2,k)); g1 env k
 
+let dispatch = fun tbl mini maxi env k ->
+  let (c,_,_) = Input.read env.current_buf env.current_pos in
+  let i = Char.code c in
+  if i < mini || i > maxi then next env
+  else tbl.(Char.code c - mini) env k
+
+let alt : (Charset.t * 'a t) list -> 'a t = fun l ->
+    let rec fn mini maxi i =
+      if i = 256 then (mini, maxi) else
+      if List.exists (fun (cs, _) -> Charset.mem cs (Char.chr i)) l
+      then let mini = min mini i in
+           let maxi = max maxi i in
+           fn mini maxi (i+1)
+      else
+        fn mini maxi (i+1)
+    in
+    let mini, maxi = fn 256 (-1) 0 in
+    if maxi < mini then fail else
+      let tbl =
+        Array.init (maxi - mini + 1)
+          (fun i ->
+            let i = i + mini in
+            let l = List.filter (fun (cs,_) -> Charset.mem cs (Char.chr i)) l in
+            let rec fn = function
+                [] -> fail
+              | [(_,g)] -> g
+              | (_,g)::l -> simple_alt g (fn l)
+            in fn l)
+      in
+      dispatch tbl mini maxi
 
 (** Application of a semantic function to alter a combinator. *)
 let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k ->
@@ -562,7 +572,7 @@ let compile_mlr : mlr_left -> mlr_right -> mlr_res t = fun gl gr ->
        in
        (cs, g) :: g1 r
 
-  and g0 : mlr_left -> mlr_res t = fun l -> alts (g1 l)
+  and g0 : mlr_left -> mlr_res t = fun l -> alt (g1 l)
 
   and get : type a. a key -> mlr_res t Lazy.t = fun k ->
     try List.assq (Assoc.K k) !adone

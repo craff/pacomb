@@ -1188,7 +1188,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
 
  and compile_alt : type a. a grne list -> a Comb.t = fun gs ->
   let l = List.map (fun g -> (first_charset g, compile_ne g)) gs in
-  Comb.alts l
+  Comb.alt l
 
  and compile : type a. bool -> a grammar -> a Comb.t =
   fun ne g ->
@@ -1222,14 +1222,13 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
     let c = match if ne then [] else g.e with
       | [] ->
          if g.ne = EFail then Comb.fail else cne
-      | [x] ->
-         if g.ne = EFail then Comb.empty x
-         else Comb.option x (first_charset g.ne) cne
       | l ->
-         let ce =
-           Comb.alts (List.map (fun x -> Charset.full, Comb.empty x) l)
+         let acc = (first_charset g.ne, cne) in
+         let (_, c) =
+           List.fold_left (fun (cs, g) e ->
+               (Charset.full, Comb.option e cs g)) acc l
          in
-         Comb.alt Charset.full ce (first_charset g.ne) cne
+         c
     in
     c
 

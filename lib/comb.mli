@@ -58,10 +58,7 @@ val dseq: ('a * 'b) t -> ('a -> ('b -> 'c) t)  -> 'c t
     charaters accepted at the beginning of  the input for each combinators.  The
     charset  must be  Charset.full if  the corresponding  combinator accept  the
     empty input *)
-val alt : Charset.t -> 'a t -> Charset.t -> 'a t -> 'a t
-
-(** same as above but with a list of alternative. *)
-val alts : (Charset.t * 'a t) list -> 'a t
+val alt : (Charset.t * 'a t) list -> 'a t
 
 (** [option a ~cs  c] is an optimisation for [alt (empty a)  ~cs c].  In fact it
     is better to use [alt] with grammar  not accepting empty and use [option] to
