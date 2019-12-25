@@ -1080,7 +1080,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
             (shift || shift', Charset.union s s')
        in
        gn (fst (Uf.find x)).left
-    | ERkey _ -> (true, Charset.empty)
+    | ERkey _ -> (true, Charset.full)
     | ERef g -> gn g
     | ERPos g -> fn g
     | ELPos (_,g) -> fn g
