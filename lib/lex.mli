@@ -18,10 +18,10 @@
 (**  Position  in   a  buffer  is  a  [Input.buffer]  together   with  an  index
     [Input.pos]. *)
 type buf = Input.buffer
-type pos = Input.pos
+type idx = Input.idx
 
 (** Type of terminal function, similar to blank, but with a returned value *)
-type 'a lexeme = buf -> pos -> 'a * buf * pos
+type 'a lexeme = buf -> idx -> 'a * buf * idx
 
 type _ ast =
   | Any : char ast
@@ -198,8 +198,8 @@ val grapheme : ?name:string -> string -> unit t
 val accept_empty : 'a t -> bool
 
 (** Test constructor for the test constructor in [Grammar] *)
-val test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool
-val blank_test_from_lex : bool t -> buf -> pos -> buf -> pos -> bool
+val test_from_lex : bool t -> buf -> idx -> buf -> idx -> bool
+val blank_test_from_lex : bool t -> buf -> idx -> buf -> idx -> bool
 
 (** equality, incomplete in particular for "alt" *)
 val eq : 'a t -> 'b t -> ('a,'b) Assoc.eq

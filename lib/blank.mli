@@ -6,10 +6,10 @@ It provides functions to eliminate "blank" characteres. *)
 (**  Position  in   a  buffer  is  a  [Input.buffer]  together   with  an  index
     [Input.pos]. *)
 type buf = Input.buffer
-type pos = Input.pos
+type idx = Input.idx
 
 (** A blank function is just a function progressing in a buffer *)
-type blank = buf -> pos -> buf * pos
+type blank = buf -> idx -> buf * idx
 type t     = blank
 
 (** {2 Functions managing blanks} *)

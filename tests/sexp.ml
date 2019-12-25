@@ -2,7 +2,7 @@ open Pacomb
 open Pos
 open Grammar
 
-type sexp = { p: Pos.interval; e : sexp' }
+type sexp = { l: Pos.t; r: Pos.t; e : sexp' }
 and sexp' =
   | Idt of string
   | Lst of sexp list
@@ -13,8 +13,8 @@ let rec size e = match e.e with
 
 let id = "[a-zA-Z_][a-zA-Z_0-9]*[']*"
 let%parser rec sexp
-   = (x::RE id)         => { p = x_pos; e = Idt x }
-   ; '(' (l::sexps) ')' => { p = l_pos; e = Lst (List.rev l) }
+   = (x::RE id)         => { l = _lpos; r = _rpos; e = Idt x }
+   ; '(' (l::sexps) ')' => { l = _lpos; r = _rpos; e = Lst (List.rev l) }
 and sexps = () => []
           ; (l::sexps) (e::sexp) => e::l
 

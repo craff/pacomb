@@ -13,14 +13,14 @@ type 'a t
 (** Partial parsing.  Beware, the returned position is not  the maximum position
     that can be reached by the grammar.  *)
 val partial_parse_buffer : 'a t -> Blank.t -> ?blank_after:bool ->
-        Lex.buf -> Lex.pos -> 'a * Lex.buf * Lex.pos
+        Lex.buf -> Lex.idx -> 'a * Lex.buf * Lex.idx
 
 (** Returns all possible parse trees.  Usefull for natural languages but also to
     debug ambiguity in a supposed non ambiguous grammar. If end of input is not
     parsed in some ways, some value may correspond to only the beginning of the
     input. Except when debugging or testing, you should rather use cache/merge
     anyway. *)
-val parse_all_buffer : 'a t -> Blank.t -> Lex.buf -> Lex.pos -> 'a list
+val parse_all_buffer : 'a t -> Blank.t -> Lex.buf -> Lex.idx -> 'a list
 
 (** {2 combinator constructors, normally not needed by the casual user } *)
 
@@ -67,10 +67,14 @@ val option: 'a -> Charset.t -> 'a t -> 'a t
 
 (** Parses with the given combinator and transforms the semantics with the given
     function *)
-val app : 'a t -> ('a -> 'b) -> 'b t
+val appl : 'a t -> ('a -> 'b) -> 'b t
 
 (** forces immediate evaluation of the action just after parsing *)
 val eval : 'a t -> 'a t
+
+(** unmerge a merged ambiguous grammar, typicallyif the rest of the parsing uses
+   dependant sequences *)
+val unmerge : 'a list t -> 'a t
 
 (** Parses  as the given  combinator and  give the position  to the left  of the
     parsing input as argument to the action *)
@@ -83,7 +87,7 @@ val right_pos : (Pos.t -> 'a) t -> 'a t
     single combinator, this adds a lot of closures in action code. To solve this
     problem, lpos is  splitted in two combinators, one that  pushes the position
     to a stack and pops after parsing and another that reads the position. *)
-val read_pos : Pos.pos Assoc.key -> (Pos.t -> 'a) t -> 'a t
+val read_pos : Pos.t Assoc.key -> (Pos.t -> 'a) t -> 'a t
 
 (** key used by lr below *)
 type 'a key = 'a Assoc.key
@@ -95,7 +99,7 @@ type 'a key = 'a Assoc.key
 val lr : 'a t -> 'a key -> Charset.t -> 'a t -> 'a t
 
 (** Same as above, but also store the position *)
-val lr_pos : 'a t -> 'a key -> Pos.pos Assoc.key -> Charset.t -> 'a t -> 'a t
+val lr_pos : 'a t -> 'a key -> Pos.t key -> Charset.t -> 'a t -> 'a t
 
 (** type to represent the left prefix of a mutually recursive grammar.
     the key represents the produced grammar for each left prefix. *)
@@ -117,7 +121,7 @@ type mlr_right =
 
 (** The combinator itself. The optionnal argument indicated that we need
     the position before parsing *)
-val mlr : ?lpos:Pos.pos Assoc.key -> mlr_left -> mlr_right -> 'a key -> 'a t
+val mlr : ?lpos:Pos.t key -> mlr_left -> mlr_right -> 'a key -> 'a t
 
 (** combinator to  access the value stored by  lr. It must be uses  as prefix of
     [c2] in [lr c1 c2].  For instance, the coding  of [let rec r = seq c1 (seq r
@@ -128,11 +132,11 @@ val mlr : ?lpos:Pos.pos Assoc.key -> mlr_left -> mlr_right -> 'a key -> 'a t
 val read_tbl : 'a key -> 'a t
 
 (** Allow to test the blank characteres before a grammar and more *)
-val test_before : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+val test_before : (Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
                  -> 'a t -> 'a t
 
 (** Allow to test the blank characteres after a grammar and more *)
-val test_after : ('a -> Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+val test_after : ('a -> Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
                  -> 'a t -> 'a t
 
 (** Access to a reference to a combinator, used by Grammar.compile for recursive

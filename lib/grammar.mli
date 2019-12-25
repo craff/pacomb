@@ -44,8 +44,12 @@ val term : ?name:string -> 'a Lex.terminal -> 'a grammar
 (** [appl g f] parses with [g] and apply [f] to the resulting semantics *)
 val appl : ?name:string -> 'a grammar -> ('a -> 'b) -> 'b grammar
 
-(** [eval g] parses with [g] and forces immedaite evaluation of the semantics *)
+(** [eval g] forces immediate evaluation of the action instead of waiting
+    for the next lexeme read *)
 val eval : ?name:string -> 'a grammar -> 'a grammar
+
+(** [unmerge g] introduce multiple parse branch for a list of semantics *)
+val unmerge : ?name:string -> 'a list grammar -> 'a grammar
 
 (** [alt [g1;g2;...;gn]] parses with [g1] and if it fails then [g2] and so on *)
 val alt : ?name:string -> 'a grammar list -> 'a grammar
@@ -53,7 +57,6 @@ val alt : ?name:string -> 'a grammar list -> 'a grammar
 (** [seq g1 g2]  parses with [g1] and then with [g2] for  the rest of the input,
     combine both semantics by apply the semantics of [g2] to [g1] *)
 val seq : ?name:string -> 'a grammar -> ('a -> 'b) grammar -> 'b grammar
-
 
 (** variation of the abover when we do not use all semantics *)
 val seq1 : ?name:string -> 'a grammar -> 'b grammar -> 'a grammar
@@ -92,11 +95,11 @@ val cache : ?name:string -> ?merge:('a -> 'a -> 'a) -> 'a grammar -> 'a grammar
 (** allows to perform a test, the test function receive the position before
     and after the blanks *)
 val test_before : ?name:string
-                  -> (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+                  -> (Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
                  -> 'a grammar -> 'a grammar
 
 val test_after : ?name:string
-                 -> ('a -> Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+                 -> ('a -> Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
                  -> 'a grammar -> 'a grammar
 
 (** particular cases of the above testing the absence of blanks. *)
@@ -169,7 +172,7 @@ val give_name : string -> 'a grammar -> 'a grammar
 
 (** Parse a whole input buffer. the eof combinator is added at
     the end of the given combinator *)
-val parse_buffer : 'a grammar -> Blank.t -> Lex.buf -> Lex.pos -> 'a
+val parse_buffer : 'a grammar -> Blank.t -> Lex.buf -> Lex.idx -> 'a
 
 (** Partial parsing.  Beware, the returned  position is not the maximum position
     that can  be reached  by the grammar  it the grammar  is ambiguous.  In this
@@ -177,11 +180,11 @@ val parse_buffer : 'a grammar -> Blank.t -> Lex.buf -> Lex.pos -> 'a
     at  the  end of  input.  Mainly  useful  with  'eof' when  [blank_after]  is
     [true]. *)
 val partial_parse_buffer : 'a grammar -> Blank.t -> ?blank_after:bool ->
-                           Lex.buf -> Lex.pos -> 'a * Lex.buf * Lex.pos
+                           Lex.buf -> Lex.idx -> 'a * Lex.buf * Lex.idx
 
 (** Returns all possible parse trees.  Usefull for natural languages but also to
     debug ambiguity in a supposed non ambiguous grammar. *)
-val parse_all_buffer : 'a grammar -> Blank.t -> Lex.buf -> Lex.pos -> 'a list
+val parse_all_buffer : 'a grammar -> Blank.t -> Lex.buf -> Lex.idx -> 'a list
 
 (**  Parse a  whole string,  reporting position  according to  utf8 if  optional
     argument [utf8] is given and [Utf8.UTF8 or Utf8.CJK_UTF8] *)
@@ -191,6 +194,9 @@ val parse_string  : ?utf8:Utf8.context -> ?filename:string
 (**  Parse a  whole  input  channel, reporting  postiion  according  to utf8. *)
 val parse_channel : ?utf8:Utf8.context -> ?filename:string
                     -> 'a grammar -> Blank.t -> in_channel -> 'a
+
+val parse_fd : ?utf8:Utf8.context -> ?filename:string ->
+           'a grammar -> Blank.t -> Unix.file_descr -> 'a
 
 (**  Parse a  whole  file, reporting  postiion  according  to utf8. *)
 val parse_file : ?utf8:Utf8.context ->

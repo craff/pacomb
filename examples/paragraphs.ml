@@ -32,4 +32,7 @@ let _ =
   let t = Pos.handle_exception (Grammar.parse_channel text blank2) stdin in
   Printf.printf "%d paragraphs\n%!" (List.length t);
   List.iteri (fun i (p,pos) -> Printf.printf "  paragraph %d at %a: %d word(s)\n%!"
-                                 i (Pos.print_interval ~style:Short ()) pos (List.length p)) t
+                                 i
+                                 (Pos.print_interval ~style:Short ())
+                                 (Pos.interval_of_spos pos)
+                                 (List.length p)) t

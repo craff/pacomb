@@ -13,11 +13,15 @@ let%parser [@merge (+.)] rec bin_seq =
     ()                             => 1.0
   ; (t1::bin_seq) 'a' (t2::bin_seq) => t1 *. t2
 
+let _ = Grammar.print_grammar stdout ~def:false bin_seq; print_newline ()
+
 (* Idem for ternary tree, we need an internal cache *)
 let%parser [@merge (+.)] rec ter_seq =
     ()                             => 1.0
   ; (t1::ter_seq) (t2t3::Grammar.cache ~merge:(+.) ('a' (t2::ter_seq) (t3::ter_seq) => t2 *. t3))
     => t1 *. t2t3
+
+let _ = Grammar.print_grammar stdout ~def:false ter_seq; print_newline ()
 
 (* To test, here is Catalan number, i.e. the number of binary trees of a given size *)
 let catalan =
