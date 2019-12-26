@@ -74,11 +74,15 @@ module Prio =
 module Heap = Heap.Make(Prio)
 
 type 'a key = 'a Assoc.key
-type lazies = N : lazies |  L : 'a lazy_t * lazies -> lazies
 
 type max_pos = (Input.byte_pos * Lex.buf * Lex.idx * string list ref) ref
 
 module LAssoc = Assoc.Make(struct type 'a data = 'a lazy_t end)
+
+type lazies_aux = N : lazies_aux
+                | L : 'a lazy_t * lazies -> lazies_aux
+
+and lazies = lazies_aux ref
 
 (** Environment holding information required for parsing. *)
 type env =
@@ -95,6 +99,7 @@ type env =
   ; idx_before_blanks : Lex.idx
   (** index in [buf_before_blanks] before reading the blanks. *)
   ; lr                : LAssoc.t
+  (** semantics value to be forced after the next lexeme read *)
   ; to_force          : lazies
   (** Association table for the lr, lr_pos and mlr combinators *)
   ; cache_order       : Input.byte_pos * int
@@ -259,29 +264,57 @@ let call : type a.a cont -> env -> a Lazy.t -> res =
 
 (**  functions  to  add  [(_,_)  trans]  constructors  inside  the  continuation
     constructor *)
-let arg : type a b. b cont -> a -> (a -> b) cont = fun k x ->
-  match k with
-  | C(k,tr,rp) -> C(k,Arg(tr, x),rp)
 
-let lrg : type a b. b cont -> a Lazy.t -> (a -> b) cont = fun k x ->
-  (** NOTE: no need for lrg if [x] is a value, but adding the following line
-     appears significantly slower:
-  [if Lazy.is_val x then arg k (Lazy.force x) else] *)
-  match k with
-  | C(k,tr,rp) -> C(k,Lrg(tr,x),rp)
+let arg : type a b. b cont -> a -> (a -> b) cont =
+  fun (C(k,tr,rp)) x -> C(k,Arg(tr,x),rp)
 
-let app : type a b. b cont -> (a -> b) -> a cont = fun k f ->
-    match k with
-    | C(k,tr,rp) -> C(k,App(tr, f),rp)
+let lrg : type a b. b cont -> a Lazy.t -> (a -> b) cont =
+  (** NOTE: no need for lrg if [x] is a value, but testing is is slower *)
+  fun (C(k,tr,rp)) x -> C(k,Lrg(tr,x),rp)
 
-let posk : type a. a cont -> (Pos.t -> a) cont = fun k ->
-  match k with
-  | C(k,tr,rp) ->
-     match rp with
-     | None ->
-        let rp = ref Input.phantom_spos in
-        C(k,Pos(tr, rp),Some rp)
-     | Some rp' -> C(k,Pos(tr, rp'),rp)
+let app : type a b. b cont -> (a -> b) -> a cont =
+  fun (C(k,tr,rp)) f -> C(k,App(tr,f),rp)
+
+let posk : type a. a cont -> (Pos.t -> a) cont =
+  fun (C(k,tr,rp)) ->
+  match rp with
+  | None    -> let p = ref Input.phantom_spos in C(k,Pos(tr, p),Some p)
+  | Some p -> C(k,Pos(tr,p),rp)
+
+let forces (l : lazies) =
+  let rec fn l =
+    let c = !l in l := N; match c with
+    | N -> ()
+    | L (x,l) -> (try
+                    ignore (Lazy.force x)
+                  with Lex.NoParse | Lex.Give_up _ -> ());
+                 fn l
+  in
+  fn l
+
+(** {2 Error managment} *)
+
+(** record the current position, before a parsing error *)
+let record_pos env =
+  let (pos_max, _, _, _) = !(env.max_pos) in
+  let pos = Input.byte_pos env.current_buf env.current_pos in
+  if pos > pos_max  then
+    env.max_pos := (pos, env.current_buf, env.current_pos, ref [])
+
+(** [next env] updates the current maximum position [env.max_pos] and
+   raise [Exit] to return to the scheduler. *)
+let next : env -> res  = fun env -> record_pos env; raise Exit
+
+(** same as abobe, but recording error messages *)
+let record_pos_msg msg env =
+  let (pos_max, _, _, msgs) = !(env.max_pos) in
+  let pos = Input.byte_pos env.current_buf env.current_pos in
+  if pos > pos_max then
+    env.max_pos := (pos, env.current_buf, env.current_pos, ref [msg])
+  else if pos = pos_max then msgs := msg :: !msgs
+
+let next_msg : string -> env -> res  = fun msg env ->
+  record_pos_msg msg env; raise Exit
 
 (** {2 Scheduler code} *)
 
@@ -314,9 +347,9 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
       let queue = env.queue in
       (** calls to the initial grammar and initialise the table *)
       (try
-         let r = g env (ink k) in
-         (** to do at further position *)
-         queue := Heap.add (get_prio r) r !queue;
+        let r = g env (ink k) in
+        (* initialize the queue *)
+        queue := Heap.add (get_prio r) r !queue;
       with Exit -> ());
       while true do
         let (todo,t) = Heap.remove !queue in
@@ -325,6 +358,7 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
           let r =
             match todo with
             | Cont(env,k,x) ->
+               (** it is time to eval lazy arguments *)
                forces env.to_force;
                (** calling the continuation *)
                call k { env with to_force = N } x
@@ -385,13 +419,17 @@ let seq : 'a t -> Charset.t -> ('a -> 'b) t -> 'b t = fun g1 cs g2 ->
   if Charset.equal cs Charset.full then
      fun env k ->
     g1 env
-      (ink (fun env x -> g2 (to_force env x) (lrg k x)))
+      (ink (fun env x ->
+           let env = { env with to_force = ref (L(x,env.to_force)) } in
+           g2 env (lrg k x)))
  else
     fun env k ->
     g1 env
-      (ink (fun env x -> if test cs env
-                         then g2 (to_force env x) (lrg k x)
-                         else next env))
+      (ink (fun env x ->
+           if test cs env then
+             let env = { env with to_force = ref (L(x,env.to_force)) } in
+             g2 env (lrg k x)
+           else next env))
 
 (** Dependant sequence combinator. *)
 let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
@@ -471,6 +509,17 @@ let unmerge : 'a list t -> 'a t = fun g env k ->
              in
              fn vs))
 
+(** unmerge a merged ambiguous grammar, typicallyif the rest of the parsing uses
+   dependant sequences *)
+let unmerge : 'a list t -> 'a t = fun g env k ->
+  g env (ink (fun env (lazy vs) ->
+             let rec fn =function
+               | [] -> next env
+               | [v] -> call k env (lazy v)
+               | v::l -> add_queue env (Cont(env,k,lazy v)); fn l
+             in
+             fn vs))
+
 (** Combinator to test the input before parsing with a grammar *)
 let test_before : (Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
                  -> 'a t -> 'a t =
@@ -516,8 +565,8 @@ let lr : 'a t -> 'a key -> Charset.t -> 'a t -> 'a t = fun g key cs gf env k ->
       if test cs env then
         begin
           let lr = LAssoc.add key v env.lr in
-          let env0 = { env with lr; to_force = L(v, env.to_force) } in
-          add_queue env (Gram(env0,gf,ink klr));
+          let env0 = { env with lr; to_force = ref (L(v, env.to_force)) } in
+          add_queue env (Gram(env0,gf,ink klr))
         end;
       call k env v
     in
@@ -532,8 +581,8 @@ let lr_pos : 'a t -> 'a key -> Pos.t key -> Charset.t -> 'a t -> 'a t =
       if test cs env then
         begin
           let lr = LAssoc.add key v env.lr in
-          let lr = LAssoc.add pkey (lazy pos) lr in
-          let env0 = { env with lr; to_force = L(v, env.to_force) } in
+          let lr = LAssoc.add pkey pos lr in
+          let env0 = { env with lr; to_force = ref (L(v, env.to_force)) } in
           add_queue env (Gram(env0,gf,ink klr))
         end;
       call k env v
@@ -617,7 +666,7 @@ let mlr : type a. ?lpos:Pos.t key ->
           | None -> lr
           | Some pkey -> LAssoc.add pkey (lazy pos) lr
         in
-        let env0 = { env with lr; to_force = L(v, env.to_force) } in
+        let env0 = { env with lr; to_force = ref (L(v, env.to_force)) } in
         begin
           match fkey.eq key.tok with
           | Assoc.Eq  -> add_queue env (Gram(env0,g',ink klr));
@@ -783,7 +832,7 @@ let gen_parse_buffer
       { buf_before_blanks = buf0 ; idx_before_blanks = idx0
         ; current_buf = buf ; current_idx = idx; lr = LAssoc.empty
         ; max_pos ; blank_fun ; cache_order = (Input.phantom_byte_pos,0)
-        ; queue = ref Heap.empty; to_force = N
+        ; queue = ref Heap.empty; to_force = ref N
       }
     in
     (** calling the scheduler to start parsing *)

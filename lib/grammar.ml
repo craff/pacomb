@@ -202,9 +202,9 @@ let prl pr sep ch l =
   in
   fn ch l
 
-type prio = PAtom | PSeq | PAlt
-
 module AssocLr = Assoc.Make (struct type 'a data = 'a grne list * 'a t list end)
+
+type prio = PAtom | PSeq | PAlt
 
 type print_ast_aux =
   | PFail
@@ -1151,9 +1151,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
             let shift', s' = gn l' in
             (shift || shift', Charset.union s s')
        in
-       let (shift, _ as r) = gn (fst (Uf.find x)).left in
-       assert(not shift);
-       r
+       gn (fst (Uf.find x)).left
     | ERkey _ -> (true, Charset.full)
     | ERef g -> gn g
     | ERPos g -> fn g

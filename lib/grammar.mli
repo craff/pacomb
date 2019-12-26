@@ -48,7 +48,9 @@ val appl : ?name:string -> 'a grammar -> ('a -> 'b) -> 'b grammar
     for the next lexeme read *)
 val eval : ?name:string -> 'a grammar -> 'a grammar
 
-(** [unmerge g] introduce multiple parse branch for a list of semantics *)
+(** [unmerge g] introduce multiple parse branch from a list of semantics.
+    Allows to create ambiguous terminals and allows fr unmerge to continue
+    a dependent parsing *)
 val unmerge : ?name:string -> 'a list grammar -> 'a grammar
 
 (** [alt [g1;g2;...;gn]] parses with [g1] and if it fails then [g2] and so on *)
