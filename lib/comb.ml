@@ -230,7 +230,7 @@ let forces (l : lazies) =
     | N -> ()
     | L (x,l) -> ignore (Lazy.force x); fn l
   in
-  fn l
+  (try fn l with Lex.NoParse | Lex.Give_up _ -> ())
 
 (** {2 Error managment} *)
 
