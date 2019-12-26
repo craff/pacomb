@@ -202,55 +202,112 @@ let prl pr sep ch l =
   in
   fn ch l
 
-type prio = Atom | Seq | PAlt
-type any_grammar = G : 'a grammar -> any_grammar
-
 module AssocLr = Assoc.Make (struct type 'a data = 'a grne list * 'a t list end)
 
-let print_grammar ?(no_other=false) ?(def=true) ch s =
-  let adone = ref [] in
-  let todo = ref [] in
-  let keys_name = ref [] in
+type prio = PAtom | PSeq | PAlt
 
-  let do_def g =
-    g.recursive ||
-      (snd g.n = Given && match g.d with Term _ -> false | _ -> true)
-  in
-  let get_name k = List.assq (Assoc.K k) !keys_name in
-  let add_name k name =
+type print_ast_aux =
+  | PFail
+  | PErr of string
+  | PEmpty
+  | PTerm of string
+  | PAlt of print_ast list
+  | PSeq of print_ast * print_ast
+  | PDSeq of print_ast (* lost the second part! *)
+  | PTrans of string * print_ast
+  | PRkey of string
+  | PLr of print_lr
+
+and print_lr = string * (string * print_ast) list
+
+and print_ast = { name : name
+                ; mutable ast : print_ast_aux
+                ; is_rec : bool  }
+
+module AAssoc = Assoc.Make(struct type 'a data = print_ast end)
+
+let print_ast_of_df : type a. a grammar -> print_ast = fun x ->
+  let adone = ref AAssoc.empty in
+  let rec fn : type a. a grdf -> print_ast_aux = function
+    | Fail         -> PFail
+    | Err m        -> PErr m
+    | Empty _      -> PEmpty
+    | Term t       -> PTerm (t.n)
+    | Alt(gs)      -> PAlt (List.map gn gs)
+    | Seq(g1,g2)   -> PSeq(gn g1, gn g2)
+    | DSeq(g1,_)   -> PDSeq(gn g1)
+    | Rkey _       -> assert false
+    | Appl(g,_)    -> PTrans("appl",gn g)
+    | RPos(g)      -> PTrans("rpos",gn g)
+    | LPos(_,g)    -> PTrans("lpos",gn g)
+    | Test(_,g)    -> PTrans("test",gn g)
+    | Layout(_,g,_)-> PTrans("blks",gn g)
+    | Eval(g)      -> PTrans("eval",gn g)
+    | UMrg(g)      -> PTrans("umgrl",gn g)
+    | Tmp          -> PErr "TMP in grammar"
+
+  and gn : type a. a t -> print_ast = fun g ->
+    if g.recursive then
+      try AAssoc.find g.k !adone
+      with Not_found ->
+        let r = { name = g.n; ast = PFail; is_rec = true } in
+        adone := AAssoc.add g.k r !adone;
+        r.ast <- fn g.d;
+        r
+    else
+      { name = g.n; ast = fn g.d; is_rec = false }
+
+  in gn x
+
+let print_ast_of_ne : type a. a grammar -> print_ast = fun x ->
+  let adone = ref AAssoc.empty in
+  let keys_name = ref [] in
+  let get_name k = try List.assq (Assoc.K k) !keys_name with Not_found -> "?" in
+  let add_name (k:Assoc.any_key) name =
     if not (List.mem_assq k !keys_name)
     then keys_name := (k, name) :: !keys_name
   in
+  let rec fn : type a. a grne -> print_ast_aux = function
+    | EFail         -> PFail
+    | EErr m        -> PErr m
+    | ETerm t       -> PTerm (t.n)
+    | EAlt(gs)      -> PAlt (List.map fn' gs)
+    | ESeq(g1,g2)   -> PSeq(fn' g1, gn g2)
+    | EDSeq(g1,_)   -> PDSeq(fn' g1)
+    | ERkey k       -> PRkey (get_name k)
+    | ELr(k,uf)     -> PLr(hn k uf)
+    | ERef g        -> PTrans("ref" ,gn g)
+    | EAppl(g,_)    -> PTrans("appl",fn' g)
+    | ERPos(g)      -> PTrans("rpos",fn' g)
+    | ELPos(_,g)    -> PTrans("lpos",fn' g)
+    | ETest(_,g)    -> PTrans("test",fn' g)
+    | ELayout(_,g,_)-> PTrans("blks",fn' g)
+    | EEval(g)      -> PTrans("eval",fn' g)
+    | EUMrg(g)      -> PTrans("umgr",fn' g)
+    | ETmp          -> PErr "TMP in grammar"
 
-  let rec print_grne : type a. prio -> out_channel -> a grne -> unit =
-    fun prio ch g ->
-    let pr x = Printf.fprintf ch x in
-    let pg x = print_grne x in
-    let pv x = print_negr x in
-    match g with
-    | EFail         -> pr "0"
-    | EErr m        -> pr "0(%s)" m
-    | ETerm t       -> pr "%s" t.n
-    | EAlt(gs)      -> pr (if prio < PAlt then "(%a)" else "%a")
-                          (prl (pg Seq) " | ") gs
-    | ESeq(g1,g2)   -> pr (if prio < Seq then "(%a %a)" else "%a %a")
-                           (pg Atom) g1 (pv Seq) g2
-    | EDSeq(g1,_)   -> pr (if prio < Seq then "(%a ...)" else "%a ...")
-                         (pg Atom) g1
-    | ELr(k,lr)     -> print_lr k lr ch
-    | ERkey k       -> pr "%s" (get_name k)
-    | EAppl(g,_)    -> pg prio ch g
-    | ERef(g)       -> pv prio ch g
-    | ERPos(g)      -> pg prio ch g
-    | ELPos(_,g)    -> pg prio ch g
-    | ETest(_,g)    -> pg prio ch g
-    | ELayout(_,g,_)-> pg prio ch g
-    | EEval(g)      -> pg prio ch g
-    | EUMrg(g)      -> pg prio ch g
-    | ETmp          -> pr "TMP"
+  and no_name ast =
+    { name = gen_name None; ast; is_rec = false }
 
-  and print_lr : type a. a key -> mlr Uf.t -> out_channel -> unit =
-    fun k lr ch ->
+  and fn' : type a. a grne -> print_ast = fun g -> no_name (fn g)
+
+  and gn : type a. a t -> print_ast = fun g ->
+    if g.recursive then
+      try AAssoc.find g.k !adone
+      with Not_found ->
+        let r = { name = g.n; ast = PFail; is_rec = true } in
+        adone := AAssoc.add g.k r !adone;
+        let ast = fn g.ne in
+        let ast = if g.e <> [] then PAlt[no_name PEmpty;no_name ast] else ast in
+        r.ast <- ast;
+        r
+    else
+      let ast = fn g.ne in
+      let ast = if g.e <> [] then PAlt[no_name PEmpty;no_name ast] else ast in
+      { name = g.n; ast; is_rec = false }
+
+  and hn : type a. a key -> mlr Uf.t -> print_lr =
+    fun k lr ->
     let ({left; right; keys; _}, _) = Uf.find lr in
     List.iter (fun (k, name) -> add_name k (name ^ "_lr")) keys;
     let matrix  = ref AssocLr.empty in
@@ -272,124 +329,117 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
     in
     collect_left left;
     collect_right right;
-    let print_one ch k (left,right) =
-      let name = get_name k in
-      let gright = mkg (Alt right) in
-      gright.ne <- EAlt (List.map (fun x -> x.ne) right);
-      Printf.fprintf ch "\n  %s ::= %a %a*"
-        name (print_grne Atom) (EAlt left) (print_negr Atom) gright
+    let print_one (left,right) =
+      no_name (PAlt (List.map fn' left @ List.map gn right))
     in
-    let print_matrix ch =
-      AssocLr.iter { f = fun x -> print_one ch x } !matrix
+    let print_matrix () =
+      let res = ref [] in
+      AssocLr.iter { f = fun k x ->
+            let g = print_one x in
+            res := (get_name k,g) :: !res
+          } !matrix;
+      !res
     in
     let name = get_name k in
-    Printf.fprintf ch "%s from %t" name print_matrix
+    (name, print_matrix ())
 
-  and print_grdf : type a. prio -> out_channel -> a grdf -> unit =
-  fun prio ch g ->
+  in gn x
+
+let print_ast ?(no_other=false) ch s =
+  let adone = ref [] in
+  let todo = ref [] in
+
+  let do_def g =
+    g.is_rec ||
+      (snd g.name = Given && match g.ast with PTerm _ -> false | _ -> true)
+  in
+
+  let rec print_ast : prio -> out_channel -> print_ast_aux -> unit =
+    fun prio ch g ->
     let pr x = Printf.fprintf ch x in
-    let pg x = print_dfgr x in
+    let pv x = print x in
     match g with
-    | Fail         -> pr "0"
-    | Err m        -> pr "0(%s)" m
-    | Empty _      -> pr "()"
-    | Term t       -> pr "%s" t.n
-    | Alt(gs)      -> pr (if prio < PAlt then "(%a)" else "%a")
-                        (prl (pg Seq) " | ") gs
-    | Seq(g1,g2)   -> pr (if prio < Seq then "(%a %a)" else "%a %a")
-                          (pg Atom) g1 (pg Seq) g2
-    | DSeq(g1,_)   -> pr (if prio < Seq then "(%a ...)" else "%a ...")
-                         (pg Atom) g1
-    | Rkey _       -> ()
-    | Appl(g,_)    -> pg prio ch g
-    | RPos(g)      -> pg prio ch g
-    | LPos(_,g)    -> pg prio ch g
-    | Test(_,g)    -> pg prio ch g
-    | Layout(_,g,_)-> pg prio ch g
-    | Eval(g)      -> pg prio ch g
-    | UMrg(g)      -> pg prio ch g
-    | Tmp          -> pr "TMP"
+    | PEmpty      -> pr "()"
+    | PFail       -> pr "0"
+    | PErr m      -> pr "0(%s)" m
+    | PTerm t     -> pr "%s" t
+    | PAlt(gs)    -> pr (if prio < PAlt then "(%a)" else "%a")
+                        (prl (pv PAlt) " | ") gs
+    | PSeq(g1,g2) -> pr (if prio < PSeq then "(%a %a)" else "%a %a")
+                         (pv PAtom) g1 (pv PSeq) g2
+    | PDSeq(g1)   -> pr (if prio < PSeq then "(%a ...)" else "%a ...")
+                       (pv PAtom) g1
+    | PLr(k,lr)   -> print_lr (k, lr) ch
+    | PRkey k     -> pr "%s" k
+    | PTrans(_,g) -> pv prio ch g
 
-  and print_negr : type a. prio -> out_channel -> a grammar -> unit =
-  fun prio ch g ->
-    let pr x = Printf.fprintf ch x in
-    if List.memq (Assoc.K g.k) !adone then Printf.fprintf ch "%s" (fst g.n)
-    else if do_def g then
-      begin
-        adone := K g.k :: !adone;
-        todo := G g :: !todo;
-        pr "%s" (fst g.n)
-      end
-    else
-      begin
-        let pg x = print_grne x in
-        match g.e with
-        | [] -> pr "%a" (pg prio) g.ne
-        | _  -> pr "(() | %a)" (pg PAlt) g.ne
-      end
+  and print_lr : print_lr -> out_channel -> unit =
+    fun (name, m) ch ->
+    let print_one ch (name,g) =
+      Printf.fprintf ch "\n  %s ::= %a" name (print PAlt) g
+    in
+    let print_matrix ch m =
+      List.iter (print_one ch) m
+    in
+    Printf.fprintf ch "%s from %a" name print_matrix m
 
-  and print_dfgr : type a. ?forced:bool -> prio -> out_channel -> a grammar -> unit =
+  and print : ?forced:bool -> prio -> out_channel -> print_ast -> unit =
     fun ?(forced=false) prio ch g ->
-    let rec fn : type a. name -> a grammar -> unit = fun name g ->
-      (*      if fst g.n = "qident" || fst name = "qident" then Printf.eprintf "coucou %s %b %s %b\n%!" (fst name) (snd name = Given) (fst g.n) (snd g.n = Given);*)
-      let name = best name g.n in
-      if snd name = Given && snd g.n = Given then print_sdfgr forced name prio ch g
-      else (match g.d with
-            | Appl(g,_) -> fn name g
-            | LPos(_,g) -> fn name g
-            | RPos(g)   -> fn name g
-            | Layout(_,g,_) -> fn name g
-            | Test(_,g) -> fn name g
-            | Eval(g) -> fn name g
-            | UMrg(g) -> fn name g
-            | _ -> print_sdfgr forced name prio ch g)
+    let rec fn : name -> print_ast -> unit = fun name g ->
+      let name = best name g.name in
+      if snd name = Given && snd g.name = Given
+      then print_aux forced name prio ch g
+      else (match g.ast with
+            | PTrans(_,g) -> fn name g
+            | _ -> print_aux forced name prio ch g)
     in
     fn ("????",Created) g
 
-  and print_sdfgr : type a. bool -> name -> prio -> out_channel -> a grammar -> unit =
+  and print_aux : bool -> name -> prio -> out_channel -> print_ast -> unit =
     fun forced name0 prio ch g ->
     let name =
-      if snd name0 <> Created then (add_name (K g.k) (fst name0); fst name0)
-      else try get_name g.k with Not_found -> fst g.n
+      if snd name0 <> Created then fst name0
+      else fst g.name
     in
     let pr x = Printf.fprintf ch x in
-    if List.memq (Assoc.K g.k) !adone && not forced
-    then Printf.fprintf ch "%s" name
+    let pg x = print_ast x in
+    if List.memq g !adone && not forced then Printf.fprintf ch "%s" name
     else if (snd name0 <> Created || do_def g) && not forced then
       begin
-        adone := K g.k :: !adone;
-        todo := G g :: !todo;
+        adone := g :: !adone;
+        todo := g :: !todo;
         pr "%s" name
+      end
+    else if not forced then
+      begin
+        pg prio ch g.ast
       end
     else
       begin
-        let pg x = print_grdf x in
-        if forced then
-          match g.d with
-          | Term _ -> ()
-          | _ -> Printf.fprintf ch "%s ::= %a\n" name (pg prio) g.d
-        else
-          pr "%a" (pg prio) g.d
+        let rec fn g = match g.ast with
+          | PTerm _ -> ()
+          | PTrans(_,g) -> fn g
+          | _ -> Printf.fprintf ch "%s ::= %a\n" name (pg prio) g.ast
+        in fn g
       end
 
   in
-  todo := G s :: !todo;
-  adone := K s.k :: !adone;
+  todo := s :: !todo;
+  adone := s :: !adone;
   while !todo != [] do
     match !todo with
       [] -> assert false
-    | G s::l ->
+    | s::l ->
        todo := l;
-       let pr f x = Printf.fprintf ch "%s ::= %a\n" (fst s.n) f x in
-       let pne ch s =
-         match s.e with
-         | [] -> print_grne PAlt ch s.ne
-         | _  -> Printf.printf "(() | %a)" (print_grne PAlt) s.ne
-       in
-       if def then print_dfgr ~forced:true PAlt ch s else pr pne s;
+       print ~forced:true PAlt ch s;
        if no_other then todo := []
-
   done
+
+let print_grammar
+    : type a. ?no_other:bool -> ?def:bool -> out_channel -> a grammar -> unit =
+  fun ?(no_other=false) ?(def=true) ch g ->
+    let g = if def then print_ast_of_df g else print_ast_of_ne g in
+    print_ast ~no_other ch g
 
 let print_grne : type a. out_channel -> a grne -> unit =
   fun ch ne ->
@@ -408,7 +458,7 @@ let print_grne : type a. out_channel -> a grne -> unit =
   in
   print_grammar ~no_other:true ~def:false ch g
 
-let _ = print_grne
+let _ = print_grne (* to avoid warning *)
 
 (** Interface to constructors.  propagate Fail because it is tested by
    elim_left_rec for the Lr suffix *)
