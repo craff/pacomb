@@ -29,9 +29,9 @@ let new_uid =
   fun () -> let uid = !c in incr c; uid
 
 (* Emtpy buffer. *)
-let empty_buffer infos lnum boff =
+let empty_buffer infos lnum boff coff =
   let rec line = lazy
-    { lnum ; boff; coff = 0; data = "" ; next = line ; infos ; ctnr = [||] }
+    { lnum ; boff; coff; data = "" ; next = line ; infos ; ctnr = [||] }
   in line
 
 let is_eof b = b.data = ""
@@ -267,13 +267,13 @@ include GenericInput(
               ; ctnr = [||] }
           with End_of_file ->
             finalise file;
-            fun () -> cont (lnum+1) boff
+            fun () -> cont lnum boff coff
         end ()
       in
       lazy
         begin
-          let cont lnum boff =
-            Lazy.force (empty_buffer infos lnum boff)
+          let cont lnum boff coff =
+            Lazy.force (empty_buffer infos lnum boff coff)
           in
           fn "" 1 0 0 cont
         end
@@ -340,14 +340,14 @@ module Make(PP : Preprocessor) =
               fun () -> fn remain infos lnum boff coff st cont
           with End_of_file ->
             finalise file;
-            fun () -> cont infos (lnum+1) boff st
+            fun () -> cont infos (lnum+1) boff coff st
         end ()
       in
       lazy
         begin
-          let cont infos lnum boff st =
+          let cont infos lnum boff coff st =
             PP.check_final st infos.name;
-            Lazy.force (empty_buffer infos lnum boff)
+            Lazy.force (empty_buffer infos lnum boff coff)
           in
           fn "" infos 1 0 0 PP.initial_state cont
         end
