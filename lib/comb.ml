@@ -246,7 +246,7 @@ let record_pos env =
 
 (** [next env] updates the current maximum position [env.max_pos] and
    raise [Exit] to return to the scheduler. *)
-let next : env -> res  = fun env -> record_pos env; raise Exit
+let next : env -> 'a  = fun env -> record_pos env; raise Exit
 
 (** same as abobe, but recording error messages *)
 let record_pos_msg msg env =
@@ -256,7 +256,7 @@ let record_pos_msg msg env =
     env.max_pos := (pos, env.current_buf, env.current_pos, ref [msg])
   else if pos = pos_max then msgs := msg :: !msgs
 
-let next_msg : string -> env -> res  = fun msg env ->
+let next_msg : string -> env -> 'a  = fun msg env ->
   record_pos_msg msg env; raise Exit
 
 (** {2 Scheduler code} *)
@@ -385,8 +385,8 @@ let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
               on right recursion *)
            let g = g2 v1 in
            fun () -> g env (arg k v2)
-         with Lex.NoParse -> fun () -> next env
-            | Lex.Give_up m -> fun () -> next_msg m env) ()))
+         with Lex.NoParse -> next env
+            | Lex.Give_up m -> next_msg m env) ()))
 
 (** option combinator,  contrary to [alt] apply to [empty],  it uses the charset
     of the  continuation for prediction. Therefore  it is preferable not  to use
