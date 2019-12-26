@@ -72,6 +72,11 @@ val app : 'a t -> ('a -> 'b) -> 'b t
 (** forces immediate evaluation of the action just after parsing *)
 val eval : 'a t -> 'a t
 
+(** unmerge  a merged ambiguous  grammar, typically if  the rest of  the parsing
+   uses dependant sequences. Allows for ambiguous terminals by return a list and
+   the using unmerge. *)
+val unmerge : 'a list t -> 'a t
+
 (** Parses  as the given  combinator and  give the position  to the left  of the
     parsing input as argument to the action *)
 val left_pos : (Pos.t -> 'a) t -> 'a t

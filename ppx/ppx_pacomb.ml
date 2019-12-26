@@ -534,7 +534,9 @@ let vb_to_parser rec_ vb =
          in
          let expr =
            match Ppxlib.Attribute.get print_param_att vb with
-           | Some _ -> add_attribute expr (attribute_of_warning loc "useless @print_param attribute")
+           | Some _ -> add_attribute expr
+                         (attribute_of_warning loc
+                            "useless @print_param attribute")
            | None   -> expr
          in
          [Vb.mk ~loc vb.pvb_pat expr]

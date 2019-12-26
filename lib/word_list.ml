@@ -88,30 +88,46 @@ let add_utf8     ?(map=idt) tbl s v = add_utf8 false map tbl s v
 let next tbl c =
   try Hashtbl.find tbl.next c with Not_found -> raise Lex.NoParse
 
-let parse_char : (char -> char) -> (char, 'a) t -> 'a Grammar.t =
-  fun map tbl ->
-    let%parser rec p tbl =
-      (x::Grammar.alt (List.map Grammar.empty tbl.leafs))      => x
-      ; ((c,__)>:((c::CHAR) => (map c,()))) (x::p (next tbl c)) => x
-    in
-    p tbl
-
-let word : ?name:string -> ?final_test:(Input.buffer -> Input.pos -> bool)
+let word : ?name:string -> ?cs:Charset.t
+           -> ?final_test:(Input.buffer -> Input.pos -> bool)
            -> ?map:(char -> char) -> (char, 'a) t -> 'a Grammar.t =
-  fun ?name ?(final_test=fun _ _ -> true) ?(map=fun c -> c) tbl ->
-  Grammar.(layout ?name Blank.none
-             (test_after (fun _ _ _ -> final_test) (parse_char map tbl)))
-
-let parse_utf8 : (string -> string) -> (string, 'a) t -> 'a Grammar.t =
-  fun map tbl ->
-    let%parser rec p tbl =
-      (x::Grammar.alt (List.map Grammar.empty tbl.leafs))      => x
-      ; ((c,__)>:((c::GRAPHEME) => (map c,()))) (x::p (next tbl c)) => x
+  fun ?name ?(cs=Charset.full)
+      ?(final_test=fun _ _ -> true)
+      ?(map=fun c -> c) tbl ->
+    let rec f tbl s n =
+      try
+        let (c,s,n) = Input.read s n in
+        let c = map c in
+        f (next tbl c) s n
+      with
+        Not_found ->
+        if final_test s n && tbl.leafs <> [] then (tbl.leafs, s, n)
+        else raise Lex.NoParse
     in
-    p tbl
+    let n = Lex.default "WORD" name in
+    let f = f tbl in
+    let lex = Lex.{ n; f; a = Custom(f,Assoc.new_key ()); c = cs }
+    in
+    Grammar.unmerge ?name (Grammar.term lex)
 
-let utf8_word : ?name:string -> ?final_test:(Input.buffer -> Input.pos -> bool)
-           -> ?map:(string -> string) -> (string, 'a) t -> 'a Grammar.t =
-  fun ?name ?(final_test=fun _ _ -> true) ?(map=fun c -> c) tbl ->
-  Grammar.(layout ?name Blank.none
-             (test_after (fun _ _ _ -> final_test) (parse_utf8 map tbl)))
+let utf8_word : ?name:string -> ?cs:Charset.t
+                -> ?final_test:(Input.buffer -> Input.pos -> bool)
+                -> ?map:(string -> string) -> (string, 'a) t -> 'a Grammar.t =
+  fun ?name ?(cs=Charset.full)
+      ?(final_test=fun _ _ -> true)
+      ?(map=fun c -> c) tbl ->
+    let rec f tbl s n =
+      try
+        let (c,s,n) = Lex.((any_grapheme ()).f s n) in
+        let c = map c in
+        f (next tbl c) s n
+      with
+        Not_found ->
+        if final_test s n && tbl.leafs <> [] then(tbl.leafs, s, n)
+        else raise Lex.NoParse
+    in
+    let n = Lex.default "WORD" name in
+    let f = f tbl in
+    let lex = Lex.{ n; f; a = Custom(f,Assoc.new_key ()); c = cs }
+    in
+    Grammar.unmerge ?name (Grammar.term lex)

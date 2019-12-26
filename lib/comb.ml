@@ -288,7 +288,8 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
       (** calls to the initial grammar and initialise the table *)
       (try
         let r = g env (ink k) in
-        queue := Heap.add (get_prio r) r !queue;  (** to do at further position *)
+        (* initialize the queue *)
+        queue := Heap.add (get_prio r) r !queue;
       with Exit -> ());
       while true do
         let (todo,t) = Heap.remove !queue in
@@ -440,6 +441,17 @@ let eval : 'a t -> 'a t = fun g env k ->
              try ignore (Lazy.force v); call k env v
              with Lex.NoParse -> next env
                 | Lex.Give_up m -> next_msg m env))
+
+(** unmerge a merged ambiguous grammar, typicallyif the rest of the parsing uses
+   dependant sequences *)
+let unmerge : 'a list t -> 'a t = fun g env k ->
+  g env (ink (fun env (lazy vs) ->
+             let rec fn =function
+               | [] -> next env
+               | [v] -> call k env (lazy v)
+               | v::l -> add_queue env (Cont(env,k,lazy v)); fn l
+             in
+             fn vs))
 
 (** Combinator to test the input before parsing with a grammar *)
 let test_before : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)

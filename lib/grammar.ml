@@ -102,6 +102,7 @@ type 'a grammar =
                                            (** changes the blank function *)
    | Test : 'a test * 'a t -> 'a grdf      (** test, before or after *)
    | Eval : 'a t -> 'a grdf                (** force evaluation *)
+   | UMrg : 'a list t -> 'a grdf           (** unmerge *)
    | Tmp  : 'a grdf                        (** used as initial value for
                                                recursive grammar. *)
 
@@ -127,6 +128,7 @@ type 'a grammar =
    | ELayout : Blank.t * 'a grne * Blank.layout_config -> 'a grne
    | ETest : 'a test * 'a grne -> 'a grne
    | EEval : 'a grne -> 'a grne
+   | EUMrg : 'a list grne -> 'a grne
    | ETmp  : 'a grne
    (** only new constructor, introduced by elimination of left recursion.
        the key give the grammar we actually parse and the mlr information
@@ -160,6 +162,11 @@ let rec eq : type a b.a grammar -> b grammar -> (a, b) Assoc.eq =
               | Eq -> Eq | _ -> NEq
             end
          | Eval(g1), Eval(g2) ->
+            begin
+              match eq g1 g2 with
+              | Eq -> Eq | _ -> NEq
+            end
+         | UMrg(g1), UMrg(g2) ->
             begin
               match eq g1 g2 with
               | Eq -> Eq | _ -> NEq
@@ -239,6 +246,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
     | ETest(_,g)    -> pg prio ch g
     | ELayout(_,g,_)-> pg prio ch g
     | EEval(g)      -> pg prio ch g
+    | EUMrg(g)      -> pg prio ch g
     | ETmp          -> pr "TMP"
 
   and print_lr : type a. a key -> mlr Uf.t -> out_channel -> unit =
@@ -299,6 +307,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
     | Test(_,g)    -> pg prio ch g
     | Layout(_,g,_)-> pg prio ch g
     | Eval(g)      -> pg prio ch g
+    | UMrg(g)      -> pg prio ch g
     | Tmp          -> pr "TMP"
 
   and print_negr : type a. prio -> out_channel -> a grammar -> unit =
@@ -332,6 +341,7 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
             | Layout(_,g,_) -> fn name g
             | Test(_,g) -> fn name g
             | Eval(g) -> fn name g
+            | UMrg(g) -> fn name g
             | _ -> print_sdfgr forced name prio ch g)
     in
     fn ("????",Created) g
@@ -342,11 +352,9 @@ let print_grammar ?(no_other=false) ?(def=true) ch s =
       if snd name0 <> Created then (add_name (K g.k) (fst name0); fst name0)
       else try get_name g.k with Not_found -> fst g.n
     in
-(*    if fst g.n = "qident" || fst name0 = "qident" then
-      Printf.eprintf "COUCOU %s %b %s %b %s\n%!"
-        (fst name0) (snd name0 <> Created) (fst g.n) (snd g.n = Given) (fst name0);*)
     let pr x = Printf.fprintf ch x in
-    if List.memq (Assoc.K g.k) !adone && not forced then Printf.fprintf ch "%s" name
+    if List.memq (Assoc.K g.k) !adone && not forced
+    then Printf.fprintf ch "%s" name
     else if (snd name0 <> Created || do_def g) && not forced then
       begin
         adone := K g.k :: !adone;
@@ -578,6 +586,10 @@ let eval ?name g =
   let name = created2 name g.n in
   mkg ?name (if g.d = Fail then Fail else Eval(g))
 
+let unmerge ?name g =
+  let name = created2 name g.n in
+  mkg ?name (if g.d = Fail then Fail else UMrg(g))
+
 let test ?name f g =
   let name = created2 name g.n in
   mkg ?name (if g.d = Fail then Fail else Test(f,g))
@@ -654,9 +666,10 @@ let plus : ?name:string -> 'a grammar -> 'a list grammar = fun ?name g ->
 let plus_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar =
   fun ?name sep g ->
     let name = created2 name (fst g.n ^ "+" ^ fst sep.n, snd g.n) in
-    appl ?name (fixpoint (fun r ->
-                    alt [appl g (fun x -> [x]);
-                         seq r (seq sep (appl g (fun x _ l -> x::l)))])) List.rev
+    appl ?name
+      (fixpoint (fun r ->
+           alt [appl g (fun x -> [x]);
+                seq r (seq sep (appl g (fun x _ l -> x::l)))])) List.rev
 
 let star_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar =
   fun ?name sep g ->
@@ -724,6 +737,10 @@ let ne_rpos g1 = match g1 with
 let ne_eval g1 = match g1 with
   | EFail -> EFail
   | _     -> EEval(g1)
+
+let ne_unmerge g1 = match g1 with
+  | EFail -> EFail
+  | _     -> EUMrg(g1)
 
 let ne_test f g1 = match g1 with
   | EFail -> EFail
@@ -802,6 +819,7 @@ let factor_empty g =
                        (* FIXME #14: Loose position *)
     | Layout(_,g,_) -> fn g; g.e
     | Eval(g)       -> fn g; g.e
+    | UMrg(g)       -> fn g; List.flatten g.e
     | Test(_,g)     -> fn g;
                        if g.e <> [] then
                          failwith "illegal test on grammar accepting empty";
@@ -848,6 +866,7 @@ let factor_empty g =
     | LPos(pk,g1) -> hn g1; ne_lpos ?pk (get g1)
     | RPos(g1) -> hn g1; ne_rpos (get g1)
     | Eval(g1) -> hn g1; ne_eval (get g1)
+    | UMrg(g1) -> hn g1; ne_unmerge (get g1)
     | Test(f,g1) -> hn g1; ne_test f (get g1)
     | Layout(b,g,cfg) -> hn g; ne_layout b (get g) cfg
     | Tmp           -> failwith "grammar compiled before full definition"
@@ -974,6 +993,9 @@ let elim_left_rec : type a. a grammar -> unit = fun g ->
       | EEval(g1) ->
          let (g1,s) = fn above g1 in
          (ne_eval g1, map_elr eval s)
+      | EUMrg(g1) ->
+         let (g1,s) = fn above g1 in
+         (ne_unmerge g1, map_elr unmerge s)
       | ERPos(g1) ->
          let (g1, s1) = fn above g1 in
          (ne_rpos g1, map_elr rpos s1)
@@ -1085,6 +1107,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
     | ERPos g -> fn g
     | ELPos (_,g) -> fn g
     | EEval(g) -> fn g
+    | EUMrg(g) -> fn g
     | ETest (_,g) -> fn g
     | ELayout(_,g,cfg) -> if cfg.old_blanks_before
                              && not cfg.new_blanks_before
@@ -1160,8 +1183,10 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
                let gs = fn k [] r.left in
                let left = compile_alt gs in
                match r.lpos with
-               | None -> Comb.lr left k (first_charset g.ne) (compile_ne g.ne)
-               | Some pk -> Comb.lr_pos left k pk (first_charset g.ne) (compile_ne g.ne)
+               | None ->
+                  Comb.lr left k (first_charset g.ne) (compile_ne g.ne)
+               | Some pk ->
+                  Comb.lr_pos left k pk (first_charset g.ne) (compile_ne g.ne)
           end
        | _ ->
           let rec fn = function
@@ -1191,6 +1216,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
        | _, Some pk -> Comb.read_pos pk (compile_ne g)
      end
   | EEval(g) -> Comb.eval (compile_ne g)
+  | EUMrg(g) -> Comb.unmerge (compile_ne g)
   | ETest(Before f,g) -> Comb.test_before f (compile_ne g)
   | ETest(After f,g) -> Comb.test_after f (compile_ne g)
   | ELayout(b,g,cfg) -> Comb.change_layout ~config:cfg b (compile_ne g)

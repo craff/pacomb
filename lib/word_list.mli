@@ -46,8 +46,10 @@ val mem_utf8
 
     [map] is called on each character before searching in the table, typically a
     case conversion. Defaults to identity.  *)
-val word : ?name:string -> ?final_test:(Input.buffer -> Input.pos -> bool)
+val word : ?name:string -> ?cs:Charset.t
+           -> ?final_test:(Input.buffer -> Input.pos -> bool)
            -> ?map:(char -> char) -> (char, 'a) t -> 'a Grammar.t
 
-val utf8_word : ?name:string -> ?final_test:(Input.buffer -> Input.pos -> bool)
-           -> ?map:(string -> string) -> (string, 'a) t -> 'a Grammar.t
+val utf8_word : ?name:string -> ?cs:Charset.t
+                -> ?final_test:(Input.buffer -> Input.pos -> bool)
+                -> ?map:(string -> string) -> (string, 'a) t -> 'a Grammar.t
