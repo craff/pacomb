@@ -204,7 +204,7 @@ let prl pr sep ch l =
 
 module AssocLr = Assoc.Make (struct type 'a data = 'a grne list * 'a t list end)
 
-type prio = PAtom | PSeq | PAlt
+type prio = P_Atom | P_Seq | P_Alt
 
 type print_ast_aux =
   | PFail
@@ -363,12 +363,12 @@ let print_ast ?(no_other=false) ch s =
     | PFail       -> pr "0"
     | PErr m      -> pr "0(%s)" m
     | PTerm t     -> pr "%s" t
-    | PAlt(gs)    -> pr (if prio < PAlt then "(%a)" else "%a")
-                        (prl (pv PAlt) " | ") gs
-    | PSeq(g1,g2) -> pr (if prio < PSeq then "(%a %a)" else "%a %a")
-                         (pv PAtom) g1 (pv PSeq) g2
-    | PDSeq(g1)   -> pr (if prio < PSeq then "(%a ...)" else "%a ...")
-                       (pv PAtom) g1
+    | PAlt(gs)    -> pr (if prio < P_Alt then "(%a)" else "%a")
+                        (prl (pv P_Alt) " | ") gs
+    | PSeq(g1,g2) -> pr (if prio < P_Seq then "(%a %a)" else "%a %a")
+                         (pv P_Atom) g1 (pv P_Seq) g2
+    | PDSeq(g1)   -> pr (if prio < P_Seq then "(%a ...)" else "%a ...")
+                       (pv P_Atom) g1
     | PLr(k,lr)   -> print_lr (k, lr) ch
     | PRkey k     -> pr "%s" k
     | PTrans(_,g) -> pv prio ch g
@@ -376,7 +376,7 @@ let print_ast ?(no_other=false) ch s =
   and print_lr : print_lr -> out_channel -> unit =
     fun (name, m) ch ->
     let print_one ch (name,g) =
-      Printf.fprintf ch "\n  %s ::= %a" name (print PAlt) g
+      Printf.fprintf ch "\n  %s ::= %a" name (print P_Alt) g
     in
     let print_matrix ch m =
       List.iter (print_one ch) m
@@ -431,7 +431,7 @@ let print_ast ?(no_other=false) ch s =
       [] -> assert false
     | s::l ->
        todo := l;
-       print ~forced:true PAlt ch s;
+       print ~forced:true P_Alt ch s;
        if no_other then todo := []
   done
 
