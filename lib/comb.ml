@@ -228,9 +228,12 @@ let forces (l : lazies) =
   let rec fn l =
     let c = !l in l := N; match c with
     | N -> ()
-    | L (x,l) -> ignore (Lazy.force x); fn l
+    | L (x,l) -> (try
+                    ignore (Lazy.force x)
+                  with Lex.NoParse | Lex.Give_up _ -> ());
+                 fn l
   in
-  (try fn l with Lex.NoParse | Lex.Give_up _ -> ())
+  fn l
 
 (** {2 Error managment} *)
 
