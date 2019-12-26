@@ -205,21 +205,6 @@ let next_msg : string -> env -> 'a  = fun msg env ->
 
 (** {2 continuations and trans functions} *)
 
-let force env x =
-  try Lazy.force x
-  with Lex.NoParse -> next env
-     | Lex.Give_up m -> next_msg m env
-
-let forces l =
-  let rec fn = function
-    | N -> ()
-    | L(x,l) -> ignore (Lazy.force x); fn l
-  in
-  fn l
-
-let to_force env x =
-  { env with to_force = L(x,env.to_force) }
-
 (** construction of a continuation with an identity transformer.
     [ink] means "injection kontinuation" *)
 let ink f = C(f,Idt,None)
@@ -281,6 +266,11 @@ let posk : type a. a cont -> (Pos.t -> a) cont =
   | None    -> let p = ref Input.phantom_spos in C(k,Pos(tr, p),Some p)
   | Some p -> C(k,Pos(tr,p),rp)
 
+let force env x =
+  try Lazy.force x
+  with Lex.NoParse -> next env
+     | Lex.Give_up m -> next_msg m env
+
 let forces (l : lazies) =
   let rec fn l =
     let c = !l in l := N; match c with
@@ -291,30 +281,6 @@ let forces (l : lazies) =
                  fn l
   in
   fn l
-
-(** {2 Error managment} *)
-
-(** record the current position, before a parsing error *)
-let record_pos env =
-  let (pos_max, _, _, _) = !(env.max_pos) in
-  let pos = Input.byte_pos env.current_buf env.current_pos in
-  if pos > pos_max  then
-    env.max_pos := (pos, env.current_buf, env.current_pos, ref [])
-
-(** [next env] updates the current maximum position [env.max_pos] and
-   raise [Exit] to return to the scheduler. *)
-let next : env -> res  = fun env -> record_pos env; raise Exit
-
-(** same as abobe, but recording error messages *)
-let record_pos_msg msg env =
-  let (pos_max, _, _, msgs) = !(env.max_pos) in
-  let pos = Input.byte_pos env.current_buf env.current_pos in
-  if pos > pos_max then
-    env.max_pos := (pos, env.current_buf, env.current_pos, ref [msg])
-  else if pos = pos_max then msgs := msg :: !msgs
-
-let next_msg : string -> env -> res  = fun msg env ->
-  record_pos_msg msg env; raise Exit
 
 (** {2 Scheduler code} *)
 
@@ -361,7 +327,7 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
                (** it is time to eval lazy arguments *)
                forces env.to_force;
                (** calling the continuation *)
-               call k { env with to_force = N } x
+               call k env x
             | Gram(env,g,k) ->
                g env k
           in
@@ -509,17 +475,6 @@ let unmerge : 'a list t -> 'a t = fun g env k ->
              in
              fn vs))
 
-(** unmerge a merged ambiguous grammar, typicallyif the rest of the parsing uses
-   dependant sequences *)
-let unmerge : 'a list t -> 'a t = fun g env k ->
-  g env (ink (fun env (lazy vs) ->
-             let rec fn =function
-               | [] -> next env
-               | [v] -> call k env (lazy v)
-               | v::l -> add_queue env (Cont(env,k,lazy v)); fn l
-             in
-             fn vs))
-
 (** Combinator to test the input before parsing with a grammar *)
 let test_before : (Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
                  -> 'a t -> 'a t =
@@ -534,7 +489,7 @@ let test_after : ('a -> Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
                  -> 'a t -> 'a t =
   fun test g env k ->
     let k = ink (fun env x ->
-      match test (Lazy.force x) env.buf_before_blanks env.idx_before_blanks
+      match test (force env x) env.buf_before_blanks env.idx_before_blanks
              env.current_buf env.current_idx
       with false -> next env
          | true  -> call k env x)
@@ -581,7 +536,7 @@ let lr_pos : 'a t -> 'a key -> Pos.t key -> Charset.t -> 'a t -> 'a t =
       if test cs env then
         begin
           let lr = LAssoc.add key v env.lr in
-          let lr = LAssoc.add pkey pos lr in
+          let lr = LAssoc.add pkey (lazy pos) lr in
           let env0 = { env with lr; to_force = ref (L(v, env.to_force)) } in
           add_queue env (Gram(env0,gf,ink klr))
         end;

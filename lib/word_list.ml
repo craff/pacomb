@@ -12,7 +12,7 @@ type ('a,'b) t =
   ; uniq : bool
   ; map  : 'a -> 'a
   ; cs   : Charset.t
-  ; finl : Input.buffer -> Input.pos -> bool }
+  ; finl : Input.buffer -> Input.idx -> bool }
 
 let create_data () = { leafs = []; next = Hashtbl.create 8 }
 
