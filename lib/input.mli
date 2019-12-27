@@ -74,12 +74,12 @@ module type Preprocessor =
         preprocessor, the  file name [name], the  number of the next  input data
         [lnum] and  the next input  [data] itself. [nl] is  true iff there  is a
         newline at the end  of [data]. It returns a tuple of  the new state, the
-        new  file name,  the new  line number  and [false] if the  data must  be
-        ignored or [true] if it must be kept.  The new file name and line number
-        can  be  used  to implement  line  number directives.   The function may
-        raise [Preprocessor_error] in case of error. *)
+        new  file name,  the new  line number  and [None]  if the  data must  be
+        ignored or  [Some(data)] which is  the new data.  The new file  name and
+        line  number can  be  used  to implement  line  number directives.   The
+        function may raise [Preprocessor_error] in case of error. *)
     val update : state -> string -> int -> string -> bool
-                   -> state * string * int * bool
+                   -> state * string * int * string option
 
     (** [check_final st name]  check that [st] indeed is a  correct state of the
         preprocessor for  the end  of input of  file [name].  If  it is  not the
