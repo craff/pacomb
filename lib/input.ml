@@ -232,24 +232,12 @@ include GenericInput(
   struct
     let from_fun finalise utf8 name get_line file =
       let infos = { utf8; name; uid = new_uid () } in
-      let rec fn remain lnum boff coff cont =
+      let rec fn lnum boff coff cont =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
-            let (data0, nl) =
-              try get_line file
-              with End_of_file when remain <> ""  -> ("", false)
-            in
-            let data = if remain <> "" then remain ^ data0 else data0 in
+            let (data, nl) = get_line file in
             let llen = String.length data in
-            let (remain,data,llen) =
-              if not nl && data0 <> "" && infos.utf8 <> Utf8.ASCII then
-                let p = Utf8.prev_grapheme data llen in
-                if p > 0 then
-                  (String.sub data p (llen - p), String.sub data 0 p, p)
-                else ("",data, llen)
-              else ("",data, llen)
-            in
             let nlnum, ncoff =
               if nl then (lnum+1, 0)
               else
@@ -260,7 +248,7 @@ include GenericInput(
             in
             fun () ->
               { lnum ; boff; coff; data ; infos
-              ; next = lazy (fn remain nlnum (boff + llen) ncoff cont)
+              ; next = lazy (fn nlnum (boff + llen) ncoff cont)
               ; ctnr = [||] }
           with End_of_file ->
             finalise file;
@@ -272,7 +260,7 @@ include GenericInput(
           let cont lnum boff coff =
             Lazy.force (empty_buffer infos lnum boff coff)
           in
-          fn "" 1 0 0 cont
+          fn 1 0 0 cont
         end
   end)
 
@@ -286,7 +274,7 @@ module type Preprocessor =
     type state
     val initial_state : state
     val update : state -> string -> int -> string -> bool
-                 -> state * string * int * string option
+                 -> state * string * int * bool
     val check_final : state -> string -> unit
   end
 
@@ -294,31 +282,18 @@ module Make(PP : Preprocessor) =
   struct
     let from_fun finalise utf8 name get_line file =
       let infos = { utf8; name; uid = new_uid () } in
-      let rec fn remain infos lnum boff coff st cont =
+      let rec fn infos lnum boff coff st cont =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
-            let (data0, nl) =
-              try get_line file
-              with End_of_file when remain <> ""  -> ("", false)
-            in
-            let data = if remain <> "" then remain ^ data0 else data0 in
+            let (data, nl) = get_line file in
             let llen = String.length data in
-            let (remain,data) =
-              if not nl && data0 <> "" && infos.utf8 <> Utf8.ASCII then
-                let p = Utf8.prev_grapheme data llen in
-                if p > 0 then
-                  (String.sub data p (llen-p), String.sub data 0 p)
-                else ("",data)
-              else ("",data)
-            in
             let (st, name, lnum, res) = PP.update st infos.name lnum data nl in
             let infos =
               if name <> infos.name then { infos with name } else infos
             in
             match res with
-            | Some data ->
-               let llen = String.length data in
+            | true ->
                let nlnum, ncoff =
                  if nl then (lnum+1, 0)
                  else
@@ -330,11 +305,10 @@ module Make(PP : Preprocessor) =
                in
               fun () ->
                 { lnum ; boff; coff; data ; infos
-                ; next = lazy (fn remain infos nlnum (boff + llen)
-                                 ncoff st cont)
+                ; next = lazy (fn infos nlnum (boff + llen) ncoff st cont)
                 ; ctnr = [||] }
-            | None ->
-              fun () -> fn remain infos lnum boff coff st cont
+            | false ->
+              fun () -> fn infos lnum boff coff st cont
           with End_of_file ->
             finalise file;
             fun () -> cont infos (lnum+1) boff coff st
@@ -346,7 +320,7 @@ module Make(PP : Preprocessor) =
             PP.check_final st infos.name;
             Lazy.force (empty_buffer infos lnum boff coff)
           in
-          fn "" infos 1 0 0 PP.initial_state cont
+          fn infos 1 0 0 PP.initial_state cont
         end
   end
 
