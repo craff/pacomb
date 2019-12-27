@@ -79,6 +79,7 @@ module LAssoc = Assoc.Make(struct type 'a data = 'a Lazy.t end)
 
 type lazies_aux = N : lazies_aux
                 | L : 'a lazy_t * lazies -> lazies_aux
+                | E : exn -> lazies_aux
 
 and lazies = lazies_aux ref
 
@@ -226,12 +227,13 @@ let posk : type a. a cont -> (Pos.t -> a) cont =
 
 let forces (l : lazies) =
   let rec fn l =
-    let c = !l in l := N; match c with
-    | N -> ()
+    match !l with
+    | N       -> ()
+    | E e     -> raise e
     | L (x,l) -> (try
                     ignore (Lazy.force x)
-                  with Lex.NoParse | Lex.Give_up _ -> ());
-                 fn l
+                  with e -> l := E e; raise e);
+                 l := N; fn l
   in
   fn l
 
@@ -445,7 +447,7 @@ let eval : 'a t -> 'a t = fun g env k ->
              with Lex.NoParse -> next env
                 | Lex.Give_up m -> next_msg m env))
 
-(** unmerge a merged ambiguous grammar, typicallyif the rest of the parsing uses
+(** unmerge a merged ambiguous grammar, typically if the rest of the parsing uses
    dependant sequences *)
 let unmerge : 'a list t -> 'a t = fun g env k ->
   g env (ink (fun env (lazy vs) ->
@@ -470,10 +472,13 @@ let test_after : ('a -> Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a t -> 'a t =
   fun test g env k ->
     let k = ink (fun env x ->
-      match test (Lazy.force x) env.buf_before_blanks env.pos_before_blanks
-             env.current_buf env.current_pos
-      with false -> next env
-         | true  -> call k env x)
+                try
+                  match test (Lazy.force x) env.buf_before_blanks env.pos_before_blanks
+                          env.current_buf env.current_pos
+                  with false -> next env
+                     | true  -> call k env x
+                with Lex.NoParse -> next env
+                   | Lex.Give_up m -> next_msg m env)
     in
     g env k
 
@@ -657,6 +662,8 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
   (** creation of a table for the cache *)
   let cache = Input.Tbl.create () in
   fun env0 k ->
+  forces env0.to_force; (* if parsing fails because of pending action, then
+                           table is registred, but impossible to use *)
   let {current_buf = buf0; current_pos = col0} = env0 in
   try
     (** Did we start parsing the same grammar at the same position *)
@@ -665,7 +672,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
        !too_late is true if we already called the continuation stored
        in !ptr *)
     assert (not !too_late);
-    ptr := (k, env0.cache_order) :: !ptr;
+    ptr := (k, env0) :: !ptr;
     (** Nothing else to do nw, try the other branch of parsing *)
     raise Exit
   with Not_found ->
@@ -674,7 +681,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
     (** NOTE: size of ptr: O(N) for each position,
          it comes from a rule using that grammar (nb of rule constant),
          and the start position of this rule (thks to cache, only one each)  *)
-    let ptr = ref [(k,env0.cache_order)] in
+    let ptr = ref [(k,env0)] in
     let too_late = ref false in
     Input.Tbl.add cache buf0 col0 (ptr, too_late);
     (** we create a merge table for all continuation to call merge on all
@@ -692,10 +699,11 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
     (** we update cache_order in the environment, ensuring the correct order in
          the scheduler. we must evaluate first grammar that were started later
          in the input buffer, or later in time if at the same position *)
-    let env = { env0 with cache_order } in
+    let env = { env0 with cache_order; to_force = ref N } in
     let k0 env v =
       (** the cache order must have been restored to its initial value *)
       assert (cache_order = env.cache_order);
+      forces env.to_force;
       let {current_buf = buf; current_pos = col} = env in
       try
         (** we first try to merge ... if merge <> None *)
@@ -744,11 +752,12 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
         (** Now we call all continuation stored in !ptr *)
         let l0 = !ptr in
         too_late := true;
-        List.iter (fun (k,cache_order) ->
+        List.iter (fun (k,env1) ->
             add_queue env
               (** we pop cache_order to ensure this continuation
                   is called after all extensions of vptr *)
-              (Cont({ env with cache_order },k,v))) l0;
+              (Cont({ env with cache_order = env1.cache_order
+                             ; to_force = ref N},k,v))) l0;
         raise Exit
     in
     (** safe to call g, env had cache pushed so it is a minimum *)
