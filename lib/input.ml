@@ -76,12 +76,16 @@ let line_num (lazy b) = b.lnum
 
 let byte_pos (lazy b) p = b.boff + p
 
+exception Splitted_end
+exception Splitted_begin
+
 (* Get the utf8 column number corresponding to the given position. *)
 let utf8_col_num context data i =
   let rec find num pos =
     if pos < i then
       let cc = Char.code data.[pos] in
       let code i =
+        if (pos+i) >= String.length data then raise Splitted_end;
         let n = match i with
           1 -> cc land 0b0111_1111
         | 2 -> (cc land (0b0001_1111) lsl 6) lor
@@ -93,20 +97,25 @@ let utf8_col_num context data i =
                  ((Char.code data.[pos+1] land 0b0011_1111) lsl 12) lor
                    ((Char.code data.[pos+2] land 0b0011_1111) lsl 6)  lor
                      (Char.code data.[pos+3] land 0b0011_1111)
-        | _ -> assert false
+        | _ -> raise Splitted_begin
         in
         Uchar.of_int n
       in
-      if cc lsr 7 = 0 then
-        find (num+Utf8.width ~context (code 1)) (pos + 1)
-      else if (cc lsr 5) land 1 = 0 then
-          find (num+Utf8.width ~context (code 2)) (pos + 2)
-      else if (cc lsr 4) land 1 = 0 then
-        find (num+Utf8.width ~context (code 3)) (pos + 3)
-      else if (cc lsr 3) land 1 = 0 then
-        find (num+Utf8.width ~context (code 4)) (pos + 4)
-      else
-      -0 (* Invalid utf8 character. *)
+      let (num, pos) =
+        try
+          if cc lsr 7 = 0 then
+            (num+Utf8.width ~context (code 1), pos + 1)
+          else if (cc lsr 5) land 1 = 0 then
+            (num+Utf8.width ~context (code 2), pos + 2)
+          else if (cc lsr 4) land 1 = 0 then
+            (num+Utf8.width ~context (code 3), pos + 3)
+          else if (cc lsr 3) land 1 = 0 then
+            (num+Utf8.width ~context (code 4), pos + 4)
+          else (num, pos+1) (* Invalid utf8 character. *)
+        with Splitted_begin -> (num, pos+1)
+           | Splitted_end   -> (num+1, String.length data)
+      in
+      find num pos
     else num
   in find 0 0
 
