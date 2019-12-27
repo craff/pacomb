@@ -372,10 +372,6 @@ and exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
   (* base case [items => action] *)
   | [%expr [%e? rule] => [%e? action]] ->
      [base_rule acts_fn rule action]
-  | [%expr [%e? rule] ==> [%e? action]] ->
-     let rule = base_rule acts_fn rule action in
-     let loc = e.pexp_loc in
-     [[%expr Pacomb.Grammar.eval [%e rule]]]
   (* inheritance case [prio1 < prio2 < ... < prion] *)
   | [%expr [%e? _] < [%e? _]] when name_param <> None ->
      let rec fn exp = match exp with

@@ -44,13 +44,13 @@ val term : ?name:string -> 'a Lex.terminal -> 'a grammar
 (** [appl g f] parses with [g] and apply [f] to the resulting semantics *)
 val appl : ?name:string -> 'a grammar -> ('a -> 'b) -> 'b grammar
 
-(** [eval g] parses with [g] and forces immedaite evaluation of the semantics *)
-val eval : ?name:string -> 'a grammar -> 'a grammar
-
 (** [unmerge g] introduce multiple parse branch from a list of semantics.
     Allows to create ambiguous terminals and allows fr unmerge to continue
     a dependent parsing *)
 val unmerge : ?name:string -> 'a list grammar -> 'a grammar
+
+val lazy_ : ?name:string -> 'a grammar -> 'a lazy_t grammar
+val force : ?name:string -> 'a lazy_t grammar -> 'a grammar
 
 (** [alt [g1;g2;...;gn]] parses with [g1] and if it fails then [g2] and so on *)
 val alt : ?name:string -> 'a grammar list -> 'a grammar

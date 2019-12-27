@@ -10,13 +10,14 @@ open Pacomb
    parse twice the same part of the input (@merge implies @cache). We just return
    the number of tree. *)
 let%parser [@merge (+.)] rec bin_seq =
-    ()                             => 1.0
+    ()                              => 1.0
   ; (t1::bin_seq) 'a' (t2::bin_seq) => t1 *. t2
 
 (* Idem for ternary tree, we need an internal cache *)
 let%parser [@merge (+.)] rec ter_seq =
     ()                             => 1.0
-  ; (t1::ter_seq) (t2t3::Grammar.cache ~merge:(+.) ('a' (t2::ter_seq) (t3::ter_seq) => t2 *. t3))
+  ; (t1::ter_seq) (t2t3::Grammar.cache ~merge:(+.)
+                           ('a' (t2::ter_seq) (t3::ter_seq) => t2 *. t3))
     => t1 *. t2t3
 
 (* To test, here is Catalan number, i.e. the number of binary trees of a given size *)

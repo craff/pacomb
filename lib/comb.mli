@@ -69,8 +69,8 @@ val option: 'a -> Charset.t -> 'a t -> 'a t
     function *)
 val app : 'a t -> ('a -> 'b) -> 'b t
 
-(** forces immediate evaluation of the action just after parsing *)
-val eval : 'a t -> 'a t
+val laz : 'a t -> 'a lazy_t t
+val frc : 'a lazy_t t -> 'a t
 
 (** unmerge  a merged ambiguous  grammar, typically if  the rest of  the parsing
    uses dependant sequences. Allows for ambiguous terminals by return a list and
@@ -88,7 +88,7 @@ val right_pos : (Pos.t -> 'a) t -> 'a t
     single combinator, this adds a lot of closures in action code. To solve this
     problem, lpos is  splitted in two combinators, one that  pushes the position
     to a stack and pops after parsing and another that reads the position. *)
-val read_pos : Pos.pos Assoc.key -> (Pos.t -> 'a) t -> 'a t
+val read_pos : Pos.t Assoc.key -> (Pos.t -> 'a) t -> 'a t
 
 (** key used by lr below *)
 type 'a key = 'a Assoc.key
@@ -100,7 +100,7 @@ type 'a key = 'a Assoc.key
 val lr : 'a t -> 'a key -> Charset.t -> 'a t -> 'a t
 
 (** Same as above, but also store the position *)
-val lr_pos : 'a t -> 'a key -> Pos.pos Assoc.key -> Charset.t -> 'a t -> 'a t
+val lr_pos : 'a t -> 'a key -> Pos.t Assoc.key -> Charset.t -> 'a t -> 'a t
 
 (** type to represent the left prefix of a mutually recursive grammar.
     the key represents the produced grammar for each left prefix. *)
@@ -122,7 +122,7 @@ type mlr_right =
 
 (** The combinator itself. The optionnal argument indicated that we need
     the position before parsing *)
-val mlr : ?lpos:Pos.pos Assoc.key -> mlr_left -> mlr_right -> 'a key -> 'a t
+val mlr : ?lpos:Pos.t Assoc.key -> mlr_left -> mlr_right -> 'a key -> 'a t
 
 (** combinator to  access the value stored by  lr. It must be uses  as prefix of
     [c2] in [lr c1 c2].  For instance, the coding  of [let rec r = seq c1 (seq r

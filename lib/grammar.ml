@@ -1,7 +1,12 @@
 open Lex
 module Uf = UnionFind
 
-type 'a cache = NoCache | Cache of ('a -> 'a -> 'a) option
+let _ = Printexc.record_backtrace true
+let _ = Sys.catch_break true
+
+type 'a cache =
+  NoCache : 'a cache
+| Cache   : ('a -> 'a -> 'a) option -> 'a cache
 
 type name_kind = Created | Inherited | Given
 
@@ -77,7 +82,7 @@ type 'a grammar =
  (** type for all information about mutuall recursive grammars *)
  and mlr = { left : mlr_left
            ; right : mlr_right
-           ; lpos : Pos.pos Assoc.key option
+           ; lpos : Pos.t Assoc.key option
            ; keys : (Assoc.any_key * string) list }
 
  (** Grammar constructors at definition *)
@@ -101,7 +106,8 @@ type 'a grammar =
    | Layout : Blank.t * 'a t * Blank.layout_config -> 'a grdf
                                            (** changes the blank function *)
    | Test : 'a test * 'a t -> 'a grdf      (** test, before or after *)
-   | Eval : 'a t -> 'a grdf                (** force evaluation *)
+   | Lazy : 'a t -> 'a lazy_t grdf
+   | Frce : 'a lazy_t t -> 'a grdf
    | UMrg : 'a list t -> 'a grdf           (** unmerge *)
    | Tmp  : 'a grdf                        (** used as initial value for
                                                recursive grammar. *)
@@ -127,7 +133,8 @@ type 'a grammar =
    | ERPos : (Pos.t -> 'a) grne -> 'a grne
    | ELayout : Blank.t * 'a grne * Blank.layout_config -> 'a grne
    | ETest : 'a test * 'a grne -> 'a grne
-   | EEval : 'a grne -> 'a grne
+   | ELazy : 'a grne -> 'a lazy_t grne
+   | EFrce : 'a lazy_t grne -> 'a grne
    | EUMrg : 'a list grne -> 'a grne
    | ETmp  : 'a grne
    (** only new constructor, introduced by elimination of left recursion.
@@ -157,11 +164,6 @@ let rec eq : type a b.a grammar -> b grammar -> (a, b) Assoc.eq =
               | Eq -> Eq | _ -> NEq
             end
          | RPos(g1), RPos(g2) ->
-            begin
-              match eq g1 g2 with
-              | Eq -> Eq | _ -> NEq
-            end
-         | Eval(g1), Eval(g2) ->
             begin
               match eq g1 g2 with
               | Eq -> Eq | _ -> NEq
@@ -241,8 +243,9 @@ let print_ast_of_df : type a. a grammar -> print_ast = fun x ->
     | RPos(g)      -> PTrans("rpos",gn g)
     | LPos(_,g)    -> PTrans("lpos",gn g)
     | Test(_,g)    -> PTrans("test",gn g)
+    | Lazy(g)      -> PTrans("lazy",gn g)
+    | Frce(g)      -> PTrans("frce",gn g)
     | Layout(_,g,_)-> PTrans("blks",gn g)
-    | Eval(g)      -> PTrans("eval",gn g)
     | UMrg(g)      -> PTrans("umgrl",gn g)
     | Tmp          -> PErr "TMP in grammar"
 
@@ -281,8 +284,9 @@ let print_ast_of_ne : type a. a grammar -> print_ast = fun x ->
     | ERPos(g)      -> PTrans("rpos",fn' g)
     | ELPos(_,g)    -> PTrans("lpos",fn' g)
     | ETest(_,g)    -> PTrans("test",fn' g)
+    | ELazy(g)      -> PTrans("lazy",fn' g)
+    | EFrce(g)      -> PTrans("frce",fn' g)
     | ELayout(_,g,_)-> PTrans("blks",fn' g)
-    | EEval(g)      -> PTrans("eval",fn' g)
     | EUMrg(g)      -> PTrans("umgr",fn' g)
     | ETmp          -> PErr "TMP in grammar"
 
@@ -632,10 +636,6 @@ let error ?name m =
   let name = created name in
   mkg ?name (Err m)
 
-let eval ?name g =
-  let name = created2 name g.n in
-  mkg ?name (if g.d = Fail then Fail else Eval(g))
-
 let unmerge ?name g =
   let name = created2 name g.n in
   mkg ?name (if g.d = Fail then Fail else UMrg(g))
@@ -655,6 +655,14 @@ let no_blank_before ?name g =
 let no_blank_after ?name g =
   let fn _ b1 c1 b2 c2 = Input.buffer_equal b1 b2 && c1 = c2 in
   test_after ?name  fn g
+
+let lazy_ ?name g =
+  let name = created2 name g.n in
+  mkg ?name (if g.d = Fail then Fail else Lazy(g))
+
+let force ?name g =
+  let name = created2 name g.n in
+  mkg ?name (if g.d = Fail then Fail else Frce(g))
 
 let layout ?name ?(config=Blank.default_layout_config) b g =
   let name = created2 name g.n in
@@ -784,10 +792,6 @@ let ne_rpos g1 = match g1 with
   | EFail -> EFail
   | _     -> ERPos(g1)
 
-let ne_eval g1 = match g1 with
-  | EFail -> EFail
-  | _     -> EEval(g1)
-
 let ne_unmerge g1 = match g1 with
   | EFail -> EFail
   | _     -> EUMrg(g1)
@@ -795,6 +799,14 @@ let ne_unmerge g1 = match g1 with
 let ne_test f g1 = match g1 with
   | EFail -> EFail
   | _     -> ETest(f,g1)
+
+let ne_lazy g1 = match g1 with
+  | EFail -> EFail
+  | _     -> ELazy(g1)
+
+let ne_force g1 = match g1 with
+  | EFail -> EFail
+  | _     -> EFrce(g1)
 
 let ne_layout b g cfg =
   match g with
@@ -868,8 +880,9 @@ let factor_empty g =
                                   with Lex.NoParse | Give_up _ -> acc) [] g1.e
                        (* FIXME #14: Loose position *)
     | Layout(_,g,_) -> fn g; g.e
-    | Eval(g)       -> fn g; g.e
     | UMrg(g)       -> fn g; List.flatten g.e
+    | Lazy(g)       -> fn g; List.map Lazy.from_val g.e
+    | Frce(g)       -> fn g; List.map Lazy.force g.e (* TODO, filter exception *)
     | Test(_,g)     -> fn g;
                        if g.e <> [] then
                          failwith "illegal test on grammar accepting empty";
@@ -915,8 +928,9 @@ let factor_empty g =
     | Rkey k    -> ERkey k
     | LPos(pk,g1) -> hn g1; ne_lpos ?pk (get g1)
     | RPos(g1) -> hn g1; ne_rpos (get g1)
-    | Eval(g1) -> hn g1; ne_eval (get g1)
     | UMrg(g1) -> hn g1; ne_unmerge (get g1)
+    | Lazy(g1) -> hn g1; ne_lazy (get g1)
+    | Frce(g1) -> hn g1; ne_force (get g1)
     | Test(f,g1) -> hn g1; ne_test f (get g1)
     | Layout(b,g,cfg) -> hn g; ne_layout b (get g) cfg
     | Tmp           -> failwith "grammar compiled before full definition"
@@ -1040,12 +1054,15 @@ let elim_left_rec : type a. a grammar -> unit = fun g ->
          let (g1,s) = fn above g1 in
          (ne_appl g1 f, map_elr (fun g -> appl g f) s)
       | ERef(g) -> gn above g
-      | EEval(g1) ->
-         let (g1,s) = fn above g1 in
-         (ne_eval g1, map_elr eval s)
       | EUMrg(g1) ->
          let (g1,s) = fn above g1 in
          (ne_unmerge g1, map_elr unmerge s)
+      | ELazy(g1) ->
+         let (g1,s) = fn above g1 in
+         (ne_lazy g1, map_elr lazy_ s)
+      | EFrce(g1) ->
+         let (g1,s) = fn above g1 in
+         (ne_force g1, map_elr force s)
       | ERPos(g1) ->
          let (g1, s1) = fn above g1 in
          (ne_rpos g1, map_elr rpos s1)
@@ -1156,8 +1173,9 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
     | ERef g -> gn g
     | ERPos g -> fn g
     | ELPos (_,g) -> fn g
-    | EEval(g) -> fn g
     | EUMrg(g) -> fn g
+    | ELazy(g) -> fn g
+    | EFrce(g) -> fn g
     | ETest (_,g) -> fn g
     | ELayout(_,g,cfg) -> if cfg.old_blanks_before
                              && not cfg.new_blanks_before
@@ -1265,8 +1283,9 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
        | _, None    -> assert false
        | _, Some pk -> Comb.read_pos pk (compile_ne g)
      end
-  | EEval(g) -> Comb.eval (compile_ne g)
   | EUMrg(g) -> Comb.unmerge (compile_ne g)
+  | ELazy(g) -> Comb.laz (compile_ne g)
+  | EFrce(g) -> Comb.frc (compile_ne g)
   | ETest(Before f,g) -> Comb.test_before f (compile_ne g)
   | ETest(After f,g) -> Comb.test_after f (compile_ne g)
   | ELayout(b,g,cfg) -> Comb.change_layout ~config:cfg b (compile_ne g)

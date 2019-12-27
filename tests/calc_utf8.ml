@@ -54,7 +54,7 @@ let config =
 let%parser top =
   (e::expr) => Printf.printf "%f\n=> %!" e
 
-let%parser rec exprs = () => () ; exprs top '\n' ==> ()
+let%parser rec exprs = () => () ; exprs top '\n' => ()
 
 (* we define the characters to be ignored, here space only *)
 let blank = Blank.from_charset (Charset.singleton ' ')

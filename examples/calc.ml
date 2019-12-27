@@ -39,9 +39,9 @@ and expr = (a::prod)               => a
 (* The parsing calling expression, with immediate evaluation (==>)
    printing the result and the next prompt. *)
 let%parser top =
-  (e::expr) => Printf.printf "%f\n=> %!" e
+  (e::expr) => lazy (Printf.printf "%f\n=> %!" e)
 
-let%parser rec exprs = () => () ; exprs top '\n' ==> ()
+let%parser rec exprs = () => () ; exprs (t::top) '\n' => Lazy.force t
 
 (* blanks *)
 let blank = Blank.from_charset (Charset.singleton ' ')
