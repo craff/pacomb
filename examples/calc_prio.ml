@@ -26,10 +26,9 @@ let%parser [@print_param string_of_prio] rec
 
 (* The parsing calling expression, with immediate evaluation (==>)
    printing the result and the next prompt. *)
-let%parser top =
-  (e::expr Sum) => Printf.printf "%f\n=> %!" e
-
-let%parser rec exprs = () => () ; exprs top '\n' ==> ()
+let%parser rec exprs =
+    () => ()
+  ; exprs (e::expr Sum) '\n' => Printf.printf "%f\n=> %!" e
 
 (* blanks *)
 let blank = Blank.from_charset (Charset.singleton ' ')

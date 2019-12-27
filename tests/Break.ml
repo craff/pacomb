@@ -48,7 +48,7 @@ let test pos l0 =
   with Exit -> ()
 
   (* Single mapping parser *)
-let%parser test = (l::sample) (~* '\n' => ()) => test l_lpos l
+let%parser test = (l::sample) (~+ '\n' => ()) => test l_lpos l
 
 let%parser tests =
   (star ('\n' => ())) (star test) => ()

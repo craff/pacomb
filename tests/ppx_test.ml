@@ -111,6 +111,17 @@ let _ = tests g2 [("", 0); ("ba",1); ("cd",-1); ("fe", 0)]
 let _ = tests g3 [("", 0); ("ab",1); ("dc",-1); ("ef", 0)]
 let _ = tests g1 [("cdefefcfedcabd",-2)]
 
+(* test right recursion and lazy *)
+
+let n = ref 0
+let%parser rec g = (c::CHAR) (l::force g) ==> (incr n; String.make 1 c :: l)
+                   ; () ==> []
+let%parser h = (lazy l::g) EOF => String.concat "" l
+
+let _ =
+  let nb = 1_000_000 in
+  let s = (String.make nb 'a') in test h s s; assert (!n = nb)
+
 (* test parameters *)
 let%parser rec g g0 n = (n=0) ()                 => 0
                       ; (n>0) (x::g g0 (n-1)) g0 => x+1

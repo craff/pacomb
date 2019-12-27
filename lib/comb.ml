@@ -185,11 +185,8 @@ let rec _print_trans : type a b. out_channel -> (a,b) trans -> unit =
   match tr with
   | Idt        -> Printf.fprintf ch "I"
   | Arg (tr,_) -> Printf.fprintf ch "A%a"  _print_trans tr
-  (*  | Arg'(tr,_) -> Printf.fprintf ch "A'%a" _print_trans tr*)
   | App (tr,_) -> Printf.fprintf ch "@%a"  _print_trans tr
-  (*  | App'(tr,_) -> Printf.fprintf ch "@'%a" _print_trans tr*)
   | Pos (tr,_) -> Printf.fprintf ch "P%a"  _print_trans tr
-  (*  | Pos'(tr,_) -> Printf.fprintf ch "P'%a" _print_trans tr*)
   | Laz (tr,_) -> Printf.fprintf ch "L%a"  _print_trans tr
   | Frc (tr)   -> Printf.fprintf ch "F%a"  _print_trans tr
 
@@ -203,7 +200,6 @@ let eval : type a b. a -> (a,b) trans -> b = fun x tr ->
     | App (tr,f) -> fn (f x) tr
     | Laz (tr,f) -> fn (lazy (f x)) tr
     | Frc (tr)   -> fn (Lazy.force x) tr
-                       (*    | _          -> assert false*)
   in fn x tr
 
 (** function calling a  continuation. It does not evaluate any  action. It is of
@@ -227,8 +223,8 @@ let arg : type a b. b cont -> a -> (a -> b) cont = fun k x ->
 let app : type a b. b cont -> (a -> b) -> a cont = fun k f ->
   match k with C(k,tr,rp) ->
     match tr with
-    | Laz(tr,g)    -> C(k,Laz(tr,fun x -> g (f x)),rp)
-    | tr         -> C(k,App(tr,f),rp)
+    | Laz(tr,g) -> C(k,Laz(tr,fun x -> g (f x)),rp)
+    | tr        -> C(k,App(tr,f),rp)
 
 let posk : type a. a cont -> (Pos.t -> a) cont = fun k ->
   match k with
