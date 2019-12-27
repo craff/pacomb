@@ -178,20 +178,20 @@ let%parser params =
 
 (* toplevel commands *)
 let%parser cmd =
-    (e::expr_top)
+    (e::expr_top) EOF
       => (Printf.printf "%f\n%!" (eval !env e))
-  ; (id::ident) (params::params) eq (e::expr_top)
+  ; (id::ident) (params::params) eq (e::expr_top) EOF
       => (env := ((id,Array.length params),Def(e,params)) :: !env)
   ; (id::op) (a1::ident)
        priority_kwd (p::priority)
-       eq (e::expr_top)
+       eq (e::expr_top) EOF
       => (let params = [|a1|] in
          env := ((id,Array.length params),Def(e,params)) :: !env;
          prefix_tbl := (id,p) :: !prefix_tbl)
   ; (a1::ident) (id::op) (a2::ident)
        priority_kwd (p::priority)
        (a::assoc) assoc_kwd
-       eq (e::expr_top)
+       eq (e::expr_top) EOF
       => (let params = [|a1;a2|] in
          env := ((id,Array.length params),Def(e,params)) :: !env;
          infix_tbl := (id,(p,a)) :: !infix_tbl)

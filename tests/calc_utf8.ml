@@ -51,10 +51,9 @@ let config =
 
 (* The parsing calling expression and changing the blank,
    printing the result and the next prompt. *)
-let%parser top =
-  (e::expr) => Printf.printf "%f\n=> %!" e
-
-let%parser rec exprs = () => () ; exprs top '\n' => ()
+let%parser rec exprs =
+    () => ()
+  ; exprs (e::expr) '\n' => Printf.printf "%f\n=> %!" e
 
 (* we define the characters to be ignored, here space only *)
 let blank = Blank.from_charset (Charset.singleton ' ')
