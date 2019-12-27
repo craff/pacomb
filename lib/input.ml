@@ -286,7 +286,7 @@ module type Preprocessor =
     type state
     val initial_state : state
     val update : state -> string -> int -> string -> bool
-                 -> state * string * int * string option
+                 -> state * string * int * bool
     val check_final : state -> string -> unit
   end
 
@@ -317,8 +317,7 @@ module Make(PP : Preprocessor) =
               if name <> infos.name then { infos with name } else infos
             in
             match res with
-            | Some data ->
-               let llen = String.length data in
+            | true ->
                let nlnum, ncoff =
                  if nl then (lnum+1, 0)
                  else
@@ -333,7 +332,7 @@ module Make(PP : Preprocessor) =
                 ; next = lazy (fn remain infos nlnum (boff + llen)
                                  ncoff st cont)
                 ; ctnr = [||] }
-            | None ->
+            | false ->
               fun () -> fn remain infos lnum boff coff st cont
           with End_of_file ->
             finalise file;
