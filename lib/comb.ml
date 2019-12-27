@@ -672,7 +672,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
        !too_late is true if we already called the continuation stored
        in !ptr *)
     assert (not !too_late);
-    ptr := (k, env0) :: !ptr;
+    ptr := (k, env0.cache_order) :: !ptr;
     (** Nothing else to do nw, try the other branch of parsing *)
     raise Exit
   with Not_found ->
@@ -681,7 +681,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
     (** NOTE: size of ptr: O(N) for each position,
          it comes from a rule using that grammar (nb of rule constant),
          and the start position of this rule (thks to cache, only one each)  *)
-    let ptr = ref [(k,env0)] in
+    let ptr = ref [(k,env0.cache_order)] in
     let too_late = ref false in
     Input.Tbl.add cache buf0 col0 (ptr, too_late);
     (** we create a merge table for all continuation to call merge on all
@@ -752,12 +752,11 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
         (** Now we call all continuation stored in !ptr *)
         let l0 = !ptr in
         too_late := true;
-        List.iter (fun (k,env1) ->
+        List.iter (fun (k,cache_order) ->
             add_queue env
               (** we pop cache_order to ensure this continuation
                   is called after all extensions of vptr *)
-              (Cont({ env with cache_order = env1.cache_order
-                             ; to_force = ref N},k,v))) l0;
+              (Cont({ env with cache_order; to_force = ref N},k,v))) l0;
         raise Exit
     in
     (** safe to call g, env had cache pushed so it is a minimum *)
