@@ -127,20 +127,17 @@ module Pos = struct
 
   (** build a position from an input buffer and a column number *)
 
-  let get_pos_aux infos line coff data p =
-    lazy (let col =
-      if infos.utf8 <> ASCII then coff + utf8_col_num infos.utf8 data p
-      else coff + p
-    in
-    let name = infos.name in
-    { name ; line ; col = col ; phantom = false })
-
   let get_pos : buffer -> ipos -> pos Lazy.t  = fun (lazy b) p ->
-    let infos = b.infos in
-    let line = b.lnum in
-    let coff = b.coff in
-    let data = b.data in
-    get_pos_aux infos line coff data p
+    lazy (let infos = b.infos in
+          let line = b.lnum in
+          let coff = b.coff in
+          let data = b.data in
+          let col =
+            if infos.utf8 <> ASCII then coff + utf8_col_num infos.utf8 data p
+            else coff + p
+          in
+          let name = infos.name in
+          { name ; line ; col = col ; phantom = false })
 
 end
 
