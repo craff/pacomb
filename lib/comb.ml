@@ -447,8 +447,8 @@ let eval : 'a t -> 'a t = fun g env k ->
              with Lex.NoParse -> next env
                 | Lex.Give_up m -> next_msg m env))
 
-(** unmerge a merged ambiguous grammar, typically if the rest of the parsing uses
-   dependant sequences *)
+(** unmerge  a merged ambiguous  grammar, typically if  the rest of  the parsing
+   uses dependant sequences *)
 let unmerge : 'a list t -> 'a t = fun g env k ->
   g env (ink (fun env (lazy vs) ->
              let rec fn =function
@@ -472,13 +472,13 @@ let test_after : ('a -> Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
                  -> 'a t -> 'a t =
   fun test g env k ->
     let k = ink (fun env x ->
-                try
-                  match test (Lazy.force x) env.buf_before_blanks env.pos_before_blanks
-                          env.current_buf env.current_pos
-                  with false -> next env
-                     | true  -> call k env x
-                with Lex.NoParse -> next env
-                   | Lex.Give_up m -> next_msg m env)
+       try
+         match test (Lazy.force x) env.buf_before_blanks env.pos_before_blanks
+                 env.current_buf env.current_pos
+         with false -> next env
+            | true  -> call k env x
+       with Lex.NoParse -> next env
+          | Lex.Give_up m -> next_msg m env)
     in
     g env k
 
