@@ -662,8 +662,6 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
   (** creation of a table for the cache *)
   let cache = Input.Tbl.create () in
   fun env0 k ->
-  forces env0.to_force; (* if parsing fails because of pending action, then
-                           table is registred, but impossible to use *)
   let {current_buf = buf0; current_pos = col0} = env0 in
   try
     (** Did we start parsing the same grammar at the same position *)
@@ -703,7 +701,6 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
     let k0 env v =
       (** the cache order must have been restored to its initial value *)
       assert (cache_order = env.cache_order);
-      forces env.to_force;
       let {current_buf = buf; current_pos = col} = env in
       try
         (** we first try to merge ... if merge <> None *)
