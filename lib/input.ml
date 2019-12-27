@@ -245,7 +245,8 @@ include GenericInput(
             let (remain,data,llen) =
               if not nl && data0 <> "" && infos.utf8 <> Utf8.ASCII then
                 let p = Utf8.prev_grapheme data llen in
-                if p > 0 then
+                let p = Utf8.next_grapheme data p in
+                if p > 0 && p < llen then
                   (String.sub data p (llen - p), String.sub data 0 p, p)
                 else ("",data, llen)
               else ("",data, llen)
