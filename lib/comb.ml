@@ -81,6 +81,7 @@ module LAssoc = Assoc.Make(struct type 'a data = 'a lazy_t end)
 
 type lazies_aux = N : lazies_aux
                 | L : 'a lazy_t * lazies -> lazies_aux
+                | E : exn -> lazies_aux
 
 and lazies = lazies_aux ref
 
@@ -273,12 +274,13 @@ let force env x =
 
 let forces (l : lazies) =
   let rec fn l =
-    let c = !l in l := N; match c with
-    | N -> ()
+    match !l with
+    | N       -> ()
+    | E e     -> raise e
     | L (x,l) -> (try
                     ignore (Lazy.force x)
-                  with Lex.NoParse | Lex.Give_up _ -> ());
-                 fn l
+                  with e -> l := E e; raise e);
+                 l := N; fn l
   in
   fn l
 
@@ -464,8 +466,8 @@ let appl : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k ->
 let eval : 'a t -> 'a t = fun g env k ->
   g env (ink (fun env v -> ignore (force env v); call k env v))
 
-(** unmerge a merged ambiguous grammar, typicallyif the rest of the parsing uses
-   dependant sequences *)
+(** unmerge  a merged ambiguous  grammar, typically if  the rest of  the parsing
+   uses dependant sequences *)
 let unmerge : 'a list t -> 'a t = fun g env k ->
   g env (ink (fun env (lazy vs) ->
              let rec fn =function
@@ -489,10 +491,13 @@ let test_after : ('a -> Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
                  -> 'a t -> 'a t =
   fun test g env k ->
     let k = ink (fun env x ->
-      match test (force env x) env.buf_before_blanks env.idx_before_blanks
-             env.current_buf env.current_idx
-      with false -> next env
-         | true  -> call k env x)
+       try
+         match test (Lazy.force x) env.buf_before_blanks env.idx_before_blanks
+                 env.current_buf env.current_idx
+         with false -> next env
+            | true  -> call k env x
+       with Lex.NoParse -> next env
+          | Lex.Give_up m -> next_msg m env)
     in
     g env k
 
@@ -710,7 +715,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
     (** we update cache_order in the environment, ensuring the correct order in
          the scheduler. we must evaluate first grammar that were started later
          in the input buffer, or later in time if at the same position *)
-    let env = { env0 with cache_order } in
+    let env = { env0 with cache_order; to_force = ref N } in
     let k0 env v =
       (** the cache order must have been restored to its initial value *)
       assert (cache_order = env.cache_order);
@@ -766,7 +771,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
             add_queue env
               (** we pop cache_order to ensure this continuation
                   is called after all extensions of vptr *)
-              (Cont({ env with cache_order },k,v))) l0;
+              (Cont({ env with cache_order; to_force = ref N},k,v))) l0;
         raise Exit
     in
     (** safe to call g, env had cache pushed so it is a minimum *)
