@@ -4,7 +4,7 @@ type infos =
   { utf8         : context(** Uses utf8 for positions                 *)
   ; name         : string (** The name of the buffer (e.g. file name) *)
   ; uid          : int    (** Unique identifier                       *)
-  ; rescan       : 'a. (int -> char -> 'a -> 'a) -> int -> 'a -> 'a
+  ; rescan       : 'a. (int -> char -> 'a -> 'a) -> 'a -> int -> 'a
   ; lnum_skip    : (int * int) list
   }
 
@@ -101,12 +101,12 @@ let line_num infos i0 =
     | _ -> if c = '\n' then (l+1, ls) else (l,ls)
   in
   let lnum_skip = List.rev infos.lnum_skip in
-  fst (infos.rescan fn i0 (1,lnum_skip))
+  fst (infos.rescan fn (1,lnum_skip) i0)
 
 (* Get the current line number of a buffer. *)
 let ascii_col_num infos i0 =
   let fn _ c p = if c = '\n' then 0 else p+1 in
-  infos.rescan fn i0 0
+  infos.rescan fn 0 i0
 
 (* Get the utf8 column number corresponding to the given position. *)
 let utf8_len context data =
@@ -146,7 +146,7 @@ let utf8_len context data =
 
 let utf8_col_num infos i0 =
   let fn _ c cs = if c = '\n' then [] else c::cs in
-  let cs = infos.rescan fn i0 [] in
+  let cs = infos.rescan fn [] i0 in
   let len = List.length cs in
   let str = Bytes.create len in
   Printf.printf "coucou 1\n%!";
@@ -184,13 +184,41 @@ let buffer_compare (lazy b1) (lazy b2) =
 (* Get the unique identifier of the buffer. *)
 let buffer_uid (lazy buf) = buf.infos.uid
 
-type scanner = { f : 'a. (byte_pos -> char -> 'a -> 'a) -> idx -> 'a -> 'a }
-
 module type MinimalInput =
   sig
     val from_fun : ('a -> unit) -> context -> string
-                   -> ('a -> string) -> ('a -> scanner) -> 'a -> buffer
+                   -> ('a -> string)
+                   -> ('a -> byte_pos) -> ('a -> byte_pos -> unit)
+                   -> 'a -> buffer
   end
+
+let rescan ch pos_in seek_in mk_buf fn acc =
+  let cache = ref [] in
+  let set_cache i idx acc =
+    cache := (i,pos_in ch, idx, acc) :: !cache
+  in
+  let get_cache i =
+    let rec fn = function
+        []                -> (0, 0, acc)
+      | (j,p,idx,acc)::ls -> if j <= i then (p, idx, acc) else fn ls
+    in
+    fn !cache
+  in
+  fun i0 ->
+    let saved = pos_in ch in
+    let (p0,idx0,acc0) = get_cache i0 in
+    seek_in ch p0;
+    let buf = ref (mk_buf ()) in
+    let acc = ref acc0 in
+    let idx = ref idx0 in
+    for i = 0 to i0 - 1 do
+      if i mod 1024 = 0 then set_cache i !idx !acc;
+      let (c,b,p) = read !buf !idx in
+      buf := b; idx := p;
+      acc := fn i c !acc
+    done;
+    seek_in ch saved;
+    !acc
 
 let buf_size = 0x10000
 
@@ -205,17 +233,6 @@ let input_buffer ch =
   else
     Bytes.sub_string res 0 n
 
-let input_rescan ch =
-  { f = fun fn i0 acc ->
-          let pos = pos_in ch in
-          seek_in ch 0;
-          let acc = ref acc in
-          for i = 0 to i0 - 1 do
-            acc := fn i (input_char ch) !acc
-          done;
-          seek_in ch pos;
-          !acc }
-
 let fd_buffer fd =
   let res = Bytes.create buf_size in
   let n = Unix.read fd res 0 buf_size in
@@ -226,10 +243,6 @@ let fd_buffer fd =
   else
     Bytes.sub_string res 0 n
 
-let fd_rescan fd =
-  let ch = Unix.in_channel_of_descr fd in
-  input_rescan ch
-
 module GenericInput(M : MinimalInput) =
   struct
     include M
@@ -237,60 +250,51 @@ module GenericInput(M : MinimalInput) =
     let from_channel
         : ?utf8:context -> ?filename:string -> in_channel -> buffer =
       fun ?(utf8=Utf8.ASCII) ?(filename="") ch ->
-        from_fun ignore utf8 filename input_buffer input_rescan ch
+        from_fun ignore utf8 filename input_buffer pos_in seek_in ch
 
     let from_fd
         : ?utf8:context -> ?filename:string -> Unix.file_descr -> buffer =
       fun ?(utf8=Utf8.ASCII) ?(filename="") fd ->
-        from_fun ignore utf8 filename fd_buffer fd_rescan fd
+        let seek fd n = ignore (Unix.lseek fd n SEEK_SET) in
+        let pos fd = Unix.lseek fd 0 SEEK_CUR in
+        from_fun ignore utf8 filename fd_buffer pos seek fd
 
     let from_file : ?utf8:context -> string -> buffer =
       fun ?(utf8=Utf8.ASCII) fname ->
         let fd = Unix.(openfile fname [O_RDONLY] 0) in
-        from_fun Unix.close utf8 fname fd_buffer fd_rescan fd
+        let seek fd n = ignore (Unix.lseek fd n SEEK_SET) in
+        let pos fd = Unix.lseek fd 0 SEEK_CUR in
+        from_fun Unix.close utf8 fname fd_buffer pos seek fd
 
     let from_string : ?utf8:context -> ?filename:string -> string -> buffer =
       fun ?(utf8=Utf8.ASCII) ?(filename="") str ->
+      let b = ref true in
         let string_buffer =
-          let b = ref true in
           fun () -> if !b then (b := false; str) else raise End_of_file
         in
-        let rescan () = { f = fun fn i0 acc ->
-          let acc = ref acc in
-          for i = 0 to i0 - 1 do
-            acc := fn i str.[i] !acc
-          done;
-          !acc}
-        in
-        from_fun ignore utf8 filename string_buffer rescan ()
+        let seek () n = b := (n <> (-1)) in
+        let pos () = (-1) in
+        from_fun ignore utf8 filename string_buffer pos seek ()
   end
 
 include GenericInput(
   struct
-    let from_fun finalise utf8 name get_line rescan file =
-      let rescan fn i0 acc = (rescan file).f fn i0 acc in
+    let rec from_fun finalise utf8 name get_line pos seek file =
+      let rescan fn acc i0 =
+        rescan file pos seek
+          (fun () -> from_fun finalise utf8 name get_line pos seek file)
+          fn acc i0
+      in
       let infos = { utf8; name; uid = new_uid (); rescan; lnum_skip = [] } in
-      let rec fn remain boff cont =
+      let rec fn boff cont =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
-            let data0 =
-              try get_line file
-              with End_of_file when remain <> ""  -> ""
-            in
-            let data = if remain <> "" then remain ^ data0 else data0 in
+            let data = get_line file in
             let llen = String.length data in
-            let (remain,data,llen) =
-              if data0 <> "" && infos.utf8 <> Utf8.ASCII then
-                let p = Utf8.prev_grapheme data llen in
-                if p > 0 then
-                  (String.sub data p (llen - p), String.sub data 0 p, p)
-                else ("",data, llen)
-              else ("",data, llen)
-            in
             fun () ->
               { boff; data ; infos
-              ; next = lazy (fn remain (boff + llen) cont)
+              ; next = lazy (fn (boff + llen) cont)
               ; ctnr = [||] }
           with End_of_file ->
             finalise file;
@@ -302,7 +306,7 @@ include GenericInput(
           let cont boff =
             Lazy.force (empty_buffer infos boff)
           in
-          fn "" 0 cont
+          fn 0 cont
         end
   end)
 
@@ -322,32 +326,23 @@ module type Preprocessor =
 
 module Make(PP : Preprocessor) =
   struct
-    let from_fun finalise utf8 name get_line rescan file =
-      let rescan fn i0 acc = (rescan file).f fn i0 acc in
+    let rec from_fun finalise utf8 name get_line pos seek file =
+      let rescan fn acc i0 =
+        rescan file pos seek
+          (fun () -> from_fun finalise utf8 name get_line pos seek file)
+          fn acc i0
+      in
       let infos = { utf8; name; uid = new_uid (); rescan = rescan
                     ; lnum_skip = [] }
       in
-      let rec fn remain infos boff st cont =
+      let rec fn infos boff st cont =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
-            let data0 =
-              try get_line file
-              with End_of_file when remain <> ""  -> ""
-            in
-            let data = if remain <> "" then remain ^ data0 else data0 in
-            let llen = String.length data in
-            let (remain,data) =
-              if data0 <> "" && infos.utf8 <> Utf8.ASCII then
-                let p = Utf8.prev_grapheme data llen in
-                if p > 0 then
-                  (String.sub data p (llen-p), String.sub data 0 p)
-                else ("",data)
-              else ("",data)
-            in
+            let data = get_line file in
             let (st, ls) = PP.update st infos.name data in
             let rec gn infos boff = function
-              | [] -> fn remain infos boff st cont
+              | [] -> fn infos boff st cont
               | (name, lnum, data) :: ls ->
                  let infos = match name with
                    | None      -> infos
@@ -377,7 +372,7 @@ module Make(PP : Preprocessor) =
             PP.check_final st infos.name;
             Lazy.force (empty_buffer infos boff)
           in
-          fn "" infos 0 PP.initial_state cont
+          fn infos 0 PP.initial_state cont
         end
   end
 
