@@ -1288,8 +1288,8 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
        | _, Some pk -> Comb.read_pos pk (compile_ne g)
      end
   | EUMrg(g) -> Comb.unmerge (compile_ne g)
-  | ELazy(g) -> Comb.laz (compile_ne g)
-  | EFrce(g) -> Comb.frc (compile_ne g)
+  | ELazy(g) -> Comb.lazy_ (compile_ne g)
+  | EFrce(g) -> Comb.force (compile_ne g)
   | ETest(Before f,g) -> Comb.test_before f (compile_ne g)
   | ETest(After f,g) -> Comb.test_after f (compile_ne g)
   | ELayout(b,g,cfg) -> Comb.change_layout ~config:cfg b (compile_ne g)
