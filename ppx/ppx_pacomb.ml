@@ -235,9 +235,9 @@ let rec base_rule acts_fn rule action =
       let pat = Pat.var gl_pos in
       let loc = loc_a in
       let vb = [
-          Vb.mk pat [%expr lazy (Pacomb.Pos.interval
-                        [%e Exp.ident (mknoloc (Lident gl_lpos.txt))]
-                        [%e Exp.ident (mknoloc (Lident gl_rpos.txt))])]]
+          Vb.mk pat [%expr
+                        ([%e Exp.ident (mknoloc (Lident gl_lpos.txt))],
+                         [%e Exp.ident (mknoloc (Lident gl_rpos.txt))])]]
       in
       (fun exp -> Exp.let_ Nonrecursive vb (acts_fn exp))
     else acts_fn
@@ -288,10 +288,9 @@ let rec base_rule acts_fn rule action =
            let pat = Pat.var id_pos in
            let loc = loc_a in
            let vb = [
-               Vb.mk pat
-                 [%expr lazy (Pacomb.Pos.interval
-                           [%e Exp.ident (mknoloc (Lident id_lpos.txt))]
-                           [%e Exp.ident (mknoloc (Lident id_rpos.txt))])]]
+               Vb.mk pat [%expr
+                 ([%e Exp.ident (mknoloc (Lident id_lpos.txt))],
+                  [%e Exp.ident (mknoloc (Lident id_rpos.txt))])]]
            in
            (fun exp -> Exp.let_ Nonrecursive vb (acts_fn exp))
          else acts_fn
@@ -534,9 +533,9 @@ let vb_to_parser rec_ vb =
          in
          let expr =
            match Ppxlib.Attribute.get print_param_att vb with
-           | Some _ -> add_attribute expr
-                         (attribute_of_warning loc
-                            "useless @print_param attribute")
+           | Some _ ->
+              add_attribute expr
+                (attribute_of_warning loc "useless @print_param attribute")
            | None   -> expr
          in
          [Vb.mk ~loc vb.pvb_pat expr]

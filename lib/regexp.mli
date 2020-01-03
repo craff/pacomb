@@ -26,7 +26,7 @@ val accepted_first_chars : regexp -> Charset.t
 
 (** Exception raised when a regexp does not match.  Note that the given buffer
     and position correspond to the first character that cannot be matched. *)
-exception Regexp_error of Input.buffer * Input.pos
+exception Regexp_error of Input.buffer * Input.idx
 
 (** [from_string s] convert a string into a regexp following [Str] syntax. *)
 val from_string : string -> regexp

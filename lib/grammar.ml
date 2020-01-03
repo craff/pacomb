@@ -41,7 +41,7 @@ let created2 name upname = match name with
 type 'a grammar =
   { mutable d : 'a grdf   (** the definition of the grammar *)
   ; mutable n : name      (** name of the grammar *)
-  ; k : 'a Comb.key       (** a key used mainly to detect recursion *)
+  ; k : 'a Comb.key      (** a key used mainly to detect recursion *)
   ; recursive : bool      (** really means declared first and defined after,
                               using declare/set_grammar *)
   ; mutable cached : 'a cache     (** is th grammar cached *)
@@ -113,8 +113,8 @@ type 'a grammar =
                                                recursive grammar. *)
 
  and 'a test =
-   | Before of (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
-   | After of ('a -> Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+   | Before of (Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
+   | After of ('a -> Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
 
  (** Type after elimination of empty  and for later phase.  same constructors as
      above prefixed  by E,  The left branch  does not go  trough the  'a grammar
@@ -734,7 +734,7 @@ let star_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar =
     let name = created2 name (fst g.n ^ "*" ^ fst sep.n, snd g.n) in
     alt ?name [empty []; plus_sep sep g]
 
-(** a function to defined indexed grammars *)
+(** a function to defined idxed grammars *)
 let grammar_family ?(param_to_string=(fun _ -> "<...>")) name =
   let tbl = Hashtbl_eq.create 8 in
   let is_set = ref None in
@@ -872,11 +872,11 @@ let factor_empty g =
                          [] g1.e
     | Rkey _        -> []
     | LPos(_,g1)    -> fn g1; List.fold_left (fun acc x ->
-                                  try x Pos.phantom :: acc
+                                  try x Input.phantom_spos :: acc
                                   with Lex.NoParse | Give_up _ -> acc) [] g1.e
                        (* FIXME #14: Loose position *)
     | RPos(g1)      -> fn g1; List.fold_left (fun acc x ->
-                                  try x Pos.phantom :: acc
+                                  try x Input.phantom_spos :: acc
                                   with Lex.NoParse | Give_up _ -> acc) [] g1.e
                        (* FIXME #14: Loose position *)
     | Layout(_,g,_) -> fn g; g.e
@@ -1142,7 +1142,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
   let rec fn : type a. a grne -> bool * Charset.t = fun g ->
     match g with
     | EFail -> (false, Charset.empty)
-    | EErr _ -> (false, Charset.full)
+    | EErr _ -> (false, Charset.empty)
     | ETerm(c) -> (false, c.c)
     | EAlt(gs) ->
        List.fold_left (fun (shift,s) g ->
@@ -1206,7 +1206,8 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
   while !changed do
     incr target;
     changed := false;
-    res := snd (fn g)
+    let (_, cs) = fn g in
+    res := cs
   done;
   !res
 
@@ -1226,7 +1227,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
        (fun x -> try Hashtbl_eq.find memo x with Not_found ->
                    let cg = compile false (g2 x) in
                    Hashtbl_eq.add memo x cg; cg)
-  | EAppl(g1,f) -> Comb.app (compile_ne g1) f
+  | EAppl(g1,f) -> Comb.appl (compile_ne g1) f
   | ELr(k,x) ->
      begin
        let (r, _) = Uf.find x in
@@ -1250,24 +1251,27 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
             | Eq  ->
                let gs = fn k [] r.left in
                let left = compile_alt gs in
+               let ne = compile_ne g.ne in
+               let cs = first_charset g.ne in
                match r.lpos with
-               | None ->
-                  Comb.lr left k (first_charset g.ne) (compile_ne g.ne)
-               | Some pk ->
-                  Comb.lr_pos left k pk (first_charset g.ne) (compile_ne g.ne)
+               | None -> Comb.lr left k cs ne
+               | Some pk -> Comb.lr_pos left k pk cs ne
           end
        | _ ->
           let rec fn = function
             | LNil -> Comb.LNil
-            | LCns(k,g,l) -> Comb.LCns(k,first_charset g,
-                                       compile_ne g, fn l)
+            | LCns(k,g,l) ->
+               let ne = compile_ne g in
+               let cs = first_charset g in
+               Comb.LCns(k, cs, ne, fn l)
           in
           let c = ref 0 in
           let rec gn = function
             | RNil -> Comb.RNil
             | RCns(k,k',g,l) -> incr c;
-                                Comb.RCns(k,k',first_charset g.ne,
-                                          compile_ne g.ne, gn l)
+                                let ne = compile_ne g.ne in
+                                let cs = first_charset g.ne in
+                                Comb.RCns(k,k',cs,ne,gn l)
           in
           Comb.mlr ?lpos:r.lpos (fn r.left) (gn r.right) k
      end
@@ -1347,19 +1351,19 @@ let add_eof g = seq g (appl (term (eof ())) (fun _ x -> x))
 (* NOTE: cs with blank_after = false makes no sense ? *)
 let partial_parse_buffer
     : type a. a t -> Blank.t -> ?blank_after:bool
-                  -> Lex.buf -> Lex.pos -> a * Lex.buf * Lex.pos =
+                  -> Lex.buf -> Lex.idx -> a * Lex.buf * Lex.idx =
   fun g blank_fun ?(blank_after=false) buf0 col0 ->
     let g = compile g in
     Comb.partial_parse_buffer g blank_fun ~blank_after buf0 col0
 
 let parse_buffer
-    : type a. a t -> Blank.t -> Lex.buf -> Lex.pos -> a =
+    : type a. a t -> Blank.t -> Lex.buf -> Lex.idx -> a =
   fun g blank_fun buf col ->
     let g = add_eof g in
     let (v,_,_) = partial_parse_buffer g blank_fun buf col in v
 
 let parse_all_buffer
-    : type a. a t -> Blank.t -> Lex.buf -> Lex.pos -> a list =
+    : type a. a t -> Blank.t -> Lex.buf -> Lex.idx -> a list =
   fun g blank_fun buf0 col0 ->
     let g = compile (add_eof g) in
     Comb.parse_all_buffer g blank_fun buf0 col0
@@ -1368,17 +1372,23 @@ let parse_string
     : type a. ?utf8:Utf8.context -> ?filename:string ->
               a t -> Blank.t -> string -> a =
   fun ?(utf8=Utf8.ASCII) ?filename g b s ->
-    parse_buffer g b (Input.from_string ~utf8 ?filename s) Input.init_pos
+    parse_buffer g b (Input.from_string ~utf8 ?filename s) Input.init_idx
 
 let parse_channel
     : type a. ?utf8:Utf8.context -> ?filename:string ->
               a t -> Blank.t -> in_channel -> a =
   fun ?(utf8=Utf8.ASCII) ?filename g b ic ->
-    parse_buffer g b (Input.from_channel ~utf8 ?filename ic) Input.init_pos
+    parse_buffer g b (Input.from_channel ~utf8 ?filename ic) Input.init_idx
+
+let parse_fd
+    : type a. ?utf8:Utf8.context -> ?filename:string ->
+              a t -> Blank.t -> Unix.file_descr -> a =
+  fun ?(utf8=Utf8.ASCII) ?filename g b ic ->
+    parse_buffer g b (Input.from_fd ~utf8 ?filename ic) Input.init_idx
 
 let parse_file ?(utf8=Utf8.ASCII) g b filename =
-    let ic = open_in filename in
-    parse_channel ~utf8 ~filename g b ic
+    let ic = Unix.(openfile filename [O_RDONLY] 0) in
+    parse_fd ~utf8 ~filename g b ic
 
 let lpos ?name g = lpos ?name ?pk:None g
 let appl ?name = appl ?name:(created name)
@@ -1386,6 +1396,8 @@ let alt ?name = alt ?name:(created name)
 
 let declare_grammar name = declare_grammar (name, Given)
 
+(*
 let print_grammar ?(no_other=false) ?(def=true) ch s =
   let _ = compile s in
   print_grammar ~no_other ~def ch s
+ *)

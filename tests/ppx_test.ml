@@ -2,7 +2,8 @@ open Pacomb
 open Pos
 open Grammar
 
-let lf = Lazy.force
+let ps = Pos.pos_of_spos
+let is = Pos.interval_of_spos
 
 let bspace = Blank.from_charset (Charset.singleton ' ')
 
@@ -31,6 +32,7 @@ let%parser g : int grammar = (x::INT) => x
 let _ = test g "42" 42
 let%parser g : float grammar = (x::FLOAT) => x
 let _ = test g "42.42E-42" 42.42E-42
+
 let%parser g : string grammar = (x::RE "\\([a-zA-Z_][a-zA-Z_0-9]*\\)") => x
 let _ = test g "toto_x3" "toto_x3"
 let%parser g : 'a -> 'a -> float grammar =
@@ -42,15 +44,16 @@ let _ = test (g 0 1) "42.0" 42.0
 
 (* test patterns in terminals *)
 let%parser g0 : (int * int) grammar =
-  (x::INT) => Pos.((lf x_lpos).col, (lf x_rpos).col)
+  (x::INT) => Pos.((ps x_lpos).col, (ps x_rpos).col)
 let _ = test g0 " 123 " (1,4)
+
 let%parser g : (int * int) grammar = ((x,y)::g0) => (y,x)
 let _ = test g " 123 " (4,1)
 let%parser g : (int * int * int) grammar =
-  (((x,y)=z)::g0) => Pos.(y,x,(lf z_rpos).col)
+  (((x,y)=z)::g0) => Pos.(y,x,(ps z_rpos).col)
 let _ = test g " 123 " (4,1,4)
 let%parser g : (int * int * int) grammar =
-  ((((x:int),(y:int))=z)::g0) => Pos.(y,x,(lf z_rpos).col)
+  ((((x:int),(y:int))=z)::g0) => Pos.(y,x,(ps z_rpos).col)
 let _ = test g " 123 " (4,1,4)
 
 (* test rules and sequences *)
@@ -66,20 +69,20 @@ let _ = tests g [("42 a b",42); ("a 42 b",42); ("a b 42",42)]
 
 (* test positions *)
 let%parser g =
-    (x::INT) 'a' 'b' => Pos.((lf x_lpos).col,x,(lf x_rpos).col)
-  ; 'a' (x::INT) (b::'b') => Pos.((lf x_lpos).col,x,(lf b_rpos).col)
-  ; (a::'a') 'b' (x::INT) => Pos.((lf a_lpos).col,x,(lf x_rpos).col)
+    (x::INT) 'a' 'b' => Pos.((ps x_lpos).col,x,(ps x_rpos).col)
+  ; 'a' (x::INT) (b::'b') => Pos.((ps x_lpos).col,x,(ps b_rpos).col)
+  ; (a::'a') 'b' (x::INT) => Pos.((ps a_lpos).col,x,(ps x_rpos).col)
 let _ = tests g [("42 a b ",(0,42,2))
                ; ("a 42 b ",(2,42,6))
                ; ("a b 42 ",(0,42,6))]
 let%parser g =
-    (x::bin) 'a' 'b' => Pos.((lf x_lpos).col,x,(lf x_rpos).col)
-  ; 'a' (x::bin) (b::'b') => Pos.((lf x_lpos).col,x,(lf b_rpos).col)
-  ; (a::'a') 'b' (x::bin) => Pos.((lf a_lpos).col,x,(lf x_rpos).col)
+    (x::bin) 'a' 'b' => Pos.((ps x_lpos).col,x,(ps x_rpos).col)
+  ; 'a' (x::bin) (b::'b') => Pos.((ps x_lpos).col,x,(ps b_rpos).col)
+  ; (a::'a') 'b' (x::bin) => Pos.((ps a_lpos).col,x,(ps x_rpos).col)
 let _ = tests g [("42+13 a b ",(0,(42,Add,13),5))
                ; ("a 42 * 4 b ",(2,(42,Mul,4),10))
                ; ("a b 42 / 2 ",(0,(42,Div,2),10))]
-let%parser g = 'a' 'b' => Pos.((lf _pos).start_col,(lf _pos).end_col)
+let%parser g = 'a' 'b' => Pos.((is _pos).start_col,(is _pos).end_col)
 let _ = tests g [("a b ",(0,3))]
 
 (* test recursion *)

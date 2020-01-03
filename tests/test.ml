@@ -28,6 +28,8 @@ let char_c = term(Lex.appl (fun _ -> 1) (Lex.char 'c'))
 let eof = term (Lex.eof ())
 let na n = String.make n 'a'
 
+let cp spos = (Pos.pos_of_spos spos).col
+
 let test0 = alt [char_a; char_b]
 
 let test0b = seq char_a char_b (+)
@@ -83,11 +85,10 @@ let test6 = plus (star (char_a)) (term(Lex.char ','))
 let star_pos g =
   let gseq = seq in
   let galt x y = alt [x;y] in
-  let open Pos in
   fixpoint
     (fun r -> rpos(lpos(galt (gseq r g
-       (fun (_,x,_) y (lazy lpos) (lazy rpos) -> (lpos.col,x+y,rpos.col)))
-          (empty (fun (lazy lpos) (lazy rpos) -> (lpos.col,0,rpos.col))))))
+       (fun (_,x,_) y lpos rpos -> (cp lpos, x+y, cp rpos)))
+          (empty (fun lpos rpos -> (cp lpos, 0, cp rpos))))))
 
 let test7 = seq (plus (star_pos (char_a))
                    (term(Lex.char ','))) char_b (fun x _ -> x)
@@ -186,6 +187,7 @@ let test18 = seq (term (Lex.char 'a'))
                (fun _ _ -> ())
 
 let _ = assert (parse_string test0 "a" = 1)
+
 let _ = assert_fail (fun () -> parse_string test0 "")
 let _ = assert_fail (fun () -> parse_string test0 "c")
 let _ = assert (parse_string test0 "b" = 1)
@@ -335,7 +337,7 @@ let _ = assert (parse_string test18 "a" = ())
 
 let parse_all_string g s =
   let s = Input.from_string s in
-  parse_all_buffer g Blank.none s Input.init_pos
+  parse_all_buffer g Blank.none s Input.init_idx
 
 let nas p =
   let rec fn p =

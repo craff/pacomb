@@ -13,14 +13,14 @@ type 'a t
 (** Partial parsing.  Beware, the returned position is not  the maximum position
     that can be reached by the grammar.  *)
 val partial_parse_buffer : 'a t -> Blank.t -> ?blank_after:bool ->
-        Lex.buf -> Lex.pos -> 'a * Lex.buf * Lex.pos
+        Lex.buf -> Lex.idx -> 'a * Lex.buf * Lex.idx
 
 (** Returns all possible parse trees.  Usefull for natural languages but also to
     debug ambiguity in a supposed non ambiguous grammar. If end of input is not
     parsed in some ways, some value may correspond to only the beginning of the
     input. Except when debugging or testing, you should rather use cache/merge
     anyway. *)
-val parse_all_buffer : 'a t -> Blank.t -> Lex.buf -> Lex.pos -> 'a list
+val parse_all_buffer : 'a t -> Blank.t -> Lex.buf -> Lex.idx -> 'a list
 
 (** {2 combinator constructors, normally not needed by the casual user } *)
 
@@ -67,10 +67,10 @@ val option: 'a -> Charset.t -> 'a t -> 'a t
 
 (** Parses with the given combinator and transforms the semantics with the given
     function *)
-val app : 'a t -> ('a -> 'b) -> 'b t
+val appl : 'a t -> ('a -> 'b) -> 'b t
 
-val laz : 'a t -> 'a lazy_t t
-val frc : 'a lazy_t t -> 'a t
+val lazy_ : 'a t -> 'a lazy_t t
+val force : 'a lazy_t t -> 'a t
 
 (** unmerge  a merged ambiguous  grammar, typically if  the rest of  the parsing
    uses dependant sequences. Allows for ambiguous terminals by return a list and
@@ -133,11 +133,11 @@ val mlr : ?lpos:Pos.t Assoc.key -> mlr_left -> mlr_right -> 'a key -> 'a t
 val read_tbl : 'a key -> 'a t
 
 (** Allow to test the blank characteres before a grammar and more *)
-val test_before : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+val test_before : (Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
                  -> 'a t -> 'a t
 
 (** Allow to test the blank characteres after a grammar and more *)
-val test_after : ('a -> Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+val test_after : ('a -> Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
                  -> 'a t -> 'a t
 
 (** Access to a reference to a combinator, used by Grammar.compile for recursive

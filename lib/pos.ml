@@ -1,27 +1,52 @@
 (** Functions managing positions *)
 
-(** Type to represent position *)
-include Input.Pos
+(** byte position, short abbreviation *)
+type t = Input.spos
 
-type interval_aux =
-  { name : string
+(** Type to represent position *)
+type pos = { name : string  (** file's name *)
+           ; line  : int    (** line number *)
+           ; col   : int    (** column number *)
+           ; phantom : bool (** is the postion a "phantom", i.e. not really
+                                in the file *) }
+
+(** Type to represent position *)
+
+let phantom = { name = ""; line = 0; col  = 0; phantom = true }
+
+(** build a position from an input buffer and a column number *)
+let pos_of_spos : t -> pos = fun (infos, i0 as spos) ->
+  if spos == Input.phantom_spos then phantom else
+  let name = Input.filename infos in
+  let line = Input.line_num infos i0 in
+  let col = Input.col_num infos i0 in
+  { name; line; col; phantom=false }
+
+let get_pos : Input.buffer -> Input.idx -> pos = fun b p ->
+  let i0 = Input.byte_pos b p in
+  pos_of_spos (Input.infos b, i0)
+
+type interval =
+  { name       : string
   ; start_line : int
   ; start_col  : int
   ; end_line   : int
   ; end_col    : int
   ; phantom    : bool }
 
-type interval = interval_aux Lazy.t
-
-let interval (lazy p1) (lazy p2) =
-  { name = p1.Input.Pos.name
+let interval (p1 : pos) (p2 : pos) =
+  { name       = p1.name
   ; start_line = p1.line
   ; start_col  = p1.col
   ; end_line   = p1.line
   ; end_col    = p2.col
   ; phantom    = p1.phantom || p2.phantom }
 
-type t = pos Lazy.t
+let interval_of_spos : (t * t) -> interval
+  = function (b1, b2) ->
+              let p1 = pos_of_spos b1 in
+              let p2 = pos_of_spos b2 in
+              interval p1 p2
 
 let max_pos p1 p2 =
   if p1.line > p2.line then p1
@@ -29,11 +54,9 @@ let max_pos p1 p2 =
   else if p1.col < p2.col then p2
   else p1
 
-let phantom = lazy { name = ""; line = 0; col  = 0; phantom = true }
-
 type style = OCaml | Short
 
-let print_pos ?(style=OCaml) () ch (lazy pos : t) =
+let print_pos ?(style=OCaml) () ch (pos:pos) =
   let open Printf in
   if pos.name = "" then
     let format : (_,_,_) format = match style with
@@ -48,7 +71,7 @@ let print_pos ?(style=OCaml) () ch (lazy pos : t) =
     in
     fprintf ch format pos.name pos.line pos.col
 
-let print_interval ?(style=OCaml) () ch (lazy pos) =
+let print_interval ?(style=OCaml) () ch pos =
   let open Printf in
   if pos.name = "" then
     if pos.start_line = pos.end_line then
@@ -79,11 +102,17 @@ let print_interval ?(style=OCaml) () ch (lazy pos) =
       fprintf ch format pos.name pos.start_line
         pos.start_col pos.end_line pos.end_col
 
-let print_buf_pos ?(style=OCaml) () ch (buf,col) =
-  print_pos ~style () ch (get_pos buf col)
+let print_spos ?(style=OCaml) () ch p =
+  print_pos ~style () ch (pos_of_spos p)
+
+let print_spos2 ?(style=OCaml) () ch p =
+  print_interval ~style () ch (interval_of_spos p)
+
+let print_buf_pos ?(style=OCaml) () ch (buf,idx) =
+  print_pos ~style () ch (get_pos buf idx)
 
 (** exception returned by the parser *)
-exception Parse_error of Input.buffer * Input.pos * string list
+exception Parse_error of Input.buffer * Input.idx * string list
 
 let fail_no_parse (_:exn) = exit 1
 

@@ -16,7 +16,8 @@ let%parser rec
              ; (show_sub=false) '(' (e::expr) ')' => e (*   rule for parenthesis
                                                        when show_sub is false *)
              ; (show_sub=true) '(' (e::expr) ')' =>(* idem with show_sub true *)
-                 (Printf.printf "%a: %f\n" (Pos.print_interval ()) _pos e;
+                 (Printf.printf "%a: %f\n" (Pos.print_interval ())
+                    (Pos.interval_of_spos _pos) e;
                                           (* ^^^^^^ to access position of l   *)
                   e)
 
@@ -36,12 +37,8 @@ and expr = (a::prod)               => a
    To solve this, it is possible to require immediate evaluation.
 *)
 
-(* The parsing calling expression, with immediate evaluation (==>)
-   printing the result and the next prompt. *)
-let%parser top =
-  (e::expr) => lazy (Printf.printf "%f\n=> %!" e)
-
-let%parser rec exprs = () => () ; exprs (t::top) '\n' => Lazy.force t
+(* The parsing calling expression, printing the result and the next prompt. *)
+let%parser rec exprs = () => () ; exprs (t::expr) '\n' => Printf.printf "%f\n=> %!" t
 
 (* blanks *)
 let blank = Blank.from_charset (Charset.singleton ' ')
@@ -51,7 +48,7 @@ let _ =
     while true do
       let f () =
         Printf.printf "=> %!"; (* initial prompt *)
-        parse_channel exprs blank stdin;
+        parse_fd exprs blank Unix.stdin;
         raise End_of_file
       in
       (* [Pos] module provides a function to handle exception with

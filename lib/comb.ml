@@ -64,7 +64,7 @@
  *)
 module Prio =
   struct
-    type t = int * int * (int * int)
+    type t = Input.byte_pos * int * (Input.byte_pos * int)
     let compare (p1,l1,(q1,co1)) (p2,l2,(q2,co2)) =
       match compare p1 p2 with
       | 0 -> (match compare q2 q1 with
@@ -79,23 +79,25 @@ module Heap = Heap.Make(Prio)
 
 type 'a key = 'a Assoc.key
 
+type max_pos = (Input.byte_pos * Lex.buf * Lex.idx * string list ref) ref
+
 (** Environment holding information required for parsing. *)
 type env =
   { blank_fun         : Blank.t
   (** Function used to ignore blanks. *)
-  ; max_pos           : (int * Lex.buf * Lex.pos * string list ref) ref
+  ; max_pos           : max_pos
   (** Maximum position reached by the parser (for error reporting). *)
   ; current_buf       : Lex.buf
   (** Current input buffer (or input stream). *)
-  ; current_pos       : Lex.pos
-  (** Current position in buffer [current_buf]. *)
+  ; current_idx       : Lex.idx
+  (** Current index in buffer [current_buf]. *)
   ; buf_before_blanks : Lex.buf
   (** Input buffer before reading the blanks. *)
-  ; pos_before_blanks : Lex.pos
+  ; idx_before_blanks : Lex.idx
   (** Position in [buf_before_blanks] before reading the blanks. *)
   ; lr                : Assoc.t
   (** semantics value to be forced after the next lexeme read *)
-  ; cache_order       : int * int
+  ; cache_order       : Input.byte_pos * int
   (** Information used  to order cache parsing, the first  [int] is the position
       where we started to parse the  cached grammar, the second int is increased
       when we parse a cached grammar that was called at same position by another
@@ -113,7 +115,7 @@ type env =
     parallel. *)
  and res =
    | Cont : env * 'a cont * 'a -> res
-   | Lazy : env * (int * int) * 'a cont * 'a lazy_t -> res
+   | Lazy : env * (Input.byte_pos * int) * 'a cont * 'a lazy_t -> res
    (**  Cont(env,k,x)  the value  and  environment  resulting from  parsing  the
       beginning of the  input and the continuation to finish  parsing It must be
       used instead of calling immediatly  the continuation because the scheduler
@@ -174,6 +176,30 @@ type env =
     parsing. *)
 and 'a t = env -> 'a cont -> res
 
+(** {2 Error managment} *)
+
+(** record the current position, before a parsing error *)
+let record_pos env =
+  let (pos_max, _, _, _) = !(env.max_pos) in
+  let pos = Input.byte_pos env.current_buf env.current_idx in
+  if pos > pos_max  then
+    env.max_pos := (pos, env.current_buf, env.current_idx, ref [])
+
+(** [next env] updates the current maximum position [env.max_pos] and
+   raise [Exit] to return to the scheduler. *)
+let next : env -> 'a  = fun env -> record_pos env; raise Exit
+
+(** same as abobe, but recording error messages *)
+let record_pos_msg msg env =
+  let (pos_max, _, _, msgs) = !(env.max_pos) in
+  let pos = Input.byte_pos env.current_buf env.current_idx in
+  if pos > pos_max then
+    env.max_pos := (pos, env.current_buf, env.current_idx, ref [msg])
+  else if pos = pos_max then msgs := msg :: !msgs
+
+let next_msg : string -> env -> 'a  = fun msg env ->
+  record_pos_msg msg env; raise Exit
+
 (** {2 continuations and trans functions} *)
 
 (** construction of a continuation with an identity transformer.
@@ -202,6 +228,18 @@ let eval : type a b. a -> (a,b) trans -> b = fun x tr ->
     | Frc (tr)   -> fn (Lazy.force x) tr
   in fn x tr
 
+let _print_trans =
+  let rec fn : type a b. out_channel -> (a, b) trans -> unit = fun ch ->
+    function
+    | Idt -> ()
+    | Laz(tr,_) -> Printf.fprintf ch "Laz %a" fn tr
+    | Frc(tr)   -> Printf.fprintf ch "Frc %a" fn tr
+    | Arg(tr,_) -> Printf.fprintf ch "Arg %a" fn tr
+    | App(tr,_) -> Printf.fprintf ch "App %a" fn tr
+    | Pos(tr,_) -> Printf.fprintf ch "Pos %a" fn tr
+  in
+  fn
+
 (** function calling a  continuation. It does not evaluate any  action. It is of
     crucial importance that this function be in O(1) before calling [k]. *)
 let call : type a.a cont -> env -> a -> res =
@@ -209,7 +247,7 @@ let call : type a.a cont -> env -> a -> res =
     match k with
     | C(k,tr,None)     -> k env (eval x tr)
     | C(k,tr,Some rp)  ->
-       rp := Pos.get_pos env.buf_before_blanks env.pos_before_blanks;
+       rp := Input.spos env.buf_before_blanks env.idx_before_blanks;
        k env (eval x tr)
 
 (**  functions  to  add  [(_,_)  trans]  constructors  inside  the  continuation
@@ -231,36 +269,12 @@ let posk : type a. a cont -> (Pos.t -> a) cont = fun k ->
   | C(k,tr,rp) ->
      let (p,rp) =
        match rp with
-       | None   -> let p = ref Pos.phantom in (p,Some p)
+       | None   -> let p = ref Input.phantom_spos in (p,Some p)
        | Some p -> (p, rp)
      in
     match tr with
     | Laz(tr,f)  -> C(k,Laz(tr,fun g -> f (g !p)),rp)
     | tr         -> C(k,Pos(tr,p),rp)
-
-(** {2 Error managment} *)
-
-(** record the current position, before a parsing error *)
-let record_pos env =
-  let (pos_max, _, _, _) = !(env.max_pos) in
-  let pos = Input.byte_pos env.current_buf env.current_pos in
-  if pos > pos_max  then
-    env.max_pos := (pos, env.current_buf, env.current_pos, ref [])
-
-(** [next env] updates the current maximum position [env.max_pos] and
-   raise [Exit] to return to the scheduler. *)
-let next : env -> 'a  = fun env -> record_pos env; raise Exit
-
-(** same as abobe, but recording error messages *)
-let record_pos_msg msg env =
-  let (pos_max, _, _, msgs) = !(env.max_pos) in
-  let pos = Input.byte_pos env.current_buf env.current_pos in
-  if pos > pos_max then
-    env.max_pos := (pos, env.current_buf, env.current_pos, ref [msg])
-  else if pos = pos_max then msgs := msg :: !msgs
-
-let next_msg : string -> env -> 'a  = fun msg env ->
-  record_pos_msg msg env; raise Exit
 
 (** {2 Scheduler code} *)
 
@@ -270,20 +284,20 @@ let next_msg : string -> env -> 'a  = fun msg env ->
 let get_prio r =
   match r with
   | Cont(env,_,_)|Gram(env,_,_) ->
-     let p = Input.byte_pos env.current_buf env.current_pos in
+     let p = Input.byte_pos env.current_buf env.current_idx in
      (p, 0, env.cache_order)
   | Lazy(env,_,_,_) ->
-     let p = Input.byte_pos env.current_buf env.current_pos in
+     let p = Input.byte_pos env.current_buf env.current_idx in
      (p, 1,env.cache_order)
 
 let _print_prio ch r =
   let (p2, l, (p1, o)) = get_prio r in
-  Printf.fprintf ch "%d-%d(%d) lazy:%d" p1 p2 o l
+  Printf.fprintf ch "%d-%d(%d) lazy:%d" (Input.int_of_byte_pos p1) (Input.int_of_byte_pos p2) o l
 
 let _print_eprio ch env =
-  let p2 = Input.byte_pos env.current_buf env.current_pos in
+  let p2 = Input.byte_pos env.current_buf env.current_idx in
   let (p1,o) = env.cache_order in
-  Printf.fprintf ch "%d-%d(%d)" p1 p2 o
+  Printf.fprintf ch "%d-%d(%d)" (Input.int_of_byte_pos p1) (Input.int_of_byte_pos p2) o
 
 let add_queue env res =
   env.queue := Heap.add (get_prio res) res !(env.queue)
@@ -346,15 +360,16 @@ let empty : 'a -> 'a t = fun x env kf -> call kf env x
 (** Combinator accepting the given lexeme (or terminal). *)
 let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k ->
     try
-      let (v, buf_before_blanks, pos_before_blanks) =
-        lex env.current_buf env.current_pos
+      let (v, buf_before_blanks, idx_before_blanks) =
+        lex env.current_buf env.current_idx
       in
-      let (current_buf, current_pos) =
-        env.blank_fun buf_before_blanks pos_before_blanks
+      (* evaluate pending arguments, before reading blanks! *)
+      let (current_buf, current_idx) =
+        env.blank_fun buf_before_blanks idx_before_blanks
       in
       let env =
-        { env with buf_before_blanks ; pos_before_blanks
-                   ; current_buf ; current_pos; lr = Assoc.empty }
+        { env with buf_before_blanks ; idx_before_blanks
+                   ; current_buf ; current_idx; lr = Assoc.empty }
       in
       (** don't call the continuation, return to the scheduler *)
       Cont(env,k,v)
@@ -363,7 +378,7 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k ->
 
 (** [test cs env]  returns [true] if and only if the next  character to parse in
     the environment [env] is in the character set [cs]. *)
-let test cs e = Charset.mem cs (Input.get e.current_buf e.current_pos)
+let test cs e = Charset.mem cs (Input.get e.current_buf e.current_idx)
 
 (** Sequence combinator. *)
 let seq : 'a t -> Charset.t -> ('a -> 'b) t -> 'b t = fun g1 cs g2 ->
@@ -399,7 +414,7 @@ let simple_alt : 'a t -> 'a t -> 'a t = fun g1 g2 env k ->
   add_queue env (Gram(env,g2,k)); g1 env k
 
 let dispatch = fun tbl mini maxi env k ->
-  let c = Input.get env.current_buf env.current_pos in
+  let c = Input.get env.current_buf env.current_idx in
   let i = Char.code c in
   if i < mini || i > maxi then next env
   else tbl.(Char.code c - mini) env k
@@ -430,19 +445,19 @@ let alt : (Charset.t * 'a t) list -> 'a t = fun l ->
     dispatch tbl mini maxi
 
 (** Application of a semantic function to alter a combinator. *)
-let app : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k -> g env (app k fn)
+let appl : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k -> g env (app k fn)
 
-let laz : type a.a t -> a lazy_t t = fun g env (C(k,tr,rp)) ->
+let lazy_ : type a.a t -> a lazy_t t = fun g env (C(k,tr,rp)) ->
   g env (match tr with
          | Laz(tr,f) -> C(k,Laz (tr,fun x -> f (lazy x)),rp)
          | Frc(tr)   -> C(k,tr,rp)
          | _         -> C(k,Laz (tr,fun x -> x),rp))
 
-let frc : type a.a lazy_t t -> a t = fun g env (C(k,tr,rp)) ->
+let force : type a.a lazy_t t -> a t = fun g env (C(k,tr,rp)) ->
   g env (C(k,Frc (tr),rp))
 
-(** unmerge a merged ambiguous grammar, typicallyif the rest of the parsing uses
-   dependant sequences *)
+(** unmerge  a merged ambiguous  grammar, typically if  the rest of  the parsing
+   uses dependant sequences *)
 let unmerge : 'a list t -> 'a t = fun g env k ->
   g env (ink (fun env vs ->
              let rec fn =function
@@ -453,21 +468,21 @@ let unmerge : 'a list t -> 'a t = fun g env k ->
              fn vs))
 
 (** Combinator to test the input before parsing with a grammar *)
-let test_before : (Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+let test_before : (Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
                  -> 'a t -> 'a t =
   fun test g env k ->
-    match test env.buf_before_blanks env.pos_before_blanks
-            env.current_buf env.current_pos
+    match test env.buf_before_blanks env.idx_before_blanks
+            env.current_buf env.current_idx
     with false -> next env
        | true  -> g env k
 
 (** Combinator to test the input after parsing with a grammar *)
-let test_after : ('a -> Lex.buf -> Lex.pos -> Lex.buf -> Lex.pos -> bool)
+let test_after : ('a -> Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
                  -> 'a t -> 'a t =
   fun test g env k ->
     let k = ink (fun env x ->
-      match test x env.buf_before_blanks env.pos_before_blanks
-             env.current_buf env.current_pos
+      match test x env.buf_before_blanks env.idx_before_blanks
+             env.current_buf env.current_idx
       with false -> next env
          | true  -> call k env x)
     in
@@ -479,8 +494,8 @@ let right_pos : type a.(Pos.t -> a) t -> a t = fun g env k ->
 
 (** Read the position before parsing. *)
 let left_pos : (Pos.t -> 'a) t -> 'a t = fun g  env k ->
-    let pos = Pos.get_pos env.current_buf env.current_pos in
-    g env (arg k pos)
+  let pos = Input.spos env.current_buf env.current_idx in
+  g env (arg k pos)
 
 (** Read left pos from the lr table. *)
 let read_pos : Pos.t key -> (Pos.t -> 'a) t -> 'a t =
@@ -508,7 +523,7 @@ let lr : 'a t -> 'a key -> Charset.t -> 'a t -> 'a t = fun g key cs gf env k ->
     in the lr table too. *)
 let lr_pos : 'a t -> 'a key -> Pos.t key -> Charset.t -> 'a t -> 'a t =
   fun g key pkey cs gf env k ->
-    let pos = Pos.get_pos env.current_buf env.current_pos in
+    let pos = Input.spos env.current_buf env.current_idx in
     let rec klr env v =
       if test cs env then
         begin
@@ -531,7 +546,7 @@ type mlr_left =
     the first key represents the grammar that parsed the input before
     the second key represents the produced grammar.
 
-    Somehow, mlr_right is a matrix R, the two keys being the index of
+    Somehow, mlr_right is a matrix R, the two keys being the idx of
     the coefficient and mlr_left is a vector L. Parsing, will somehow use
     L R^n for n large enough;
 *)
@@ -590,8 +605,8 @@ let mlr : type a. ?lpos:Pos.t key ->
     let g = compile_mlr gl gr in
     fun env k ->
       let pos = match lpos with
-        | None   -> Pos.phantom
-        | Some _ -> Pos.get_pos env.current_buf env.current_pos
+        | None   -> Input.phantom_spos
+        | Some _ -> Input.spos env.current_buf env.current_idx
       in
       let rec klr env (Res(key,v,g')) =
         let lr = Assoc.add key v env.lr in
@@ -621,19 +636,19 @@ let deref : 'a t ref -> 'a t = fun gref env k -> !gref env k
 let change_layout : ?config:Blank.layout_config -> Blank.t -> 'a t -> 'a t =
     fun ?(config=Blank.default_layout_config) blank_fun g env k ->
     let (s, n, _) as buf=
-      if config.old_blanks_before then (env.current_buf, env.current_pos, false)
-      else (env.buf_before_blanks, env.pos_before_blanks, true)
+      if config.old_blanks_before then (env.current_buf, env.current_idx, false)
+      else (env.buf_before_blanks, env.idx_before_blanks, true)
     in
     let (s, n, moved) =
       if config.new_blanks_before then let (s,n) = blank_fun s n in (s,n,true)
       else buf
     in
     let old_blank_fun = env.blank_fun in
-    let env = { env with blank_fun ; current_buf = s ; current_pos = n } in
+    let env = { env with blank_fun ; current_buf = s ; current_idx = n } in
     g env (ink (fun env v ->
       let (s, n) as buf =
-        if config.new_blanks_after then (env.current_buf, env.current_pos)
-        else (env.buf_before_blanks, env.pos_before_blanks)
+        if config.new_blanks_after then (env.current_buf, env.current_idx)
+        else (env.buf_before_blanks, env.idx_before_blanks)
       in
       let (s, n) =
         if config.old_blanks_after then old_blank_fun s n
@@ -641,7 +656,7 @@ let change_layout : ?config:Blank.layout_config -> Blank.t -> 'a t -> 'a t =
       in
       let env =
         { env with blank_fun = old_blank_fun
-        ; current_buf = s ; current_pos = n }
+        ; current_buf = s ; current_idx = n }
       in
       (** return to scheduler if we moved in the input *)
       if moved then Cont(env,k,v) else call k env v))
@@ -653,10 +668,10 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
   (** creation of a table for the cache *)
   let cache = Input.Tbl.create () in
   fun env0 k ->
-  let {current_buf = buf0; current_pos = col0} = env0 in
+  let {current_buf = buf0; current_idx = idx0} = env0 in
   try
     (** Did we start parsing the same grammar at the same position *)
-    let (ptr, too_late) = Input.Tbl.find cache buf0 col0 in
+    let (ptr, too_late) = Input.Tbl.find cache buf0 idx0 in
     (** If yes we store the continuation in the returned pointer.
        !too_late is true if we already called the continuation stored
        in !ptr *)
@@ -672,14 +687,14 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
          and the start position of this rule (thks to cache, only one each)  *)
     let ptr = ref [(k,env0.cache_order)] in
     let too_late = ref false in
-    Input.Tbl.add cache buf0 col0 (ptr, too_late);
+    Input.Tbl.add cache buf0 idx0 (ptr, too_late);
     (** we create a merge table for all continuation to call merge on all
          semantics before proceding. To do so, we need to complete all parsing
          of this grammar at this position before calling the continuation.
          [vnum] will be used to ensure this, see below. *)
     let merge_tbl = Input.Tbl.create () in
     (** NOTE: merge_tbl is not used if merge = None *)
-    let co = Input.byte_pos buf0 col0 in
+    let co = Input.byte_pos buf0 idx0 in
     assert(co >= fst env0.cache_order);
     let cache_order = (co, snd env0.cache_order + 1) in
     (** we update cache_order in the environment, ensuring the correct order in
@@ -689,12 +704,12 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
     let k0 env v =
       (** the cache order must have been restored to its initial value *)
       assert (cache_order = env.cache_order);
-      let {current_buf = buf; current_pos = col} = env in
+      let {current_buf = buf; current_idx = idx} = env in
       try
         (** we first try to merge ... if merge <> None *)
         if merge = None then raise Not_found;
         (** We get the vptr to share this value, if any *)
-        let (vptr,too_late_v) = Input.Tbl.find merge_tbl buf col in
+        let (vptr,too_late_v) = Input.Tbl.find merge_tbl buf idx in
         (** and it is not too late to add a semantics for this action, that is
            the action was not evaluated *)
         assert (not !too_late_v);
@@ -713,7 +728,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
              (** create vptr and register in merge_tbl *)
              let vptr = ref [v] in
              let too_late_v = ref false in
-             Input.Tbl.add merge_tbl buf col (vptr,too_late_v);
+             Input.Tbl.add merge_tbl buf idx (vptr,too_late_v);
              (** the semantics merge together all value in vptr, Once forced,
                   too_late_v ensure an assertion failure if we try to extend
                   vptr after evaluation *)
@@ -751,16 +766,16 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
 (** function doing the parsing *)
 let gen_parse_buffer
     : type a. a t -> Blank.t -> ?blank_after:bool
-                  -> Lex.buf -> Lex.pos -> (a * Lex.buf * Lex.pos) list =
-  fun g blank_fun ?(blank_after=false) buf0 col0 ->
+                  -> Lex.buf -> Lex.idx -> (a * Lex.buf * Lex.idx) list =
+  fun g blank_fun ?(blank_after=false) buf0 idx0 ->
     (** environment initialisation *)
-    let p0 = Input.byte_pos buf0 col0  in
-    let max_pos = ref (p0, buf0, col0, ref []) in
-    let (buf, col) = blank_fun buf0 col0 in
+    let p0 = Input.byte_pos buf0 idx0  in
+    let max_pos = ref (p0, buf0, idx0, ref []) in
+    let (buf, idx) = blank_fun buf0 idx0 in
     let env =
-      { buf_before_blanks = buf0 ; pos_before_blanks = col0
-        ; current_buf = buf ; current_pos = col; lr = Assoc.empty
-        ; max_pos ; blank_fun ; cache_order = (0,0)
+      { buf_before_blanks = buf0 ; idx_before_blanks = idx0
+        ; current_buf = buf ; current_idx = idx; lr = Assoc.empty
+        ; max_pos ; blank_fun ; cache_order = (Input.init_byte_pos,0)
         ; queue = ref Heap.empty }
     in
     (** calling the scheduler to start parsing *)
@@ -768,20 +783,20 @@ let gen_parse_buffer
     match r with
     | [] ->
        (** error managment *)
-       let (_, buf, col, msgs) = !max_pos in
+       let (_, buf, idx, msgs) = !max_pos in
        let msgs = List.sort_uniq compare !msgs in
-       raise (Pos.Parse_error(buf, col, msgs))
+       raise (Pos.Parse_error(buf, idx, msgs))
     | _ ->
        (** finalisation *)
        List.map (fun (v,env) ->
-           if blank_after then (v, env.current_buf, env.current_pos)
-           else (v, env.buf_before_blanks, env.pos_before_blanks)) r
+           if blank_after then (v, env.current_buf, env.current_idx)
+           else (v, env.buf_before_blanks, env.idx_before_blanks)) r
 
 (** parse for non ambiguous grammars, allows for continue parsing *)
 let partial_parse_buffer : type a. a t -> Blank.t -> ?blank_after:bool
-                                -> Lex.buf -> Lex.pos -> a * Lex.buf * Lex.pos =
-  fun g blank_fun ?(blank_after=false) buf0 col0 ->
-    let l = gen_parse_buffer g blank_fun ~blank_after buf0 col0 in
+                                -> Lex.buf -> Lex.idx -> a * Lex.buf * Lex.idx =
+  fun g blank_fun ?(blank_after=false) buf0 idx0 ->
+    let l = gen_parse_buffer g blank_fun ~blank_after buf0 idx0 in
     match l with
     | [r]  -> r
     | r::_ -> Printf.eprintf "Parsing ambiguity, use cache with merge\n%!"; r
@@ -791,7 +806,7 @@ let partial_parse_buffer : type a. a t -> Blank.t -> ?blank_after:bool
     input is not parsed in some ways, some value may correspond to only the
     beginning of the input. You should rather use cache/merge anyway.*)
 let parse_all_buffer
-    : type a. a t -> Blank.t -> Lex.buf -> Lex.pos -> a list =
-  fun g blank_fun buf0 col0 ->
-    let l = gen_parse_buffer g blank_fun buf0 col0 in
+    : type a. a t -> Blank.t -> Lex.buf -> Lex.idx -> a list =
+  fun g blank_fun buf0 idx0 ->
+    let l = gen_parse_buffer g blank_fun buf0 idx0 in
     List.map (fun (r,_,_) -> r) l

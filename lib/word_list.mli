@@ -25,7 +25,7 @@ exception Already_bound
 val create : ?unique:bool ->
              ?map:('a -> 'a) ->
              ?cs:Charset.t ->
-             ?final_test:(Input.buffer -> Input.pos -> bool)
+             ?final_test:(Input.buffer -> Input.idx -> bool)
              -> unit -> ('a,'b) t
 
 (** Returns the number of bindings in the table *)

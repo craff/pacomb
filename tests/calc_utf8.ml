@@ -17,7 +17,10 @@ let%parser rec
                                                        when show_sub is false *)
              ; (show_sub=true) '(' (e::expr) ')' =>(* idem with show_sub true *)
 
-                 (Printf.printf "%a: %f\n" (Pos.print_interval ()) _pos e;
+                 (Printf.printf "%a: %f\n"
+                    (Pos.print_interval ())
+                    (Pos.interval_of_spos _pos)
+                    e;
                                           (* ^^^^^^ to access position of l   *)
                   e)
 

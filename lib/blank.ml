@@ -1,10 +1,10 @@
 (** Functions managing blanks *)
 
 type buf = Input.buffer
-type pos = Input.pos
+type idx = Input.idx
 
 (** A blank function is just a function progressing in a buffer *)
-type blank = buf -> pos -> buf * pos
+type blank = buf -> idx -> buf * idx
 type t = blank
 
 (** Use when you have no blank chars *)

@@ -107,7 +107,7 @@ and regexp =
   (rs :: ~+ ["\\|"] seq_regexp) => Alt rs
 
 (* Exception raised when a regexp cannot be parsed. *)
-exception Regexp_error of Input.buffer * Input.pos
+exception Regexp_error of Input.buffer * Input.idx
 
 let from_string : string -> regexp = fun s ->
   try Grammar.parse_string regexp Blank.none s
