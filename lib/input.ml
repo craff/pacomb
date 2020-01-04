@@ -70,7 +70,7 @@ let rec is_empty (lazy l) idx =
   else is_empty l.next (idx - llen l)
 
 (* Read the character at the given position in the given buffer. *)
-let rec read (lazy l as b) i =
+let [@inline] rec read (lazy l as b) i =
   match compare (i+1) (llen l) with
   | -1 -> (l.data.[i], b     , i+1)
   | 0  -> (l.data.[i], l.next, 0  )
@@ -89,7 +89,7 @@ let sub b i len =
   fn b i 0
 
 (* Get the character at the given position in the given buffer. *)
-let rec get (lazy l) i =
+let [@inline] rec get (lazy l) i =
   if i < llen l then l.data.[i] else
   if is_eof l then '\255' else
   get l.next (i - llen l)
@@ -98,10 +98,10 @@ let rec get (lazy l) i =
 let filename infos = infos.name
 
 (* byte position *)
-let byte_pos (lazy b) p = b.boff + p
+let [@inline] byte_pos (lazy b) p = b.boff + p
 
 (* short position *)
-let spos (lazy b) p = (b.infos, b.boff + p)
+let [@inline] spos (lazy b) p = (b.infos, b.boff + p)
 
 (* Get the current line number of a buffer, rescanning the file *)
 let line_num infos i0 =
