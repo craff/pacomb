@@ -32,13 +32,17 @@ and expr = (a::prod)               => a
          ; (x::expr) '-' (y::prod) => x-.y
 
 (* A subtlety : we want to parse expression, one by one and print the
-   result. Pacomb evaluates action after the next token to avoid some useless
-   evaluation but still make give_up usable. So we evaluate after newline...
-   To solve this, it is possible to require immediate evaluation.
+   result. Pacomb needs to do things that require buffer examination avec
+   each token to printing after parsing the newline does not work.
+   A trick that works is to test for the newline, not parsing it.
 *)
 
 (* The parsing calling expression, printing the result and the next prompt. *)
-let%parser rec exprs = () => () ; exprs (t::expr) '\n' => Printf.printf "%f\n=> %!" t
+
+let nl _ b i _ _ =
+  let (c,_,_) = Input.read b i in c = '\n'
+let%parser rec top = (t::Grammar.test_after nl expr) => Printf.printf "%f\n=> %!" t
+let%parser rec exprs = () => () ; exprs top '\n' => ()
 
 (* blanks *)
 let blank = Blank.from_charset (Charset.singleton ' ')
