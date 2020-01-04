@@ -52,7 +52,9 @@ let _ =
     while true do
       let f () =
         Printf.printf "=> %!"; (* initial prompt *)
-        parse_fd exprs blank Unix.stdin;
+        parse_fd exprs blank Unix.stdin; (* no need to stack the buffer of
+                                            in_channel and those of Pacomb. So
+                                            file desciptor are enough *)
         raise End_of_file
       in
       (* [Pos] module provides a function to handle exception with
