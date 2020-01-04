@@ -195,15 +195,43 @@ let buffer_compare (lazy b1) (lazy b2) =
 (* Get the unique identifier of the buffer. *)
 let buffer_uid (lazy buf) = buf.infos.uid
 
+type 'a rescan_type =
+  | Seek of ('a -> int) * ('a -> int -> unit)
+  | Buf
+
 module type MinimalInput =
   sig
     val from_fun : ('a -> unit) -> context -> string
                    -> ('a -> string)
-                   -> ('a -> byte_pos) -> ('a -> byte_pos -> unit)
-                   -> 'a -> buffer
+                   -> 'a rescan_type -> 'a -> buffer
   end
 
-let rescan ch pos_in seek_in mk_buf fn acc =
+let rescan_buf buf0 fn acc =
+  let cache = ref [] in
+  let set_cache i buf idx acc =
+    cache := (i,buf, idx, acc) :: !cache
+  in
+  let get_cache i =
+    let rec fn = function
+        []                -> (buf0, 0, acc)
+      | (j,buf,idx,acc)::ls -> if j <= i then (buf, idx, acc) else fn ls
+    in
+    fn !cache
+  in
+  fun i0 ->
+    let (buf0,idx0,acc0) = get_cache i0 in
+    let buf = ref buf0 in
+    let acc = ref acc0 in
+    let idx = ref idx0 in
+    for i = 0 to i0 - 1 do
+      if i mod 1024 = 0 then set_cache i !buf !idx !acc;
+      let (c,b,p) = read !buf !idx in
+      buf := b; idx := p;
+      acc := fn i c !acc
+    done;
+    !acc
+
+let rescan_seek ch pos_in seek_in mk_buf fn acc =
   let cache = ref [] in
   let set_cache i idx acc =
     cache := (i,pos_in ch, idx, acc) :: !cache
@@ -258,24 +286,35 @@ module GenericInput(M : MinimalInput) =
   struct
     include M
 
+    let st_ch ch =
+      let open Unix in
+      let stat = fstat (Unix.descr_of_in_channel ch) in
+      if stat.st_kind = S_REG then Seek(pos_in,seek_in) else Buf
+
+    let st_fd fd =
+      let open Unix in
+      let stat = fstat fd in
+      let seek fd n = ignore (Unix.lseek fd n SEEK_SET) in
+      let pos fd = Unix.lseek fd 0 SEEK_CUR in
+      if stat.st_kind = S_REG then Seek(pos,seek) else Buf
+
     let from_channel
         : ?utf8:context -> ?filename:string -> in_channel -> buffer =
       fun ?(utf8=Utf8.ASCII) ?(filename="") ch ->
-        from_fun ignore utf8 filename input_buffer pos_in seek_in ch
+        let st = st_ch ch in
+        from_fun ignore utf8 filename input_buffer st ch
 
     let from_fd
         : ?utf8:context -> ?filename:string -> Unix.file_descr -> buffer =
       fun ?(utf8=Utf8.ASCII) ?(filename="") fd ->
-        let seek fd n = ignore (Unix.lseek fd n SEEK_SET) in
-        let pos fd = Unix.lseek fd 0 SEEK_CUR in
-        from_fun ignore utf8 filename fd_buffer pos seek fd
+        let st = st_fd fd in
+        from_fun ignore utf8 filename fd_buffer st fd
 
     let from_file : ?utf8:context -> string -> buffer =
       fun ?(utf8=Utf8.ASCII) fname ->
         let fd = Unix.(openfile fname [O_RDONLY] 0) in
-        let seek fd n = ignore (Unix.lseek fd n SEEK_SET) in
-        let pos fd = Unix.lseek fd 0 SEEK_CUR in
-        from_fun Unix.close utf8 fname fd_buffer pos seek fd
+        let st = st_fd fd in
+        from_fun Unix.close utf8 fname fd_buffer st fd
 
     let from_string : ?utf8:context -> ?filename:string -> string -> buffer =
       fun ?(utf8=Utf8.ASCII) ?(filename="") str ->
@@ -285,19 +324,24 @@ module GenericInput(M : MinimalInput) =
         in
         let seek () n = b := (n <> (-1)) in
         let pos () = (-1) in
-        from_fun ignore utf8 filename string_buffer pos seek ()
+        let st = Seek(pos, seek) in
+        from_fun ignore utf8 filename string_buffer st ()
   end
 
 include GenericInput(
   struct
-    let rec from_fun finalise utf8 name get_line pos seek file =
-      let rescan fn acc i0 =
-        rescan file pos seek
-          (fun () -> from_fun finalise utf8 name get_line pos seek file)
-          fn acc i0
-      in
-      let infos = { utf8; name; uid = new_uid (); rescan; lnum_skip = [] } in
-      let rec fn boff cont =
+    let rec from_fun finalise utf8 name get_line st file =
+      let rec rescan : type a.(byte_pos -> char -> a -> a) -> a -> byte_pos -> a =
+        fun fn acc i0 ->
+        match st with
+        | Seek (pos, seek) ->
+           rescan_seek file pos seek
+             (fun () -> from_fun finalise utf8 name get_line st file)
+             fn acc i0
+        | Buf ->
+           rescan_buf buf fn acc i0
+      and infos = { utf8; name; uid = new_uid (); rescan; lnum_skip = [] }
+      and fn boff cont =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
@@ -311,14 +355,16 @@ include GenericInput(
             finalise file;
             fun () -> cont boff
         end ()
-      in
-      lazy
-        begin
-          let cont boff =
-            Lazy.force (empty_buffer infos boff)
-          in
-          fn 0 cont
-        end
+      and buf =
+        lazy
+          begin
+            let cont boff =
+              Lazy.force (empty_buffer infos boff)
+            in
+            fn 0 cont
+          end
+        in
+        buf
   end)
 
 (* Exception to be raised on errors in custom preprocessors. *)
@@ -337,16 +383,19 @@ module type Preprocessor =
 
 module Make(PP : Preprocessor) =
   struct
-    let rec from_fun finalise utf8 name get_line pos seek file =
-      let rescan fn acc i0 =
-        rescan file pos seek
-          (fun () -> from_fun finalise utf8 name get_line pos seek file)
-          fn acc i0
-      in
-      let infos = { utf8; name; uid = new_uid (); rescan = rescan
+    let rec from_fun finalise utf8 name get_line st file =
+      let rec rescan : type a.(byte_pos -> char -> a -> a) -> a -> byte_pos -> a =
+        fun fn acc i0 ->
+        match st with
+        | Seek (pos, seek) ->
+           rescan_seek file pos seek
+             (fun () -> from_fun finalise utf8 name get_line st file)
+             fn acc i0
+        | Buf ->
+           rescan_buf buf fn acc i0
+      and infos = { utf8; name; uid = new_uid (); rescan = rescan
                     ; lnum_skip = [] }
-      in
-      let rec fn infos boff st cont =
+      and fn infos boff st cont =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
@@ -376,15 +425,16 @@ module Make(PP : Preprocessor) =
             finalise file;
             fun () -> cont infos boff st
         end ()
+      and buf =  lazy
+                   begin
+                     let cont infos boff st =
+                       PP.check_final st infos.name;
+                       Lazy.force (empty_buffer infos boff)
+                     in
+                     fn infos 0 PP.initial_state cont
+                   end
       in
-      lazy
-        begin
-          let cont infos boff st =
-            PP.check_final st infos.name;
-            Lazy.force (empty_buffer infos boff)
-          in
-          fn infos 0 PP.initial_state cont
-        end
+      buf
   end
 
 module WithPP(PP : Preprocessor) = GenericInput(Make(PP))
