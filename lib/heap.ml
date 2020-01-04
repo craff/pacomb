@@ -1,25 +1,22 @@
 
-module Make(T:Set.OrderedType) = struct
-  type elt = T.t
+let empty = []
 
-  type 'a t = (T.t * 'a list) list
+type 'a t = 'a list list
 
-  let empty = []
+let add cmp x h =
+  let rec fn acc h = match h with
+    | [] -> List.rev_append acc [[x]]
+    | []::_ -> assert false
+    | (y::_ as l)::h' ->
+       match cmp x y with
+       | 0 -> List.rev_append acc ((x::l) :: h')
+       | n when n < 0 -> List.rev_append acc ([x]:: h)
+       | _ -> fn (l::acc) h'
+  in
+  fn [] h
 
-  let add p x h =
-    let rec fn acc h = match h with
-    | [] -> List.rev_append acc [(p, [x])]
-    | (p',l as c)::h' ->
-       match T.compare p p' with
-       | 0 -> List.rev_append acc ((p, x::l) :: h')
-       | n when n < 0 -> List.rev_append acc ((p, [x]):: h)
-       | _ -> fn (c::acc) h'
-    in
-    fn [] h
-
-  let remove l = match l with
-    | [] -> raise Not_found
-    | (_,[x])::h -> x, h
-    | (p,(x::l))::h -> (x, ((p,l)::h))
-    | (_,[])::_ -> assert false
-end
+let remove l = match l with
+  | [] -> raise Not_found
+  | [x]::h -> x, h
+  | (x::l)::h -> (x, (l::h))
+  | []::_ -> assert false

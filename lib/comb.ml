@@ -62,21 +62,6 @@
                       start parsing from the same position, the one
                       calling the other as a smaller depth
  *)
-module Prio =
-  struct
-    type t = Input.byte_pos * int * (Input.byte_pos * int)
-    let compare (p1,l1,(q1,co1)) (p2,l2,(q2,co2)) =
-      match compare p1 p2 with
-      | 0 -> (match compare q2 q1 with
-              | 0 -> (match compare co2 co1 with
-                      | 0 -> compare l1 l2
-                      | c -> c)
-              | c -> c)
-      | c -> c
-  end
-
-module Heap = Heap.Make(Prio)
-
 type 'a key = 'a Assoc.key
 
 type max_pos = (Input.byte_pos * Lex.buf * Lex.idx * string list ref) ref
@@ -281,26 +266,34 @@ let posk : type a. a cont -> (Pos.t -> a) cont = fun k ->
 (** the scheduler stores what remains to do in a list sorted by position in the
     buffer, and vptr key list (see cache below) here are the comparison function
     used for this sorting *)
-let get_prio r =
-  match r with
-  | Cont(env,_,_)|Gram(env,_,_) ->
-     let p = Input.byte_pos env.current_buf env.current_idx in
-     (p, 0, env.cache_order)
-  | Lazy(env,_,_,_) ->
-     let p = Input.byte_pos env.current_buf env.current_idx in
-     (p, 1,env.cache_order)
-
-let _print_prio ch r =
-  let (p2, l, (p1, o)) = get_prio r in
-  Printf.fprintf ch "%d-%d(%d) lazy:%d" (Input.int_of_byte_pos p1) (Input.int_of_byte_pos p2) o l
-
-let _print_eprio ch env =
-  let p2 = Input.byte_pos env.current_buf env.current_idx in
-  let (p1,o) = env.cache_order in
-  Printf.fprintf ch "%d-%d(%d)" (Input.int_of_byte_pos p1) (Input.int_of_byte_pos p2) o
+let cmp c1 c2 =
+  let gn = function
+    | Gram(env,_,_) -> (1, env)
+    | Cont(env,_,_) -> (0, env)
+    | Lazy(env,_,_,_) -> (2, env)
+  in
+  let (l1,e1) = gn c1 in
+  let (l2,e2) = gn c2 in
+  let p1 = Input.byte_pos e1.current_buf e1.current_idx in
+  let p2 = Input.byte_pos e2.current_buf e2.current_idx in
+  match compare p1 p2 with
+  | 0 ->
+     begin
+       let (q1,co1) = e1.cache_order in
+       let (q2,co2) = e2.cache_order in
+       match compare q2 q1 with
+       | 0 ->
+          begin
+            match compare co2 co1 with
+            | 0 -> compare l1 l2
+            | c -> c
+          end
+       | c -> c
+     end
+  | c -> c
 
 let add_queue env res =
-  env.queue := Heap.add (get_prio res) res !(env.queue)
+  env.queue := Heap.add cmp res !(env.queue)
 
 
 (** [scheduler  env g] drives  the parsing, it calls  the combinator [g]  in the
@@ -321,7 +314,7 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
       (try
         let r = g env (ink k) in
         (* initialize the queue *)
-        queue := Heap.add (get_prio r) r !queue;
+        queue := Heap.add cmp r !queue;
       with Exit -> ());
       while true do
         let (todo,t) = Heap.remove !queue in
@@ -334,7 +327,7 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
                                  call k env (Lazy.force x)
             | Gram(env,g,k)   -> g env k
           in
-          queue := Heap.add (get_prio r) r !queue
+          queue := Heap.add cmp r !queue;
         with
         | Exit -> ()
         | Lex.NoParse -> record_pos env
