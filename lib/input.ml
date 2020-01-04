@@ -19,24 +19,39 @@ type buffer_aux =
 
 and buffer = buffer_aux Lazy.t
 
+(* Generate a unique identifier. *)
+let new_uid =
+  let c = ref 0 in
+  fun () -> let uid = !c in incr c; uid
+
+(** infos function *)
+let infos (lazy b) = b.infos
+
+let phantom_infos =
+  { utf8 = Utf8.ASCII
+  ; name = ""
+  ; uid = new_uid ()
+  ; rescan = (fun _ -> assert false)
+  ; lnum_skip = [] }
+
+(** idx type and constant *)
 type idx = int
 
-type byte_pos = int
+let init_idx = 0
 
-type spos = infos * byte_pos
+(** byte_pos type and constant *)
+type byte_pos = int
 
 let int_of_byte_pos x = x
 
 let init_byte_pos = 0
 
-let init_idx = 0
+let phantom_byte_pos = -1
 
-let infos (lazy b) = b.infos
+(** spos type  and constant *)
+type spos = infos * byte_pos
 
-(* Generate a unique identifier. *)
-let new_uid =
-  let c = ref 0 in
-  fun () -> let uid = !c in incr c; uid
+let phantom_spos = (phantom_infos, phantom_byte_pos)
 
 (* Emtpy buffer. *)
 let empty_buffer infos boff =
@@ -61,6 +76,7 @@ let rec read (lazy l as b) i =
   | 0  -> (l.data.[i], l.next, 0  )
   | _  -> if is_eof l then ('\255', b, 0) else read l.next (i - llen l)
 
+(* substring of a buffer *)
 let sub b i len =
   let s = Bytes.create len in
   let rec fn b i j =
@@ -84,18 +100,10 @@ let filename infos = infos.name
 (* byte position *)
 let byte_pos (lazy b) p = b.boff + p
 
+(* short position *)
 let spos (lazy b) p = (b.infos, b.boff + p)
 
-let phantom_infos =
-  { utf8 = Utf8.ASCII
-  ; name = ""
-  ; uid = new_uid ()
-  ; rescan = (fun _ -> assert false)
-  ; lnum_skip = [] }
-let phantom_byte_pos = -1
-let phantom_spos = (phantom_infos, phantom_byte_pos)
-
-(* Get the current line number of a buffer. *)
+(* Get the current line number of a buffer, rescanning the file *)
 let line_num infos i0 =
   let fn i c (l,ls) =
     match ls with
@@ -105,7 +113,7 @@ let line_num infos i0 =
   let lnum_skip = List.rev infos.lnum_skip in
   fst (infos.rescan fn (1,lnum_skip) i0)
 
-(* Get the current line number of a buffer. *)
+(* Get the current ascii column number of a buffer, rescanning *)
 let ascii_col_num infos i0 =
   let fn _ c p = if c = '\n' then 0 else p+1 in
   infos.rescan fn 0 i0
@@ -113,9 +121,8 @@ let ascii_col_num infos i0 =
 exception Splitted_end
 exception Splitted_begin
 
-(* Get the utf8 column number corresponding to the given position. *)
+(** length of a utf8 string *)
 let utf8_len context data =
-  Printf.printf "%S\n%!" data;
   let len = String.length data in
   let rec find num pos =
     if pos < len then
@@ -155,12 +162,12 @@ let utf8_len context data =
     else num
   in find 0 0
 
+(* Get the utf8 column number corresponding to the given position. *)
 let utf8_col_num infos i0 =
   let fn _ c cs = if c = '\n' then [] else c::cs in
   let cs = infos.rescan fn [] i0 in
   let len = List.length cs in
   let str = Bytes.create len in
-  Printf.printf "coucou 1\n%!";
   let rec fn cs p =
     match cs with
     | [] -> assert (p=0); ()
@@ -169,18 +176,11 @@ let utf8_col_num infos i0 =
                fn cs p
   in
   fn cs len;
-  Printf.printf "coucou 2\n%!";
   utf8_len infos.utf8 (Bytes.unsafe_to_string str)
 
+(* general column number *)
 let col_num infos i0 =
   if infos.utf8 = ASCII then ascii_col_num infos i0 else utf8_col_num infos i0
-
-(* Ensure that the given position is in the current line. *)
-let rec normalize (lazy b as str) idx =
-  if idx >= llen b then
-    if is_eof b then (str, 0)
-    else normalize b.next (idx - llen b)
-  else (str, idx)
 
 (* Equality of buffers. *)
 let buffer_equal (lazy b1) (lazy b2) =
@@ -195,9 +195,11 @@ let buffer_compare (lazy b1) (lazy b2) =
 (* Get the unique identifier of the buffer. *)
 let buffer_uid (lazy buf) = buf.infos.uid
 
+(* The way to rescan (using seek, keeping the buffer of no rescan *)
 type 'a rescan_type =
   | Seek of ('a -> int) * ('a -> int -> unit)
   | Buf
+  | NoRescan
 
 module type MinimalInput =
   sig
@@ -205,6 +207,9 @@ module type MinimalInput =
                    -> ('a -> string)
                    -> 'a rescan_type -> 'a -> buffer
   end
+
+let rescan_no _ _ _ =
+  failwith "no line of column number available for this buffer"
 
 let rescan_buf buf0 fn acc =
   let cache = ref [] in
@@ -286,34 +291,42 @@ module GenericInput(M : MinimalInput) =
   struct
     include M
 
-    let st_ch ch =
-      let open Unix in
-      let stat = fstat (Unix.descr_of_in_channel ch) in
-      if stat.st_kind = S_REG then Seek(pos_in,seek_in) else Buf
-
-    let st_fd fd =
+    let st_fd rescan fd =
       let open Unix in
       let stat = fstat fd in
       let seek fd n = ignore (Unix.lseek fd n SEEK_SET) in
       let pos fd = Unix.lseek fd 0 SEEK_CUR in
-      if stat.st_kind = S_REG then Seek(pos,seek) else Buf
+      if rescan then
+        if stat.st_kind = S_REG then Seek(pos,seek) else Buf
+      else
+        NoRescan
+
+    let st_ch rescan ch =
+      let open Unix in
+      let stat = fstat (Unix.descr_of_in_channel ch) in
+      if rescan then
+        if stat.st_kind = S_REG then Seek(pos_in,seek_in) else Buf
+      else
+        NoRescan
 
     let from_channel
-        : ?utf8:context -> ?filename:string -> in_channel -> buffer =
-      fun ?(utf8=Utf8.ASCII) ?(filename="") ch ->
-        let st = st_ch ch in
+        : ?utf8:context -> ?filename:string -> ?rescan:bool
+          -> in_channel -> buffer =
+      fun ?(utf8=Utf8.ASCII) ?(filename="") ?(rescan=true) ch ->
+        let st = st_ch rescan ch in
         from_fun ignore utf8 filename input_buffer st ch
 
     let from_fd
-        : ?utf8:context -> ?filename:string -> Unix.file_descr -> buffer =
-      fun ?(utf8=Utf8.ASCII) ?(filename="") fd ->
-        let st = st_fd fd in
+        : ?utf8:context -> ?filename:string -> ?rescan:bool
+          -> Unix.file_descr -> buffer =
+      fun ?(utf8=Utf8.ASCII) ?(filename="") ?(rescan=true) fd ->
+        let st = st_fd rescan fd in
         from_fun ignore utf8 filename fd_buffer st fd
 
-    let from_file : ?utf8:context -> string -> buffer =
-      fun ?(utf8=Utf8.ASCII) fname ->
+    let from_file : ?utf8:context -> ?rescan:bool -> string -> buffer =
+      fun ?(utf8=Utf8.ASCII) ?(rescan=true) fname ->
         let fd = Unix.(openfile fname [O_RDONLY] 0) in
-        let st = st_fd fd in
+        let st = st_fd rescan fd in
         from_fun Unix.close utf8 fname fd_buffer st fd
 
     let from_string : ?utf8:context -> ?filename:string -> string -> buffer =
@@ -340,6 +353,8 @@ include GenericInput(
              fn acc i0
         | Buf ->
            rescan_buf buf fn acc i0
+        | NoRescan ->
+           rescan_no fn acc i0
       and infos = { utf8; name; uid = new_uid (); rescan; lnum_skip = [] }
       and fn boff cont =
         begin
@@ -367,11 +382,6 @@ include GenericInput(
         buf
   end)
 
-(* Exception to be raised on errors in custom preprocessors. *)
-exception Preprocessor_error of string * string
-let pp_error : type a. string -> string -> a =
-  fun name msg -> raise (Preprocessor_error (name, msg))
-
 module type Preprocessor =
   sig
     type state
@@ -393,6 +403,8 @@ module Make(PP : Preprocessor) =
              fn acc i0
         | Buf ->
            rescan_buf buf fn acc i0
+        | NoRescan ->
+           rescan_no fn acc i0
       and infos = { utf8; name; uid = new_uid (); rescan = rescan
                     ; lnum_skip = [] }
       and fn infos boff st cont =
