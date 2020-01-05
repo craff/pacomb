@@ -27,6 +27,7 @@ let from_terminal : 'a Lex.t -> blank =
       (s,n)
     with Lex.NoParse -> (s,n)
 
+(** blank with c++/lisp/shell like comments *)
 let line_comments : ?cs:Charset.t -> string -> blank =
   fun ?(cs=Charset.from_string " \t\n\r")  start_comment ->
     let start_comment = (Lex.string start_comment).f in
