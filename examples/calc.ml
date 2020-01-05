@@ -41,7 +41,7 @@ and expr = (a::prod)               => a
 
 let nl _ b i _ _ =
   let (c,_,_) = Input.read b i in c = '\n'
-let%parser rec top = (t::Grammar.test_after nl expr) => Printf.printf "%f\n=> %!" t
+let%parser rec top = (t::Grammar.test_after nl expr) => Printf.printf "%e\n=> %!" t
 let%parser rec exprs = () => () ; exprs top '\n' => ()
 
 (* blanks *)

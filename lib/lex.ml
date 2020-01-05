@@ -452,6 +452,7 @@ let float : ?name:string -> unit -> float t = fun ?name () ->
   ; a = Float
   ; f = fun s0 n0 ->
         let sg = ref 1.0 in
+        let ve = ref 0.0 in
         let found_digit = ref false in
         let m = ref 0.0 in
         let digit c = float (Char.code c - Char.code '0')
@@ -464,12 +465,13 @@ let float : ?name:string -> unit -> float t = fun ?name () ->
             fn s n)
           else (c,s,n,s0,n0)
         in
-        let rec fne x s0 n0 =
+        let rec fne s0 n0 =
           let (c,s,n) = Input.read s0 n0 in
           if (c >= '0' && c <= '9') then (
             found_digit := true;
-            m := !m +. x *. digit c;
-            fne (x /. 10.0) s n)
+            m := !m *. 10.0 +. digit c;
+            ve := !ve +. 1.0;
+            fne s n)
           else (c,s,n,s0,n0)
         in
         let (c,s,n,s0,n0) =
@@ -484,7 +486,7 @@ let float : ?name:string -> unit -> float t = fun ?name () ->
         in
         let (c,s,n,s0,n0) =
           if c <> '.' then (c,s,n,s0,n0) else
-            fne 0.1 s n
+            fne s n
         in
         if not !found_digit then raise NoParse;
         let sge = ref 1.0 in
@@ -513,7 +515,7 @@ let float : ?name:string -> unit -> float t = fun ?name () ->
               hn s n
             end
         in
-        (!sg *. !m *. (10.0 ** (!sge *. !e)), s0, n0) }
+        (!sg *. !m *. (10.0 ** (-. !ve)) *. (10.0 ** (!sge *. !e)), s0, n0) }
 
 let escaped = fun c s n ->
   if c = '\\' then
