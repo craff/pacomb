@@ -6,7 +6,8 @@ type ('a, 'b) eq =
   | NEq : ('a, 'b) eq
 
 (** Type of tokens used to make keys unique, and carrying a type. This type is
-    not intended to be extended by the used, hence it is private. *)
+    not intended to be extended by the user, hence it is private... but not
+    declared priveta as it fails if 4.04 *)
 type _ token = ..
 
 (** Type of a key for a value of type ['a]. It contains a unique token and the
@@ -19,7 +20,7 @@ type any_key = K : 'a key -> any_key [@@unboxed]
 (** [new_key ()] generates a new unique key for a value of type ['a]. *)
 val new_key : unit -> 'a key
 
-(** Type of an association list. *)
+(** Type of an association list, where items may have different types *)
 type t
 
 (** [empty] is the empty association list. *)
@@ -28,7 +29,9 @@ val empty : t
 (** compare keys by uid *)
 val compare : 'a key -> 'b key -> int
 
-(** [add k v l] inserts a new binding of [k] to [v] at the head of [l]. *)
+(** [add k v l] inserts a new binding of [k] to [v] at the head of [l]. A previous
+    binding of [k] will not be removed. Hence removing [k] will uncover a previous
+    binding. *)
 val add : 'a key -> 'a -> t -> t
 
 (** [length l] returns the size of the association list [l]. *)
@@ -48,13 +51,21 @@ val mem : 'a key -> t -> bool
     there is no such binding, then {!exception:Not_found} is raised. *)
 val remove : 'a key -> t -> t
 
+(** [replace k l] replaces a previous binding if it exists ]. If two bindings
+    existed, only the first is removed to be replaced. *)
 val replace : 'a key -> 'a -> t -> t
 
+(** [append l1 l2] concatenate the two association lists. Duplicated are not
+    removed. *)
 val append : t -> t -> t
 
+(** Iterator *)
 type iter = { f : 'a. 'a key -> 'a -> unit }
 val iter : iter -> t -> unit
 
+(** Variation on the above to associate value of type ['a data] to key of type
+   ['a key]. The abobe function are obatained with
+   [Make(struct type 'a data = 'a end)] *)
 module Make(T:sig type 'a data end) :
 sig
   type t
@@ -71,6 +82,4 @@ sig
 
   type iter = { f : 'a. 'a key -> 'a T.data -> unit }
   val iter : iter -> t -> unit
-
-
 end
