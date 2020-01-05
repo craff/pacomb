@@ -8,16 +8,14 @@ type infos =
   ; lnum_skip    : (int * int) list
   }
 
-type buffer_aux =
+type buffer =
   { boff         : int    (* Offset to the line ( bytes )            *)
   ; data         : string (* Contents of the buffer                  *)
-  ; mutable next : buffer (* Following line                          *)
+  ; mutable next : buffer Lazy.t (* Following line                   *)
   ; mutable ctnr : Container.t option array
                           (* for map table, initialized if used      *)
   ; infos        : infos  (* infos common to the whole file          *)
   }
-
-and buffer = buffer_aux Lazy.t
 
 (* Generate a unique identifier. *)
 let new_uid =
@@ -25,7 +23,7 @@ let new_uid =
   fun () -> let uid = !c in incr c; uid
 
 (** infos function *)
-let infos (lazy b) = b.infos
+let infos b = b.infos
 
 let phantom_infos =
   { utf8 = Utf8.ASCII
@@ -57,24 +55,28 @@ let phantom_spos = (phantom_infos, phantom_byte_pos)
 let empty_buffer infos boff =
   let rec line = lazy
     { boff; data = "" ; next = line ; infos ; ctnr = [||] }
-  in line
+  in Lazy.force line
 
 let is_eof b = b.data = ""
 
 let llen b = String.length b.data
 
 (* Test if a buffer is empty. *)
-let rec is_empty (lazy l) idx =
+let rec is_empty l idx =
   if idx < llen l then false
   else if idx = 0 then is_eof l
-  else is_empty l.next (idx - llen l)
+  else is_empty (Lazy.force l.next) (idx - llen l)
 
 (* Read the character at the given position in the given buffer. *)
-let [@inline] rec read (lazy l as b) i =
-  match compare (i+1) (llen l) with
-  | -1 -> (l.data.[i], b     , i+1)
-  | 0  -> (l.data.[i], l.next, 0  )
-  | _  -> if is_eof l then ('\255', b, 0) else read l.next (i - llen l)
+let [@inline] rec read l i =
+  if i < llen l then (l.data.[i], l     , i+1)
+  else if is_eof l then ('\255', l, 0) else read (Lazy.force l.next) (i - llen l)
+
+(* Get the character at the given position in the given buffer. *)
+let [@nline] rec get l i =
+  if i < llen l then l.data.[i] else
+  if is_eof l then '\255' else
+  get (Lazy.force l.next) (i - llen l)
 
 (* substring of a buffer *)
 let sub b i len =
@@ -88,20 +90,14 @@ let sub b i len =
   in
   fn b i 0
 
-(* Get the character at the given position in the given buffer. *)
-let [@inline] rec get (lazy l) i =
-  if i < llen l then l.data.[i] else
-  if is_eof l then '\255' else
-  get l.next (i - llen l)
-
 (* Get the name of a buffer. *)
 let filename infos = infos.name
 
 (* byte position *)
-let [@inline] byte_pos (lazy b) p = b.boff + p
+let [@inline] byte_pos b p = b.boff + p
 
 (* short position *)
-let [@inline] spos (lazy b) p = (b.infos, b.boff + p)
+let [@inline] spos b p = (b.infos, b.boff + p)
 
 (* Get the current line number of a buffer, rescanning the file *)
 let line_num infos i0 =
@@ -183,17 +179,17 @@ let col_num infos i0 =
   if infos.utf8 = ASCII then ascii_col_num infos i0 else utf8_col_num infos i0
 
 (* Equality of buffers. *)
-let buffer_equal (lazy b1) (lazy b2) =
+let buffer_equal b1 b2 =
   b1.infos.uid = b2.infos.uid && b1.boff = b2.boff
 
 (* Comparison of buffers. *)
-let buffer_compare (lazy b1) (lazy b2) =
+let buffer_compare b1 b2 =
   match b1.boff - b2.boff with
   | 0 -> b1.infos.uid - b2.infos.uid
   | c -> c
 
 (* Get the unique identifier of the buffer. *)
-let buffer_uid (lazy buf) = buf.infos.uid
+let buffer_uid b = b.infos.uid
 
 (* The way to rescan (using seek, keeping the buffer of no rescan *)
 type 'a rescan_type =
@@ -218,7 +214,7 @@ let rescan_buf buf0 fn acc =
   in
   let get_cache i =
     let rec fn = function
-        []                -> (buf0, 0, acc)
+        []                -> (buf0 (), 0, acc)
       | (j,buf,idx,acc)::ls -> if j <= i then (buf, idx, acc) else fn ls
     in
     fn !cache
@@ -370,16 +366,15 @@ include GenericInput(
             finalise file;
             fun () -> cont boff
         end ()
-      and buf =
-        lazy
-          begin
-            let cont boff =
-              Lazy.force (empty_buffer infos boff)
-            in
-            fn 0 cont
+      and buf () =
+        begin
+          let cont boff =
+            empty_buffer infos boff
+          in
+          fn 0 cont
           end
-        in
-        buf
+      in
+      buf ()
   end)
 
 module type Preprocessor =
@@ -437,16 +432,16 @@ module Make(PP : Preprocessor) =
             finalise file;
             fun () -> cont infos boff st
         end ()
-      and buf =  lazy
-                   begin
-                     let cont infos boff st =
-                       PP.check_final st infos.name;
-                       Lazy.force (empty_buffer infos boff)
-                     in
-                     fn infos 0 PP.initial_state cont
-                   end
+      and buf () =
+        begin
+          let cont infos boff st =
+            PP.check_final st infos.name;
+            empty_buffer infos boff
+          in
+          fn infos 0 PP.initial_state cont
+        end
       in
-      buf
+      buf ()
   end
 
 module WithPP(PP : Preprocessor) = GenericInput(Make(PP))
@@ -454,7 +449,7 @@ module WithPP(PP : Preprocessor) = GenericInput(Make(PP))
 let leq_buf {boff = b1} i1 {boff = b2} i2 =
   b1 < b2 || (b1 = b2 && (i1 <= i2))
 
-let buffer_before b1 i1 b2 i2 = leq_buf (Lazy.force b1) i1 (Lazy.force b2) i2
+let buffer_before b1 i1 b2 i2 = leq_buf b1 i1 b2 i2
 
 (** Table to associate value to positions in input buffers *)
 module Tbl = struct
@@ -471,11 +466,9 @@ module Tbl = struct
     | Some c -> c
 
   let add tbl buf idx x =
-    let buf = Lazy.force buf in
     Container.add tbl (ctnr buf idx) x
 
   let find tbl buf idx =
-    let buf = Lazy.force buf in
     Container.find tbl (ctnr buf idx)
 
   let clear = Container.clear
