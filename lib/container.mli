@@ -3,12 +3,12 @@
 
     Another way to see it, is map with access time in O(N) where
     N is the number of tables! Note: O(1) is possible, but usually
-    there are very few table at the same time.
+    there are very few tables at the same time.
 
     The typical use case is to have a record with a field of type
     [Container.t]. Then when you want to store some information in
     that field of type [a], you create with [Container.create_table],
-    a value of type [a Container.table]. The with [Container.add]
+    a value of type [a Container.table]. Then with [Container.add]
     and [Container.find], you can store value in your field of
     type [Container.t].
 
@@ -20,7 +20,7 @@
     type graph = node list (* at least on node per component *)
 ]}
     If you want to traverse the graphe, you create a table
-    to associate a boolean to each note:
+    to associate a boolean to each node:
 {[
     let iter graph f =
       let visited : bool Container.table = Container.create_table 101 in
@@ -35,24 +35,26 @@
 ]}
 
     The functorial interface is useful when you have a parametric
-    type.  Considier a record type [ 'a t ] to which you want to
-    associate values of type [ ('b,'a) v ]. It is enough for this to
+    type.  Considier a record type [ 'b t ] to which you want to
+    associate values of type [ ('a,'b) v ]. It is enough for this to
     call the functor with
 
     [ module M = Constainer.Make(struct type ('a,'b) v end) ]
 
-    and have a field of type [ 'a M.container ] inside your record.
-    Then, you use the type [ 'b M.table ] when you want to start to
+    and have a field of type [ 'b M.container ] inside your record.
+    Then, you use the type [ 'a M.table ] when you want to start to
     associate values of type [ ('a,'b) v ] to the record. The same
-    module [ M ] can be used for many types [ 'b ].
+    module [ M ] can be used for many types [ 'a ].
 
     Remark: the non funtorial version is just defined by:
       [ Container.Make(struct type ('a, 'b) elt = 'a end ]
-
  *)
 
 (** Type of a container cell *)
 type t
+
+(** equality on container *)
+val eq : t -> t -> bool
 
 (** Type of a container table. You must create a container table of
     type [ a table ] to store value of type [ a ] in a container
@@ -84,11 +86,22 @@ type _ tag = ..
 (** [ address n ] return a unique id of each cell *)
 val address   : t -> unit tag
 
+(** iterator as in List module *)
+val iter : ('a -> unit) -> 'a table -> unit
+
+(** fold as in List module *)
+val fold : ('a -> 'c -> 'c) -> 'a table -> 'c -> 'c
+
+(** definition of the [elt] type *)
+type ('a, 'b) elt = 'a
+
 (** Standard eq-type. *)
 type ('a,'b) eq =
   | Y : ('a,'a) eq
   | N : ('a,'b) eq
 
+(** functorial verstion storing element of type ('a, 'b) elt for container of
+   the 'b and table of type 'a *)
 module type Param = sig
   type 'a table
   type 'b container
@@ -107,14 +120,9 @@ module type Param = sig
   val fold : ('a, 'c) fold -> 'a table -> 'c -> 'c
 end
 
-val eq : t -> t -> bool
-
 module Make(T : sig type ('a,'b) elt end) : Param
        with type ('a, 'b) elt = ('a,'b) T.elt
 
-type ('a, 'b) elt = 'a
-
-val iter : ('a -> unit) -> 'a table -> unit
-val fold : ('a -> 'c -> 'c) -> 'a table -> 'c -> 'c
-
+(** useful particular case, when container are used for graphs or union
+    find and you associate containers to containers *)
 module Ref : Param with type ('a,'b) elt = 'b
