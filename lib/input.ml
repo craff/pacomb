@@ -214,7 +214,7 @@ let rescan_buf buf0 fn acc =
   in
   let get_cache i =
     let rec fn = function
-        []                -> (buf0 (), 0, acc)
+        []                -> (Lazy.force buf0, 0, acc)
       | (j,buf,idx,acc)::ls -> if j <= i then (buf, idx, acc) else fn ls
     in
     fn !cache
@@ -366,7 +366,7 @@ include GenericInput(
             finalise file;
             fun () -> cont boff
         end ()
-      and buf () =
+      and buf = lazy
         begin
           let cont boff =
             empty_buffer infos boff
@@ -374,7 +374,7 @@ include GenericInput(
           fn 0 cont
           end
       in
-      buf ()
+      Lazy.force buf
   end)
 
 module type Preprocessor =
@@ -432,7 +432,7 @@ module Make(PP : Preprocessor) =
             finalise file;
             fun () -> cont infos boff st
         end ()
-      and buf () =
+      and buf = lazy
         begin
           let cont infos boff st =
             PP.check_final st infos.name;
@@ -441,7 +441,7 @@ module Make(PP : Preprocessor) =
           fn infos 0 PP.initial_state cont
         end
       in
-      buf ()
+      Lazy.force buf
   end
 
 module WithPP(PP : Preprocessor) = GenericInput(Make(PP))
