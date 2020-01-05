@@ -5,8 +5,8 @@
     For memoization though, using a perfect equality test is not important. In
     other words, it does not really matter if the equality test produces false
     negatives when comparing closures. We thus use an alternative, polymorphic
-    equality function that behaves as [(=)], but compares closures with [(==)]
-    instead of failing. *)
+    equality function that behaves as [(=)], but compares closures with  using
+    [Marshall.to_string] instead of failing. *)
 
 (** Representation of a hash table with keys of type ['a] and elements of type
     ['b], with a custom equality test. *)
