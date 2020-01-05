@@ -1,6 +1,7 @@
 (** {1 Functions managing positions} *)
 
-(** byte position, short abbreviation *)
+(** byte position with infos to allow computation of line and column number by
+   rescanning. This is what is stored in AST *)
 type t = Input.infos * Input.byte_pos
 
 (** Type to represent position *)
@@ -10,6 +11,7 @@ type pos = { name : string  (** file's name *)
            ; phantom : bool (** is the postion a "phantom", i.e. not really
                                 in the file *) }
 
+(** Type to represent begin and end position of a portion of buffer *)
 type interval =
   { name : string
   ; start_line : int
@@ -22,10 +24,11 @@ type interval =
 (** constructor for interval *)
 val interval : pos -> pos -> interval
 
-(** a phantom position, used for grammar accepting the empty input *)
+(** a phantom position, used for grammar accepting the empty input, and other
+    reference initialisation *)
 val phantom : pos
 
-(** the max of to position (further in the file *)
+(** the max of two positions (further in the file *)
 val max_pos : pos -> pos -> pos
 
 (** Get a position from an input buffer and a column number *)
@@ -39,7 +42,7 @@ val interval_of_spos : t * t -> interval
 type style = OCaml (** like OCaml *)
            | Short (** like gcc *)
 
-(** printting for position *)
+(** printing for position *)
 val print_pos  : ?style:style -> unit -> out_channel -> pos -> unit
 val print_spos : ?style:style -> unit -> out_channel -> t   -> unit
 
