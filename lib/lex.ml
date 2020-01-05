@@ -310,6 +310,14 @@ let seq : ?name:string -> 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t =
 let seq1 ?name t1 t2 = seq ?name t1 t2 (fun x _ -> x)
 let seq2 ?name t1 t2 = seq ?name t1 t2 (fun _ x -> x)
 
+(** multiple sequence *)
+let seqs : 'a t list -> ('a -> 'a -> 'a) -> 'a t = fun l f ->
+  let rec fn = function
+  | [] -> invalid_arg "alts: empty list"
+  | [r] -> r
+  | r::l -> seq r (fn l) f
+  in fn l
+
 (** [alt t1 t2] parses the input with [t1] or [t2]. *)
 let alt : ?name:string -> 'a t -> 'a t -> 'a t =
   fun ?name t1 t2 ->
@@ -328,6 +336,13 @@ let alt : ?name:string -> 'a t -> 'a t -> 'a t =
         with NoParse -> t2.f s n
   }
 
+(** multiple alternatives *)
+let rec alts : 'a t list -> 'a t = function
+  | [] -> invalid_arg "alts: empty list"
+  | [r] -> r
+  | r::l -> alt r (alts l)
+
+(** save the content of the buffer in a string *)
 let save : ?name:string -> 'a t -> (string -> 'a -> 'b) -> 'b t =
   fun ?name t1 f ->
   { n = default t1.n name
@@ -517,6 +532,7 @@ let float : ?name:string -> unit -> float t = fun ?name () ->
         in
         (!sg *. !m *. (10.0 ** (-. !ve)) *. (10.0 ** (!sge *. !e)), s0, n0) }
 
+(** escaped char for string and char litteral below *)
 let escaped = fun c s n ->
   if c = '\\' then
     let (c,s,n) = Input.read s n in
@@ -572,6 +588,7 @@ let escaped = fun c s n ->
     | _ -> raise NoParse
   else raise Exit
 
+(** char literal *)
 let char_lit : ?name:string -> unit -> char t = fun ?name () ->
   { n = default "CHARLIT" name
   ; c = Charset.singleton '\''
@@ -587,6 +604,7 @@ let char_lit : ?name:string -> unit -> char t = fun ?name () ->
         (cr,s,n)
   }
 
+(** treatment of escaped newline in string literal *)
 let rec skip_newline c s0 n0 =
   let rec fn s0 n0 =
     let (c,s,n) = Input.read s0 n0 in
@@ -598,6 +616,7 @@ let rec skip_newline c s0 n0 =
     if c1 = '\n' then fn s n else (c,s0, n0)
   else (c,s0,n0)
 
+(** string literal *)
 let string_lit : ?name:string -> unit -> string t = fun ?name () ->
   { n = default "STRINTLIT" name
   ; c = Charset.singleton '"'
@@ -621,15 +640,3 @@ let string_lit : ?name:string -> unit -> string t = fun ?name () ->
         let (s,n) = fn s n in
         (Buffer.contents b,s,n)
   }
-
-let rec alts : 'a t list -> 'a t = function
-  | [] -> invalid_arg "alts: empty list"
-  | [r] -> r
-  | r::l -> alt r (alts l)
-
-let seqs : 'a t list -> ('a -> 'a -> 'a) -> 'a t = fun l f ->
-  let rec fn = function
-  | [] -> invalid_arg "alts: empty list"
-  | [r] -> r
-  | r::l -> seq r (fn l) f
-  in fn l

@@ -23,6 +23,7 @@ type idx = Input.idx
 (** Type of terminal function, similar to blank, but with a returned value *)
 type 'a lexeme = buf -> idx -> 'a * buf * idx
 
+(** ast for terminals, needed for equality *)
 type _ ast =
   | Any : char ast
   | Any_utf8 : Uchar.t ast
@@ -59,7 +60,7 @@ and 'a terminal = { n : string    (** name *)
 and 'a t = 'a terminal
 
 (** exception when failing,
-    - can be raised (but not captured) by terminal
+    - can be raised (but not captured) by terminals
     - can  be raised  (but not  captured)  by action  code in  the grammar,  see
       [Combinator.give_up]
     - will be  raised and captured  by [Combinator.parse_buffer] that  will give
@@ -89,7 +90,7 @@ val eof : ?name:string -> unit -> unit t
     [name] default is the given charater. *)
 val char : ?name:string -> char -> unit t
 
-(**  Accept a  character  for  which the  test  returns  [true].
+(**  Accept any character for which the test returns [true].
     [name]  default to the result of [Charset.show]. *)
 val test : ?name:string -> (char -> bool) -> char t
 
