@@ -882,7 +882,9 @@ let factor_empty g =
     | Layout(_,g,_) -> fn g; g.e
     | UMrg(g)       -> fn g; List.flatten g.e
     | Lazy(g)       -> fn g; List.map Lazy.from_val g.e
-    | Frce(g)       -> fn g; List.map Lazy.force g.e (* TODO, filter exception *)
+    | Frce(g)       -> fn g; List.fold_left (fun acc x ->
+                                 try Lazy.force x :: acc
+                                 with Lex.NoParse | Give_up _ -> acc) [] g.e
     | Test(_,g)     -> fn g;
                        if g.e <> [] then
                          failwith "illegal test on grammar accepting empty";
