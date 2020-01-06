@@ -1,7 +1,7 @@
 (** {1 Module to build and parse list of words} *)
 
 (** Type of a word list with
-    'a : the type of characters (typically, char or Uchar.t)
+    'a : the type of characters (typically, char for ascii or string for utf8)
     'b : a value associated to each word *)
 type ('a,'b) t
 
@@ -53,3 +53,8 @@ val mem_utf8 : (string,'b) t -> string -> bool
 val word : ?name:string -> (char, 'a) t -> 'a Grammar.t
 
 val utf8_word : ?name:string -> (string, 'a) t -> 'a Grammar.t
+
+type ('a,'b) data
+val save : ('a,'b) t -> ('a,'b) data
+val save_and_reset : ('a,'b) t -> ('a,'b) data
+val restore : ('a,'b) t -> ('a,'b) data -> unit

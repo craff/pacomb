@@ -5,7 +5,7 @@ end
 
 type ('a,'b) data =
   { mutable leafs : 'b list
-  ; next  : ('a, ('a, 'b) data) Hashtbl.t }
+  ; mutable next  : ('a, ('a, 'b) data) Hashtbl.t }
 
 type ('a,'b) t =
   { data : ('a, 'b) data
@@ -22,7 +22,13 @@ let create ?(unique=true) ?(map=idt)
       ?(cs=Charset.full) ?(final_test=fun _ _ -> true) () =
   { data = create_data () ; uniq = unique; map; cs; finl = final_test }
 
-let reset t = t.data.leafs <- []; Hashtbl.clear t.data.next
+let reset t = t.data.leafs <- []; t.data.next <- Hashtbl.create 8
+
+let save t = { leafs = t.data.leafs; next = t.data.next }
+
+let save_and_reset t = let s = save t in reset t; s
+
+let restore t s = t.data.leafs <- s.leafs; t.data.next <- s.next
 
 let size { data = {leafs; next}; _} =
   let res = ref 0 in
