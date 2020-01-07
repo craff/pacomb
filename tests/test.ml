@@ -50,17 +50,25 @@ let test1pr = seq (fixpoint (fun r ->
                                            (fun x y _ -> x + y))])))
               eof (fun (lazy x) _ -> x)
 
-let testd = fixpoint (fun r -> lazy_ (alt [empty 0;
-                                    dseq (appl char_a (fun n -> ((),n)))
-                                      (fun _ -> appl (force r) (+))]))
-let testdpl = fixpoint (fun r -> lazy_ (alt [empty 0;
-                                    lpos (dseq (appl char_a (fun n -> ((),n)))
-                                      (fun _ -> appl (force r) (fun x y _ -> x + y)))]))
-let testdpr = fixpoint (fun r -> lazy_ (alt [empty 0;
-                                    rpos (dseq (appl char_a (fun n -> ((),n)))
-                                      (fun _ -> appl (force r) (fun x y _ -> x + y)))]))
+let testd =
+  fixpoint (fun r -> lazy_ (alt [empty 0;
+                                 dseq (appl char_a (fun n -> ((),n)))
+                                   (fun _ -> appl (force r) (+))]))
+let testdpl =
+  fixpoint
+    (fun r ->
+      lazy_ (alt [empty 0;
+                  lpos (dseq (appl char_a (fun n -> ((),n)))
+                          (fun _ -> appl (force r) (fun x y _ -> x + y)))]))
 
-let testc = fixpoint (fun r -> cache (lazy_ (alt [empty 0; seq char_a (force r) (+)])))
+let testdpr =
+  fixpoint (fun r ->
+      lazy_ (alt [empty 0;
+                  rpos (dseq (appl char_a (fun n -> ((),n)))
+                          (fun _ -> appl (force r) (fun x y _ -> x + y)))]))
+
+let testc =
+  fixpoint (fun r -> cache (lazy_ (alt [empty 0; seq char_a (force r) (+)])))
 let testcpl = fixpoint (fun r ->
                 cache (alt [empty 0; lpos (seq char_a r (fun x y _ -> x + y))]))
 let testcpr = fixpoint (fun r ->
