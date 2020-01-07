@@ -1,6 +1,4 @@
 open Pacomb
-open Grammar
-open Pos
 
 (*  This  example  (read  calc.ml  first)  illustrates  another  way  to  handle
    priorities with parametric grammars. *)
@@ -13,8 +11,9 @@ let string_of_prio = function
   | Prod -> "P"
   | Sum  -> "S"
 
+(* for printing, we provide a function to convert priorities to string *)
 let%parser [@print_param string_of_prio] rec
-              (* This includes each priority level in the next one *)
+     (* This includes each priority level in the next one *)
      expr p = Atom < Prod < Sum
             (* all other rule are selected by their priority level *)
             ; (p=Atom) (x::FLOAT)                        => x
@@ -24,29 +23,52 @@ let%parser [@print_param string_of_prio] rec
             ; (p=Sum ) (x::expr Sum ) '+' (y::expr Prod) => x+.y
             ; (p=Sum ) (x::expr Sum ) '-' (y::expr Prod) => x-.y
 
-(* The parsing calling expression, with immediate evaluation (==>)
-   printing the result and the next prompt. *)
+(* A subtlety : we want to parse expression, one by one and print the
+   result. Pacomb needs to do things that require buffer examination after
+   each token. So printing after parsing the newline does not work.
+   A trick that works is to test for the newline, not parsing it,
+   using Grammar.test_after. Another solution would be to read each
+   line with input_line and use Grammar.parse_string on the result.
+*)
+let nl _ b i _ _ =
+  let (c,_,_) = Input.read b i in c = '\n'
+let%parser rec top =
+  (t::Grammar.test_after nl (expr Sum)) => Printf.printf "%g\n=> %!" t
 let%parser rec exprs =
-    () => ()
-  ; exprs (e::expr Sum) '\n' => Printf.printf "%f\n=> %!" e
+  () => () ; exprs top '\n' => ()
+
+(* parsing command line arguments, illustrating grammar printing *)
+let usage_msg = Printf.sprintf "%s [options]" Sys.argv.(0)
+
+let rec help () =
+  Arg.usage spec usage_msg;
+  Printf.eprintf "\nParsing with:\n\n%a\n%!"
+    (fun ch -> Grammar.print_grammar ch) exprs
+
+and spec = [("-v", Arg.Set show_sub, "print the value and position of each \
+                                      expression inside parenthesis")
+           ;("-help", Arg.Unit help, "print help message")
+           ;("--help", Arg.Unit help, "print help message")]
+
+let _ = Arg.parse spec (fun s -> raise (Arg.Bad s)) usage_msg
 
 (* blanks *)
 let blank = Blank.from_charset (Charset.singleton ' ')
 
 let _ =
-  Printf.printf "parsing with:\n%a\n%!" (fun ch -> print_grammar ch) exprs;
-  Printf.printf "compiled to:\n%a\n%!" (fun ch -> print_grammar ~def:false ch) exprs;
   try
     while true do
       let f () =
         Printf.printf "=> %!"; (* initial prompt *)
-        parse_channel exprs blank stdin;
+        (* no need to stack the buffer of in_channel and those of Pacomb. So
+           file desciptor are preferred *)
+        Grammar.parse_fd exprs blank Unix.stdin;
         raise End_of_file
       in
       (* [Pos] module provides a function to handle exception with
          an optional argument to call for error (default is to exit with
          code 1 *)
-      handle_exception ~error:(fun _ -> ()) f ()
+      Pos.handle_exception ~error:(fun _ -> ()) f ()
     done
   with
     End_of_file -> ()
