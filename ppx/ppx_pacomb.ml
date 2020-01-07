@@ -180,7 +180,7 @@ let exp_to_rule_item is_lazy (e, loc_e) =  match e with
      let (name, pat) = exp_to_pattern rml epat in
      let exp = exp_to_term exp in
      let loc = loc_e in
-     let exp = if !ptr then (Printf.eprintf "force\n%!"; [%expr Pacomb.Grammar.force [%e exp]]) else exp in
+     let exp = if !ptr then [%expr Pacomb.Grammar.force [%e exp]] else exp in
      (Some (name, pat), None, exp, loc_e)
   | [%expr ([%e? dpat], [%e? epat]) >: [%e? exp]] ->
      let (name, pat) = exp_to_pattern None epat in
@@ -382,7 +382,6 @@ and exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
   match e with
   (* base case [items => action] *)
   | [%expr [%e? rule] => lazy [%e? action]] ->
-     Printf.eprintf "lazy\n%!";
      let rule = base_rule true acts_fn rule action in
      let loc = e.pexp_loc in
      [[%expr Pacomb.Grammar.lazy_ [%e rule]]]
