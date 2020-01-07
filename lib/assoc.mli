@@ -51,8 +51,8 @@ val mem : 'a key -> t -> bool
     there is no such binding, then {!exception:Not_found} is raised. *)
 val remove : 'a key -> t -> t
 
-(** [replace k  l] replaces a previous  binding if it exists ].  If two bindings
-    existed, only the first is removed to be replaced. *)
+(** [replace  k l] replaces  a previous binding if  it exists.  If  two bindings
+   existed, only the first is removed to be replaced. *)
 val replace : 'a key -> 'a -> t -> t
 
 (** [append  l1 l2] concatenate  the two  association lists. Duplicated  are not

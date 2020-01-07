@@ -81,8 +81,11 @@ let rec exp_to_pattern rml e =
   let loc = e.pexp_loc in
   match e with
   | {pexp_desc = Pexp_ident({txt = Lident name; loc = loc_s})} ->
-     let name = mkloc name loc_s in
-     (Some name, Pat.var ~loc name)
+     if name = "__" then
+       (None, Pat.any ~loc ())
+     else
+       let name = mkloc name loc_s in
+       (Some name, Pat.var ~loc name)
   | [%expr [%e? e] = [%e? {pexp_desc = Pexp_ident({txt = Lident name
                                                   ;loc = loc_s})}]]
      ->
@@ -130,16 +133,6 @@ let rec exp_to_term exp =
      [%expr Pacomb.Grammar.term (Pacomb.Lex.string [%e exp])]
   | [%expr STR([%e? s])] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.string [%e s])]
-  | [%expr NAT] ->
-     [%expr Pacomb.Grammar.term (Pacomb.Lex.nat ())]
-  | [%expr INT] ->
-     [%expr Pacomb.Grammar.term (Pacomb.Lex.int ())]
-  | [%expr FLOAT] ->
-     [%expr Pacomb.Grammar.term (Pacomb.Lex.float ())]
-  | [%expr STRING_LIT] ->
-     [%expr Pacomb.Grammar.term (Pacomb.Lex.string_lit ())]
-  | [%expr CHAR_LIT] ->
-     [%expr Pacomb.Grammar.term (Pacomb.Lex.char_lit ())]
   | [%expr UTF8] ->
      [%expr Pacomb.Grammar.term (Pacomb.Lex.any_utf8 ())]
   | [%expr UTF8([%e? c])] ->
@@ -153,6 +146,16 @@ let rec exp_to_term exp =
   | [%expr RE([%e? s])] ->
      [%expr Pacomb.Grammar.term (Pacomb.Regexp.regexp
                                   (Pacomb.Regexp.from_string [%e s]))]
+  | [%expr NAT] ->
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.nat ())]
+  | [%expr INT] ->
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.int ())]
+  | [%expr FLOAT] ->
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.float ())]
+  | [%expr STRING_LIT] ->
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.string_lit ())]
+  | [%expr CHAR_LIT] ->
+     [%expr Pacomb.Grammar.term (Pacomb.Lex.char_lit ())]
   | [%expr ~? [ [%e? default] ] [%e? exp] ] ->
      [%expr Pacomb.Grammar.default_option [%e default] [%e exp_to_term exp]]
   | [%expr ~? [%e? exp]] ->
