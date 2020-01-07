@@ -3,18 +3,18 @@ module Pacomb = struct
   module Grammar = Grammar
 end
 
-type ('a,'b) data =
-  { mutable leafs : 'b list
-  ; mutable next  : ('a, ('a, 'b) data) Hashtbl.t }
+type 'a data =
+  { mutable leafs : 'a list
+  ; mutable next  : 'a data option array }
 
 type ('a,'b) t =
-  { data : ('a, 'b) data
+  { data : 'b data
   ; uniq : bool
   ; map  : 'a -> 'a
   ; cs   : Charset.t
   ; finl : Input.buffer -> Input.idx -> bool }
 
-let create_data () = { leafs = []; next = Hashtbl.create 8 }
+let create_data () = { leafs = []; next = Array.make 256 None }
 
 let idt x = x
 
@@ -22,7 +22,7 @@ let create ?(unique=true) ?(map=idt)
       ?(cs=Charset.full) ?(final_test=fun _ _ -> true) () =
   { data = create_data () ; uniq = unique; map; cs; finl = final_test }
 
-let reset t = t.data.leafs <- []; t.data.next <- Hashtbl.create 8
+let reset t = t.data.leafs <- []; t.data.next <- Array.make 256 None
 
 let save t = { leafs = t.data.leafs; next = t.data.next }
 
@@ -32,103 +32,99 @@ let restore t s = t.data.leafs <- s.leafs; t.data.next <- s.next
 
 let size { data = {leafs; next}; _} =
   let res = ref 0 in
-  let rec fn _ {leafs; next} =
+  let rec fn {leafs; next} =
     res := !res + List.length leafs;
-    Hashtbl.iter fn next
+    Array.iter gn next
+  and gn = function
+    | None -> ()
+    | Some d -> fn d
   in
   res := !res + List.length leafs;
-  Hashtbl.iter fn next;
+  Array.iter gn next;
   !res
-
-type ('a,'b) fold = ('a -> 'b -> 'a) -> 'a -> 'a
 
 exception Already_bound
 
-let add : ('a,'b) t -> (('a,'b) data, 'a) fold -> 'b -> unit =
-  fun { data; uniq; map } fold v ->
-    let f data c =
-      let c = map c in
-      try
-        Hashtbl.find data.next c
-      with Not_found ->
-        let r = create_data () in
-        Hashtbl.add data.next c r;
-        r
-    in
-    let data = fold f data in
+let next tbl c = tbl.next.(Char.code c)
+
+let advance : bool -> (char -> char) -> 'b data -> string -> 'b data =
+  fun add map tbl s ->
+  let r = ref tbl in
+  for i = 0 to String.length s - 1 do
+    let c = map s.[i] in
+    match !r.next.(Char.code c) with
+    | Some tbl -> r := tbl
+    | None ->
+       if add then
+         let tbl = create_data () in
+         !r.next.(Char.code c) <- Some tbl;
+         r := tbl
+       else raise Not_found
+  done;
+  !r
+
+let add_ascii : (char,'b) t -> string -> 'b -> unit =
+  fun { data; uniq; map; cs } s v ->
+    if s = "" then invalid_arg "Word_list.add_ascii: empty word";
+    if not (Charset.mem cs s.[0]) then
+      invalid_arg "Word_list.add: charset mismatch";
+    let data = advance true map data s in
     if uniq && data.leafs <> [] then raise Already_bound;
     data.leafs <- v :: data.leafs
 
-let mem : ('a,'b) t -> (('a,'b) data, 'a) fold -> bool =
-  fun { data = tbl; map; _ } fold ->
-    let f tbl c =
-      Hashtbl.find tbl.next (map c)
-    in
+let mem_ascii : (char,'b) t -> string -> bool =
+  fun { data; map; _ } s ->
     try
-      let tbl = fold f tbl in
-      tbl.leafs <> []
+      let data = advance false map data s in
+      data.leafs <> []
     with
       Not_found -> false
 
-let mem_ascii : (char,'b) t -> string -> bool =
-  fun tbl s ->
-    let fold f a =
-      let res = ref a in
-      String.iter (fun c -> res := f !res c) s;
-      !res
-    in
-    mem tbl fold
-
-let add_ascii : (char,'b) t -> string -> 'b -> unit =
-  fun tbl s v ->
-    if s = "" then invalid_arg "Word_list.add: empty word";
-    if not (Charset.mem tbl.cs s.[0]) then
+let add_utf8 : (string, 'b) t -> string -> 'b -> unit =
+  fun { data; map; uniq; cs  } s v ->
+    if s = "" then invalid_arg "Word_list.add_utf8: empty word";
+    if not (Charset.mem cs s.[0]) then
       invalid_arg "Word_list.add: charset mismatch";
-    let fold f a =
-      let res = ref a in
-      String.iter (fun c -> res := f !res c) s;
-      !res
-    in
-    add tbl fold v
+    let fn data s = advance true (fun c -> c) data (map s) in
+    let data = Utf8.fold_grapheme fn data s in
+    if uniq && data.leafs <> [] then raise Already_bound;
+    data.leafs <- v :: data.leafs
 
 let mem_utf8 : (string, 'b) t -> string -> bool =
-  fun tbl s ->
-    mem tbl (fun f a -> Utf8.fold_grapheme f a s)
-
-let add_utf8 : (string, 'b) t -> string -> 'b -> unit =
-  fun tbl s v ->
-    add tbl (fun f a -> Utf8.fold_grapheme f a s) v
-
-let next tbl c = Hashtbl.find tbl.next c
+  fun { data; map; _ } s ->
+    try
+      let fn data s = advance false (fun c -> c) data (map s) in
+      let data = Utf8.fold_grapheme fn data s in
+      data.leafs <> []
+    with
+      Not_found -> false
 
 let word : ?name:string -> (char, 'a) t -> 'a Grammar.t =
   fun ?name { data = tbl; map; cs; finl; uniq } ->
     let n = Lex.default "WORD" name in
     if uniq then
-      let rec f tbl s n =
-        try
-          let (c,s,n) = Input.read s n in
-          let c = map c in
-          f (next tbl c) s n
-        with
-          Not_found ->
-          if finl s n && tbl.leafs <> [] then (List.hd tbl.leafs, s, n)
-          else raise Lex.NoParse
+      let rec f tbl s0 n0 =
+        let (c,s,n) = Input.read s0 n0 in
+        let c = map c in
+        match next tbl c with
+        | Some t -> f t s n
+        | None ->
+           if finl s0 n0 && tbl.leafs <> [] then (List.hd tbl.leafs, s0, n0)
+           else (raise Lex.NoParse)
       in
       let f = f tbl in
       let lex = Lex.{ n; f; a = Custom(f,Assoc.new_key ()); c = cs }
       in
       Grammar.term ?name lex
     else
-      let rec f tbl s n =
-        try
-          let (c,s,n) = Input.read s n in
-          let c = map c in
-          f (next tbl c) s n
-        with
-          Not_found ->
-          if finl s n && tbl.leafs <> [] then (tbl.leafs, s, n)
-        else raise Lex.NoParse
+      let rec f tbl s0 n0 =
+        let (c,s,n) = Input.read s0 n0 in
+        let c = map c in
+        match next tbl c with
+        | Some t -> f t s n
+        | None ->
+           if finl s0 n0 && tbl.leafs <> [] then (tbl.leafs, s0, n0)
+           else raise Lex.NoParse
       in
       let f = f tbl in
       let lex = Lex.{ n; f; a = Custom(f,Assoc.new_key ()); c = cs }
@@ -141,9 +137,9 @@ let utf8_word : ?name:string -> (string, 'a) t -> 'a Grammar.t =
     if uniq then
       let rec f tbl s n =
         try
-          let (c,s,n) = Lex.((any_grapheme ()).f s n) in
-          let c = map c in
-          f (next tbl c) s n
+          let (g,s,n) = Lex.((any_grapheme ()).f s n) in
+          let g = map g in
+          f (advance false (fun c -> c) tbl g) s n
         with
           Not_found ->
           if finl s n && tbl.leafs <> [] then(List.hd tbl.leafs, s, n)
@@ -156,9 +152,9 @@ let utf8_word : ?name:string -> (string, 'a) t -> 'a Grammar.t =
     else
       let rec f tbl s n =
         try
-          let (c,s,n) = Lex.((any_grapheme ()).f s n) in
-          let c = map c in
-          f (next tbl c) s n
+          let (g,s,n) = Lex.((any_grapheme ()).f s n) in
+          let g = map g in
+          f (advance false (fun c -> c) tbl g) s n
         with
           Not_found ->
           if finl s n && tbl.leafs <> [] then (tbl.leafs, s, n)

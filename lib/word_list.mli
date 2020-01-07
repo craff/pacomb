@@ -54,7 +54,7 @@ val word : ?name:string -> (char, 'a) t -> 'a Grammar.t
 
 val utf8_word : ?name:string -> (string, 'a) t -> 'a Grammar.t
 
-type ('a,'b) data
-val save : ('a,'b) t -> ('a,'b) data
-val save_and_reset : ('a,'b) t -> ('a,'b) data
-val restore : ('a,'b) t -> ('a,'b) data -> unit
+type 'a data
+val save : ('a,'b) t -> 'b data
+val save_and_reset : ('a,'b) t -> 'b data
+val restore : ('a,'b) t -> 'b data -> unit
