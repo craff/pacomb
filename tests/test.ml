@@ -34,15 +34,21 @@ let test0 = alt [char_a; char_b]
 
 let test0b = seq char_a char_b (+)
 
-let test1 = seq (fixpoint (fun r -> lazy_ (alt [empty 0; seq char_a r (fun x (lazy y) -> x + y)])))
-              eof (fun x _ -> Lazy.force x)
+let test1 = seq (fixpoint (fun r ->
+                     lazy_ (alt [empty 0;
+                                 seq char_a (force r) (+)])))
+              eof (fun (lazy x) _ -> x)
 
 let test1pl = seq (fixpoint (fun r ->
-                  lazy_ (alt [empty 0; lpos (seq char_a (force r) (fun x y _ -> x + y))])))
-              eof (fun x _ -> Lazy.force x)
+                       lazy_ (alt [empty 0;
+                                   lpos (seq char_a (force r)
+                                           (fun x y _ -> x + y))])))
+              eof (fun (lazy x) _ -> x)
 let test1pr = seq (fixpoint (fun r ->
-                  lazy_ (alt [empty 0; rpos (seq char_a (force r) (fun x y _ -> x + y))])))
-              eof (fun x _ -> Lazy.force x)
+                       lazy_ (alt [empty 0;
+                                   rpos (seq char_a (force r)
+                                           (fun x y _ -> x + y))])))
+              eof (fun (lazy x) _ -> x)
 
 let testd = fixpoint (fun r -> lazy_ (alt [empty 0;
                                     dseq (appl char_a (fun n -> ((),n)))

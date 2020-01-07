@@ -70,7 +70,8 @@ let rec is_empty l idx =
 (* Read the character at the given position in the given buffer. *)
 let [@inline] rec read l i =
   if i < llen l then (l.data.[i], l     , i+1)
-  else if is_eof l then ('\255', l, 0) else read (Lazy.force l.next) (i - llen l)
+  else if is_eof l then ('\255', l, 0)
+  else read (Lazy.force l.next) (i - llen l)
 
 (* Get the character at the given position in the given buffer. *)
 let [@nline] rec get l i =
@@ -340,7 +341,8 @@ module GenericInput(M : MinimalInput) =
 include GenericInput(
   struct
     let rec from_fun finalise utf8 name get_line st file =
-      let rec rescan : type a.(byte_pos -> char -> a -> a) -> a -> byte_pos -> a =
+      let rec rescan
+              : type a.(byte_pos -> char -> a -> a) -> a -> byte_pos -> a =
         fun fn acc i0 ->
         match st with
         | Seek (pos, seek) ->
@@ -389,7 +391,8 @@ module type Preprocessor =
 module Make(PP : Preprocessor) =
   struct
     let rec from_fun finalise utf8 name get_line st file =
-      let rec rescan : type a.(byte_pos -> char -> a -> a) -> a -> byte_pos -> a =
+      let rec rescan
+              : type a.(byte_pos -> char -> a -> a) -> a -> byte_pos -> a =
         fun fn acc i0 ->
         match st with
         | Seek (pos, seek) ->
