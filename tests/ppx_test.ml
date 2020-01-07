@@ -117,8 +117,8 @@ let _ = tests g1 [("cdefefcfedcabd",-2)]
 (* test right recursion and lazy *)
 
 let n = ref 0
-let%parser rec g = (c::CHAR) (l::force g) ==> (incr n; String.make 1 c :: l)
-                   ; () ==> []
+let%parser rec g = (c::CHAR) (l::force g) => lazy (incr n; String.make 1 c :: l)
+                   ; () => lazy []
 let%parser h = (lazy l::g) EOF => String.concat "" l
 
 let _ =
