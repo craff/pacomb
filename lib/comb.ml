@@ -213,18 +213,6 @@ let eval : type a b. a -> (a,b) trans -> b = fun x tr ->
     | Frc (tr)   -> fn (Lazy.force x) tr
   in fn x tr
 
-let _print_trans =
-  let rec fn : type a b. out_channel -> (a, b) trans -> unit = fun ch ->
-    function
-    | Idt -> ()
-    | Laz(tr,_) -> Printf.fprintf ch "Laz %a" fn tr
-    | Frc(tr)   -> Printf.fprintf ch "Frc %a" fn tr
-    | Arg(tr,_) -> Printf.fprintf ch "Arg %a" fn tr
-    | App(tr,_) -> Printf.fprintf ch "App %a" fn tr
-    | Pos(tr,_) -> Printf.fprintf ch "Pos %a" fn tr
-  in
-  fn
-
 (** function calling a  continuation. It does not evaluate any  action. It is of
     crucial importance that this function be in O(1) before calling [k]. *)
 let call : type a.a cont -> env -> a -> res =
