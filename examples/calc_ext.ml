@@ -33,7 +33,7 @@ type func =
   | Op3 of (float -> float -> float -> float)
 
 (* The initial environment *)
-let env = ref [(("^",2)  , (Op2 ( ** )))
+let init_env =[(("^",2)  , (Op2 ( ** )))
               ;(("*",2)  , (Op2 ( *. )))
               ;(("/",2)  , (Op2 ( /. )))
               ;(("+",2)  , (Op2 ( +. )))
@@ -49,6 +49,11 @@ let env = ref [(("^",2)  , (Op2 ( ** )))
               ;(("tan",1), (Op1 (tan )))
               ]
 
+let env =
+  let e = Hashtbl.create 32 in
+  List.iter (fun (k,d) -> Hashtbl.add e k d) init_env;
+  e
+
 exception Unbound of string * int
 
 (* and the evaluation function *)
@@ -57,13 +62,17 @@ let rec eval env = function
   | Idt(id,args) ->
      try
        let args = Array.map (eval env) args in
-       let f = List.assoc (id,Array.length args) env  in
+       let f = Hashtbl.find env (id,Array.length args) in
        match f with
        | Def(f,params) ->
-          let env = ref env in
-          let add i id = env := ((id,0),(Op0 args.(i))) :: !env in
+          let add i id = Hashtbl.add env (id,0) (Op0 args.(i)) in
+          let remove _ id = Hashtbl.remove env (id,0) in
           Array.iteri add params;
-          eval !env f
+          (try
+            let r = eval env f in
+            Array.iteri remove params; r
+          with
+            e -> Array.iteri remove params; raise e)
        | Op0(x) -> x
        | Op1(f) -> f args.(0)
        | Op2(f) -> f args.(0) args.(1)
@@ -79,16 +88,22 @@ let%parser ident = (id::RE("[a-zA-Z][a-zA-Z0-9_]*")) => id
 (* tables giving the syntax class of each symbol *)
 type assoc = RightAssoc | LeftAssoc | NonAssoc
 
-let infix_tbl = ref [("^", (2.0, RightAssoc))
-                ;("*", (4.0, LeftAssoc))
-                ;("/", (4.0, LeftAssoc))
-                ;("+", (6.0, LeftAssoc))
-                ;("-", (6.0, LeftAssoc))
-              ]
+let cs = Charset.(from_string "-&~^+=*/\\$!:")
 
-let prefix_tbl = ref [("+", 5.0)
-                     ;("-", 5.0)
-                   ]
+let infix_tbl =
+  let t = Word_list.create ~cs () in
+  Word_list.add_ascii t "^" ("^", 2.0, RightAssoc);
+  Word_list.add_ascii t "*" ("*", 4.0, LeftAssoc);
+  Word_list.add_ascii t "/" ("/", 4.0, LeftAssoc);
+  Word_list.add_ascii t "+" ("+", 6.0, LeftAssoc);
+  Word_list.add_ascii t "-" ("-", 6.0, LeftAssoc);
+  t
+
+let prefix_tbl =
+  let t = Word_list.create ~cs () in
+  Word_list.add_ascii t "+" ("+", 5.0);
+  Word_list.add_ascii t "-" ("-", 5.0);
+  t
 
 (* parser for symbols, it uses Lex.give_up to reject some rule from the action
    code. *)
@@ -104,8 +119,7 @@ let%parser op =
 let eps = 1e-10
 
 let%parser infix pmin pmax =
-  (c::op) =>
-    try let (p,a) = List.assoc c !infix_tbl in
+  ((c,p,a)::Word_list.word infix_tbl) =>
         let good = match a with
           | NonAssoc   -> pmin < p && p < pmax
           | LeftAssoc  -> pmin <= p && p < pmax
@@ -117,16 +131,13 @@ let%parser infix pmin pmax =
           | _          -> p -. 1e-10
         in
         (p,c)
-    with Not_found -> give_up ~msg:("unbound infix "^c) ()
 
 (* parser for prefix symbol *)
 let%parser prefix pmax =
-  (c::op) =>
-    try let p = List.assoc c !prefix_tbl in
+  ((c,p)::Word_list.word prefix_tbl) =>
         let good = p <= pmax in
         if not good then give_up ();
         (p,c)
-    with Not_found -> give_up ~msg:("unbound prefix "^c) ()
 
 (* some keywords *)
 let%parser opening = '(' => (); ERROR "closing parenthesis"
@@ -179,22 +190,22 @@ let%parser params =
 (* toplevel commands *)
 let%parser cmd =
     (e::expr_top) EOF
-      => (Printf.printf "%f\n%!" (eval !env e))
+      => (Printf.printf "%f\n%!" (eval env e))
   ; (id::ident) (params::params) eq (e::expr_top) EOF
-      => (env := ((id,Array.length params),Def(e,params)) :: !env)
+      => Hashtbl.add env (id,Array.length params) (Def(e,params))
   ; (id::op) (a1::ident)
        priority_kwd (p::priority)
        eq (e::expr_top) EOF
       => (let params = [|a1|] in
-         env := ((id,Array.length params),Def(e,params)) :: !env;
-         prefix_tbl := (id,p) :: !prefix_tbl)
+         Hashtbl.add env (id,Array.length params) (Def(e,params));
+         Word_list.add_ascii prefix_tbl id (id,p))
   ; (a1::ident) (id::op) (a2::ident)
        priority_kwd (p::priority)
        (a::assoc) assoc_kwd
        eq (e::expr_top) EOF
       => (let params = [|a1;a2|] in
-         env := ((id,Array.length params),Def(e,params)) :: !env;
-         infix_tbl := (id,(p,a)) :: !infix_tbl)
+         Hashtbl.add env (id,Array.length params) (Def(e,params));
+         Word_list.add_ascii infix_tbl id (id,p,a))
 
 (* blanks *)
 let blank = Blank.from_charset (Charset.singleton ' ')

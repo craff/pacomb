@@ -11,30 +11,30 @@ let eps = 1e-10
 
 type assoc = RightAssoc | LeftAssoc | NonAssoc
 
-let prios =  [("^", (( ** ), 2.0, RightAssoc))
-             ;("*", (( *. ), 4.0, LeftAssoc))
-             ;("/", (( /. ),4.0, LeftAssoc))
-             ;("+", (( +. ),6.0, LeftAssoc))
-             ;("-", (( -. ),6.0, LeftAssoc))
-             ]
+let cs = Charset.(complement (from_string "0-9()"))
 
-let%parser bin = (c::RE("[-&~^+=*/\\$!:]+\\(_[a-zA-Z0-9_]+\\)?")) => c
+let bins = Word_list.create ~cs ()
+
+let _ =
+  Word_list.add_ascii bins "^" (( ** ), 2.0, RightAssoc);
+  Word_list.add_ascii bins "*" (( *. ), 4.0, LeftAssoc);
+  Word_list.add_ascii bins "/" (( /. ),4.0, LeftAssoc);
+  Word_list.add_ascii bins "+" (( +. ),6.0, LeftAssoc);
+  Word_list.add_ascii bins "-" (( -. ),6.0, LeftAssoc)
 
 let%parser op pmin pmax =
-  (c::bin) =>
-    try let (f,p,a) = List.assoc c prios in
-        let good = match a with
-          | NonAssoc -> pmin < p && p < pmax
-          | LeftAssoc -> pmin <= p && p < pmax
-          | RightAssoc -> pmin < p && p <= pmax
-        in
-        if not good then give_up ();
-        let p = match a with
-          | RightAssoc -> p
-          | _          -> p -. 1e-10
-        in
-        (p,f)
-    with Not_found -> give_up ~msg:("unbound op bin "^c) ()
+  ((f,p,a)::Word_list.word bins) =>
+      let good = match a with
+        | NonAssoc -> pmin < p && p < pmax
+        | LeftAssoc -> pmin <= p && p < pmax
+        | RightAssoc -> pmin < p && p <= pmax
+      in
+      if not good then give_up ();
+      let p = match a with
+        | RightAssoc -> p
+        | _          -> p -. 1e-10
+      in
+      (p,f)
 
 let%parser rec
  expr pmax = ((pe,e1)>:expr pmax) ((pop,b)>:op pe pmax) ((__,e2)::expr pop)
