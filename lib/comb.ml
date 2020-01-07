@@ -430,7 +430,6 @@ let appl : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k -> g env (app k fn)
 
 let lazy_ : type a.a t -> a lazy_t t = fun g env (C(k,tr,rp)) ->
   g env (match tr with
-         | Laz(tr,f) -> C(k,Laz (tr,fun x -> f (lazy x)),rp)
          | Frc(tr)   -> C(k,tr,rp)
          | _         -> C(k,Laz (tr,fun x -> x),rp))
 
