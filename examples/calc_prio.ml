@@ -3,6 +3,10 @@ open Pacomb
 (*  This  example  (read  calc.ml  first)  illustrates  another  way  to  handle
    priorities with parametric grammars. *)
 
+(*  If -v  option  is given,  the  value of  expression  between parenthesis  is
+   printed. If --help is given, the grammar is printed *)
+let show_sub = ref false
+
 (* The three levels of priorities *)
 type p = Atom | Prod | Sum
 
