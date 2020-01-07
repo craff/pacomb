@@ -77,7 +77,7 @@ let has_ident id e =
 (* transform an expression in a pattern
    - "_" does not work. use "__" instead
    - (pat = lid) is the synta for as pattern *)
-let rec exp_to_pattern e =
+let rec exp_to_pattern rml e =
   let loc = e.pexp_loc in
   match e with
   | {pexp_desc = Pexp_ident({txt = Lident name; loc = loc_s})} ->
@@ -87,17 +87,21 @@ let rec exp_to_pattern e =
                                                   ;loc = loc_s})}]]
      ->
      let name = mkloc name loc_s in
-     let (_, pat) = exp_to_pattern e in
+     let (_, pat) = exp_to_pattern rml e in
      (Some name, Pat.alias pat name)
   | [%expr ([%e? e] : [%t? t])] ->
-     let (name, pat) = exp_to_pattern e in
+     let (name, pat) = exp_to_pattern rml e in
      (name, [%pat? ([%p pat] : [%t t])])
   | {pexp_desc = Pexp_tuple(l)} ->
-     let (_,pats) = List.split (List.map exp_to_pattern l) in
+     let (_,pats) = List.split (List.map (exp_to_pattern None) l) in
      (None, Pat.tuple ~loc pats)
   | [%expr lazy [%e? e]] ->
-     let (name, pat) = exp_to_pattern e in
-     (name, [%pat? lazy [%p pat]])
+     (match rml with
+     | None ->
+        let (name, pat) = exp_to_pattern None e in
+        (name, [%pat? lazy [%p pat]])
+     | Some p -> p := true; exp_to_pattern None e)
+
 (* NOTE: the next line works wirh ocaml 4.08.1 and 4.09.0, but not with
    4.07.1 ???, best abandon let open in pattern, not so useful  *)
 (*| [%expr let open [%m? { pmod_desc = Pmod_ident m }] in [%e? e]] ->*)
@@ -107,7 +111,7 @@ let rec exp_to_pattern e =
   | { pexp_desc = Pexp_construct(c,a) } ->
      (None, Pat.construct c (match a with
                      | None -> None
-                     | Some e -> Some(snd (exp_to_pattern e))))
+                     | Some e -> Some(snd (exp_to_pattern None e))))
   | _ -> warn loc "expression left of \"::\" does not represent a pattern"
 
 (* transform an expression into a terminal *)
@@ -166,13 +170,18 @@ let rec exp_to_term exp =
 (* treat each iterm in a rule. Accept (pat::term) or term when
    - pat is an expression accepted by exp_to_pattern
    - term is an expression accepted by exp_to_term *)
-let exp_to_rule_item (e, loc_e) =  match e with
+let exp_to_rule_item is_lazy (e, loc_e) =  match e with
   | [%expr [%e? epat] :: [%e? exp]] ->
-     let (name, pat) = exp_to_pattern epat in
-     (Some (name, pat), None, exp_to_term exp, loc_e)
+     let ptr = ref false in
+     let rml = if is_lazy then Some ptr else None in
+     let (name, pat) = exp_to_pattern rml epat in
+     let exp = exp_to_term exp in
+     let loc = loc_e in
+     let exp = if !ptr then (Printf.eprintf "force\n%!"; [%expr Pacomb.Grammar.force [%e exp]]) else exp in
+     (Some (name, pat), None, exp, loc_e)
   | [%expr ([%e? dpat], [%e? epat]) >: [%e? exp]] ->
-     let (name, pat) = exp_to_pattern epat in
-     let (_, dpat) = exp_to_pattern dpat in
+     let (name, pat) = exp_to_pattern None epat in
+     let (_, dpat) = exp_to_pattern None dpat in
      (Some (name, pat), Some dpat, exp_to_term exp, loc_e)
   | _ ->
      (None, None, exp_to_term e, loc_e)
@@ -185,7 +194,7 @@ type cond =
 (* transform exp into rule, that is list of rule item. Accept
    - a sequence of items (that is applications of items)
    - or () to denote the empty rule *)
-let rec exp_to_rule e =
+let rec exp_to_rule is_lazy e =
   let loc_e = e.pexp_loc in
   match e.pexp_desc with
   | Pexp_apply({ pexp_desc =
@@ -198,7 +207,7 @@ let rec exp_to_rule e =
                as cond,
       (Nolabel,a3)::rest)  ->
      let (rule,_) =
-       exp_to_rule (if rest <> [] then Exp.apply a3 rest else a3)
+       exp_to_rule is_lazy (if rest <> [] then Exp.apply a3 rest else a3)
      in
      let cond = if sym = "=|" then CondMatch(a0,a1) else CondTest(cond) in
      (rule, cond)
@@ -217,12 +226,12 @@ let rec exp_to_rule e =
      in
      let kn (_,e') = (e',merge_loc e'.pexp_loc loc_e) in
      let l = (e1, e.pexp_loc) :: List.map kn args in
-     (List.map exp_to_rule_item l, CondNone)
+     (List.map (exp_to_rule_item is_lazy) l, CondNone)
   | _ ->
-     ([exp_to_rule_item (e, e.pexp_loc)], CondNone)
+     ([exp_to_rule_item is_lazy (e, e.pexp_loc)], CondNone)
 
-let rec base_rule acts_fn rule action =
-  let (rule,cond) = exp_to_rule rule in
+let rec base_rule is_lazy acts_fn rule action =
+  let (rule,cond) = exp_to_rule is_lazy rule in
   let loc_a = action.pexp_loc in
   let gl_pos = mknoloc ("_pos") in
   let gl_lpos = mknoloc ("_lpos") in
@@ -358,7 +367,7 @@ let rec base_rule acts_fn rule action =
      let loc = rule.pexp_loc in
      [%expr if [%e cond] then [%e rule] else Pacomb.Grammar.fail ()]
   | CondMatch(a0,a1) ->
-     let (_,pat) = exp_to_pattern a1 in
+     let (_,pat) = exp_to_pattern None a1 in
      let loc = rule.pexp_loc in
      [%expr match [%e a0] with [%p pat] -> [%e rule]
                              | _ -> Pacomb.Grammar.fail ()]
@@ -369,12 +378,13 @@ let rec base_rule acts_fn rule action =
 and exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
   match e with
   (* base case [items => action] *)
-  | [%expr [%e? rule] => [%e? action]] ->
-     [base_rule acts_fn rule action]
-  | [%expr [%e? rule] ==> [%e? action]] ->
-     let rule = base_rule acts_fn rule action in
+  | [%expr [%e? rule] => lazy [%e? action]] ->
+     Printf.eprintf "lazy\n%!";
+     let rule = base_rule true acts_fn rule action in
      let loc = e.pexp_loc in
      [[%expr Pacomb.Grammar.lazy_ [%e rule]]]
+  | [%expr [%e? rule] => [%e? action]] ->
+     [base_rule false acts_fn rule action]
   (* inheritance case [prio1 < prio2 < ... < prion] *)
   | [%expr [%e? _] < [%e? _]] when name_param <> None ->
      let rec fn exp = match exp with
