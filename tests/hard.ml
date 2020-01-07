@@ -6,31 +6,33 @@ let gamma_gen n =
   let b = Buffer.create (2*n) in
   let rec gen n =
     if n <= 0 then () else
-    if Random.bool () then
-      begin
-        Buffer.add_string b "a";
-        gen (n-1);
-        Buffer.add_string b "b"
-      end
-    else
-      begin
-        Buffer.add_string b "a";
-        gen (n-1);
-        Buffer.add_string b "c"
-      end
+      match Random.int 3 with
+      | 0 ->
+           Buffer.add_string b "a";
+           gen (n-1);
+           Buffer.add_string b "b"
+      | 1 ->
+         Buffer.add_string b "a";
+         Buffer.add_string b "b";
+         gen (n-1);
+         Buffer.add_string b "c"
+      | 2 ->
+         Buffer.add_string b "a";
+         Buffer.add_string b "b";
+         Buffer.add_string b "c";
+         gen (n-1);
+         Buffer.add_string b "d"
+      | _ -> assert false
   in
   gen n;
   Buffer.contents b
 
 let parse_string c = parse_string c (Blank.from_charset (Charset.singleton ' '))
 
-let char_a = term(Lex.appl (fun _ -> 1) (Lex.char 'a'))
-let char_b = term(Lex.appl (fun _ -> 1) (Lex.char 'b'))
-let char_c = term(Lex.appl (fun _ -> 1) (Lex.char 'c'))
-
-let%parser [@cache] rec g =   () => ()
+let%parser [@cache] rec g =     () => ()
                        ; 'a' g 'b' => ()
-                       ; 'a' g 'c' => ()
+                       ; 'a' g 'b' g 'c' => ()
+                       ; 'a' g 'b' g 'c' g 'd' => ()
 
 let n = int_of_string Sys.argv.(1)
 
