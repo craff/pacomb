@@ -348,7 +348,8 @@ module GenericInput(M : MinimalInput) =
 include GenericInput(
   struct
     let rec from_fun finalise utf8 name get_line st file =
-      let infos = { utf8; name; uid = new_uid (); rescan = { f = rescan_no }; lnum_skip = [] }
+      let infos = { utf8; name; uid = new_uid ()
+                  ; rescan = { f = rescan_no }; lnum_skip = [] }
       in
       let rec  fn boff cont =
         begin
@@ -379,8 +380,11 @@ include GenericInput(
     and mk_rescan finalise utf8 name get_line st file buf =
       match st with
       | Seek (pos, seek) ->
-         { f = fun fn acc i0 -> rescan_seek file pos seek
-                                  (fun () -> from_fun finalise utf8 name get_line st file) fn acc i0 }
+         { f = fun fn acc i0 ->
+               rescan_seek file pos seek
+                 (fun () -> from_fun finalise utf8 name
+                              get_line st file) fn acc i0
+         }
       | Buf              -> { f = fun fn acc i0 -> rescan_buf buf fn acc i0 }
       | NoRescan         -> { f = rescan_no }
 
@@ -446,8 +450,11 @@ module Make(PP : Preprocessor) =
    and mk_rescan finalise utf8 name get_line st file buf =
       match st with
       | Seek (pos, seek) ->
-         { f = fun fn acc i0 -> rescan_seek file pos seek
-                                  (fun () -> from_fun finalise utf8 name get_line st file) fn acc i0 }
+         { f = fun fn acc i0 ->
+               rescan_seek file pos seek
+                 (fun () -> from_fun finalise utf8 name
+                              get_line st file) fn acc i0
+         }
       | Buf              -> { f = fun fn acc i0 -> rescan_buf buf fn acc i0 }
       | NoRescan         -> { f = rescan_no }
   end
