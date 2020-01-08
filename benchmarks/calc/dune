@@ -1,0 +1,15 @@
+(executable
+  (name calc)
+  (modules :standard)
+  (preprocess (pps pacomb.ppx))
+  (libraries unix pacomb))
+
+(rule
+ (targets lexer.ml)
+ (deps lexer.mll)
+ (action (run ocamllex lexer.mll)))
+
+(rule
+ (targets parser.ml parser.mli)
+ (deps parser.mly)
+ (action (run ocamlyacc parser.mly)))

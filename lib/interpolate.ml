@@ -12,6 +12,7 @@ let solve mat vector =
       done;
       !r
     in
+    if pivot = -1 then failwith "non invertible";
     for j = i to dim-1 do
       let v = mat.(pivot).(j) in
       mat.(pivot).(j) <- mat.(i).(j);
@@ -61,6 +62,8 @@ module type Interpolation = sig
   val compute : interpolation -> input -> float
 
   val compute_coefs : (input * float) array -> interpolation
+
+  val correlation :  (input * float) array -> interpolation -> float
 
   val print : out_channel -> interpolation -> unit
 end
@@ -113,6 +116,16 @@ module Make(B:Base) = struct
       Printf.fprintf ch "%s%e" (if i > 0  then ", " else "") a.(i)
     done;
     Printf.fprintf ch ")"
+
+  let correlation (samples:(input * float) array) coefs =
+    let nb  = float (Array.length samples) in
+    let avg = Array.fold_left (fun s (_, x) -> x +. s) 0.0 samples /. nb in
+    let error = Array.fold_left (fun e (n, x) ->
+                    let dx = x -. compute coefs n in
+                    e +. dx *. dx) 0.0  samples
+    in
+    sqrt (error /. nb) /. abs_float avg
+
 end
 
 (*

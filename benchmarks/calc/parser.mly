@@ -14,7 +14,7 @@ main:
                           { () }
 | main top                { () }
 ;
-top: expr EOL             { Printf.printf "%f\n>> " $1 }
+top: expr EOF             { $1 }
 ;
 expr:
   FLOAT                   { $1 }

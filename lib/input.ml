@@ -4,9 +4,13 @@ type infos =
   { utf8         : context(** Uses utf8 for positions                 *)
   ; name         : string (** The name of the buffer (e.g. file name) *)
   ; uid          : int    (** Unique identifier                       *)
-  ; rescan       : 'a. (int -> char -> 'a -> 'a) -> 'a -> int -> 'a
+  ; mutable rescan  : rescan
   ; lnum_skip    : (int * int) list
   }
+
+and rescan =
+  { f : 'a. (int -> char -> 'a -> 'a) -> 'a -> int -> 'a }
+    [@@unboxed]
 
 type buffer =
   { boff         : int    (* Offset to the line ( bytes )            *)
@@ -29,7 +33,7 @@ let phantom_infos =
   { utf8 = Utf8.ASCII
   ; name = ""
   ; uid = new_uid ()
-  ; rescan = (fun _ -> assert false)
+  ; rescan = { f = fun _ -> assert false }
   ; lnum_skip = [] }
 
 (** idx type and constant *)
@@ -108,12 +112,12 @@ let line_num infos i0 =
     | _ -> if c = '\n' then (l+1, ls) else (l,ls)
   in
   let lnum_skip = List.rev infos.lnum_skip in
-  fst (infos.rescan fn (1,lnum_skip) i0)
+  fst (infos.rescan.f fn (1,lnum_skip) i0)
 
 (* Get the current ascii column number of a buffer, rescanning *)
 let ascii_col_num infos i0 =
   let fn _ c p = if c = '\n' then 0 else p+1 in
-  infos.rescan fn 0 i0
+  infos.rescan.f fn 0 i0
 
 exception Splitted_end
 exception Splitted_begin
@@ -162,7 +166,7 @@ let utf8_len context data =
 (* Get the utf8 column number corresponding to the given position. *)
 let utf8_col_num infos i0 =
   let fn _ c cs = if c = '\n' then [] else c::cs in
-  let cs = infos.rescan fn [] i0 in
+  let cs = infos.rescan.f fn [] i0 in
   let len = List.length cs in
   let str = Bytes.create len in
   let rec fn cs p =
@@ -205,8 +209,10 @@ module type MinimalInput =
                    -> 'a rescan_type -> 'a -> buffer
   end
 
-let rescan_no _ _ _ =
-  failwith "no line of column number available for this buffer"
+exception NoLineNorColumnNumber
+
+let rescan_no _ _ _ = raise NoLineNorColumnNumber
+
 
 let rescan_buf buf0 fn acc =
   let cache = ref [] in
@@ -215,7 +221,7 @@ let rescan_buf buf0 fn acc =
   in
   let get_cache i =
     let rec fn = function
-        []                -> (Lazy.force buf0, 0, acc)
+        []                -> (buf0, 0, acc)
       | (j,buf,idx,acc)::ls -> if j <= i then (buf, idx, acc) else fn ls
     in
     fn !cache
@@ -338,23 +344,13 @@ module GenericInput(M : MinimalInput) =
         from_fun ignore utf8 filename string_buffer st ()
   end
 
+
 include GenericInput(
   struct
     let rec from_fun finalise utf8 name get_line st file =
-      let rec rescan
-              : type a.(byte_pos -> char -> a -> a) -> a -> byte_pos -> a =
-        fun fn acc i0 ->
-        match st with
-        | Seek (pos, seek) ->
-           rescan_seek file pos seek
-             (fun () -> from_fun finalise utf8 name get_line st file)
-             fn acc i0
-        | Buf ->
-           rescan_buf buf fn acc i0
-        | NoRescan ->
-           rescan_no fn acc i0
-      and infos = { utf8; name; uid = new_uid (); rescan; lnum_skip = [] }
-      and fn boff cont =
+      let infos = { utf8; name; uid = new_uid (); rescan = { f = rescan_no }; lnum_skip = [] }
+      in
+      let rec  fn boff cont =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
@@ -368,15 +364,26 @@ include GenericInput(
             finalise file;
             fun () -> cont boff
         end ()
-      and buf = lazy
+      in
+      let buf =
         begin
           let cont boff =
             empty_buffer infos boff
           in
           fn 0 cont
-          end
+        end
       in
-      Lazy.force buf
+      infos.rescan <- mk_rescan finalise utf8 name get_line st file buf;
+      buf
+
+    and mk_rescan finalise utf8 name get_line st file buf =
+      match st with
+      | Seek (pos, seek) ->
+         { f = fun fn acc i0 -> rescan_seek file pos seek
+                                  (fun () -> from_fun finalise utf8 name get_line st file) fn acc i0 }
+      | Buf              -> { f = fun fn acc i0 -> rescan_buf buf fn acc i0 }
+      | NoRescan         -> { f = rescan_no }
+
   end)
 
 module type Preprocessor =
@@ -391,21 +398,10 @@ module type Preprocessor =
 module Make(PP : Preprocessor) =
   struct
     let rec from_fun finalise utf8 name get_line st file =
-      let rec rescan
-              : type a.(byte_pos -> char -> a -> a) -> a -> byte_pos -> a =
-        fun fn acc i0 ->
-        match st with
-        | Seek (pos, seek) ->
-           rescan_seek file pos seek
-             (fun () -> from_fun finalise utf8 name get_line st file)
-             fn acc i0
-        | Buf ->
-           rescan_buf buf fn acc i0
-        | NoRescan ->
-           rescan_no fn acc i0
-      and infos = { utf8; name; uid = new_uid (); rescan = rescan
+      let infos = { utf8; name; uid = new_uid (); rescan = { f = rescan_no }
                     ; lnum_skip = [] }
-      and fn infos boff st cont =
+      in
+      let rec fn infos boff st cont =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
@@ -435,7 +431,8 @@ module Make(PP : Preprocessor) =
             finalise file;
             fun () -> cont infos boff st
         end ()
-      and buf = lazy
+      in
+      let buf =
         begin
           let cont infos boff st =
             PP.check_final st infos.name;
@@ -444,7 +441,15 @@ module Make(PP : Preprocessor) =
           fn infos 0 PP.initial_state cont
         end
       in
-      Lazy.force buf
+      infos.rescan <- mk_rescan finalise utf8 name get_line st file buf;
+      buf
+   and mk_rescan finalise utf8 name get_line st file buf =
+      match st with
+      | Seek (pos, seek) ->
+         { f = fun fn acc i0 -> rescan_seek file pos seek
+                                  (fun () -> from_fun finalise utf8 name get_line st file) fn acc i0 }
+      | Buf              -> { f = fun fn acc i0 -> rescan_buf buf fn acc i0 }
+      | NoRescan         -> { f = rescan_no }
   end
 
 module WithPP(PP : Preprocessor) = GenericInput(Make(PP))

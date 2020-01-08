@@ -131,20 +131,20 @@ module WithPP : functor (PP : Preprocessor) ->
 (** [is_empty buf] test whether the buffer [buf] is empty. *)
 val is_empty : buffer -> int -> bool
 
-(** [line_num  infos pos] returns  the line number  of [pos].  Rescan  the whole
+exception NoLineNorColumnNumber
+
+(** [line_num infos pos] returns the line number of [pos].  Rescan the whole
    file. A cache is used if you request line number more than once.
 
-   raises [Failure "no line of column number available for this buffer"] if
-   [~rescan:false] was provided at buffer creation.
-*)
+   raises [NoLineNorColumnNumber] if [~rescan:false] was provided at buffer
+   creation.  *)
 val line_num : infos -> byte_pos -> int
 
 (** [col_num  infos pos] returns the  column number of [pos]  according the utf8
    if requested at buffer creation. As [line_num] it rescan the whole file.
 
-   raises [Failure "no line of column number available for this buffer"] if
-   [~rescan:false] was provided at buffer creation.
-*)
+   raises [NoLineNorColumnNumber] if [~rescan:false] was provided at buffer
+   creation.  *)
 val col_num : infos -> byte_pos -> int
 
 (** position in bytes, regardless to utf8 *)

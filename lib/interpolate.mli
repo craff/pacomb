@@ -2,21 +2,23 @@
 type 'a base = ('a -> float) array
 
 module type Base = sig
-  type input 
+  type input
   val base : input base
 end
-                     
-module type Interpolation = sig  
+
+module type Interpolation = sig
   type input
   type interpolation
 
   val get : interpolation -> float array
-                                   
+
   val zero : interpolation
-               
+
   val compute : interpolation -> input -> float
 
   val compute_coefs : (input * float) array -> interpolation
+
+  val correlation :  (input * float) array -> interpolation -> float
 
   val print : out_channel -> interpolation -> unit
 end
