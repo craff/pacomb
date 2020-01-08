@@ -407,11 +407,11 @@ let print_ast ?(no_other=false) ch s =
     in
     let pr x = Printf.fprintf ch x in
     let pg x = print_ast x in
-    if List.memq g !adone && not forced then Printf.fprintf ch "%s" name
+    if List.mem g !adone && not forced then Printf.fprintf ch "%s" name
     else if (snd name0 <> Created || do_def g) && not forced then
       begin
-        adone := g :: !adone;
-        todo := g :: !todo;
+        if not (List.mem g !adone) && not (List.memq g !todo) then todo := g :: !todo;
+        if not (List.mem g !adone) then adone := g :: !adone;
         pr "%s" name
       end
     else if not forced then
@@ -434,7 +434,7 @@ let print_ast ?(no_other=false) ch s =
     match !todo with
       [] -> assert false
     | s::l ->
-       todo := l;
+       todo := l; adone := s:: !adone;
        print ~forced:true P_Alt ch s;
        if no_other then todo := []
   done
@@ -1339,6 +1339,12 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
     c
 
 let compile g = compile false g
+
+let print_grammar
+    : type a. ?no_other:bool -> ?def:bool -> out_channel -> a grammar -> unit =
+  fun ?(no_other=false) ?(def=true) ch g ->
+    if not def then ignore (compile g);
+    print_grammar ~no_other ~def ch g
 
 let grammar_name g = fst g.n
 
