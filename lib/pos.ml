@@ -56,6 +56,41 @@ let max_pos p1 p2 =
 
 type style = OCaml | Short
 
+let print_spos ?(style=OCaml) () ch ((infos,n):t) =
+  let open Printf in
+  let n = Input.int_of_byte_pos n in
+  let name = Input.filename infos in
+  if name = "" then
+    let format : (_,_,_) format = match style with
+      | OCaml -> "character %d"
+      | Short -> "%d"
+    in
+    fprintf ch format n
+  else
+    let format : (_,_,_) format = match style with
+      | OCaml -> "File %S, character %d"
+      | Short -> "%S:%d"
+    in
+    fprintf ch format name n
+
+let print_spos2 ?(style=OCaml) () ch (((infos,n1),(_,n2)):t*t) =
+  let open Printf in
+  let n1 = Input.int_of_byte_pos n1 in
+  let n2 = Input.int_of_byte_pos n2 in
+  let name = Input.filename infos in
+   if name = "" then
+    let format : (_,_,_) format = match style with
+      | OCaml -> "character %d-%d"
+      | Short -> "%d-%d"
+    in
+    fprintf ch format n1 n2
+  else
+    let format : (_,_,_) format = match style with
+      | OCaml -> "File %S, character %d to %d"
+      | Short -> "%S:%d:%d"
+    in
+    fprintf ch format name n1 n2
+
 let print_pos ?(style=OCaml) () ch (pos:pos) =
   let open Printf in
   if pos.name = "" then
@@ -103,13 +138,25 @@ let print_interval ?(style=OCaml) () ch pos =
         pos.start_col pos.end_line pos.end_col
 
 let print_spos ?(style=OCaml) () ch p =
-  print_pos ~style () ch (pos_of_spos p)
+  try
+    print_pos ~style () ch (pos_of_spos p)
+  with
+    Input.NoLineNorColumnNumber ->
+    print_spos ~style () ch p
 
 let print_spos2 ?(style=OCaml) () ch p =
-  print_interval ~style () ch (interval_of_spos p)
+  try
+    print_interval ~style () ch (interval_of_spos p)
+  with
+    Input.NoLineNorColumnNumber ->
+    print_spos2 ~style () ch p
 
 let print_buf_pos ?(style=OCaml) () ch (buf,idx) =
-  print_pos ~style () ch (get_pos buf idx)
+  try
+    print_pos ~style () ch (get_pos buf idx)
+  with
+    Input.NoLineNorColumnNumber ->
+    print_spos ~style () ch (Input.spos buf idx)
 
 (** exception returned by the parser *)
 exception Parse_error of Input.buffer * Input.idx * string list
