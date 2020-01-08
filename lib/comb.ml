@@ -114,7 +114,7 @@ type env =
     parallel. *)
  and res =
    | Cont : env * 'a cont * 'a -> res
-   | Lazy : env * (Input.byte_pos * int) * 'a cont * 'a lazy_t -> res
+   | Merg : env * (Input.byte_pos * int) * 'a cont * 'a lazy_t -> res
    (**  Cont(env,k,x)  the value  and  environment  resulting from  parsing  the
       beginning of the  input and the continuation to finish  parsing It must be
       used instead of calling immediatly  the continuation because the scheduler
@@ -216,7 +216,7 @@ let rec _print_trans : type a b. out_channel -> (a,b) trans -> unit =
   | Frc (tr)   -> Printf.fprintf ch "F%a"  _print_trans tr
 
 (** evaluation function for the [trans] type *)
-let eval : type a b. a -> (a,b) trans -> b = fun x tr ->
+let eval : type a b. env -> a -> (a,b) trans -> b = fun env x tr ->
   let rec fn : type a b. a -> (a,b) trans -> b = fun x tr ->
     match tr with
     | Idt        -> x
@@ -225,25 +225,22 @@ let eval : type a b. a -> (a,b) trans -> b = fun x tr ->
     | App (tr,f) -> fn (f x) tr
     | Laz (tr,f) -> fn (lazy (f x)) tr
     | Frc (tr)   -> fn (Lazy.force x) tr
-  in fn x tr
+  in
+  match tr with Idt -> x | _ ->
+    try fn x tr
+    with
+      Lex.NoParse -> next env
+    | Lex.Give_up m -> next_msg m env
 
 (** function calling a  continuation. It does not evaluate any  action. It is of
     crucial importance that this function be in O(1) before calling [k]. *)
 let call : type a.a cont -> env -> a -> res =
   fun k env x ->
     match k with
-    | C(k,tr,None)     -> let x = try eval x tr with
-                                    Lex.NoParse -> next env
-                                  | Lex.Give_up m -> next_msg m env
-                          in k env x
+    | C(k,tr,None)     -> k env (eval env x tr)
     | C(k,tr,Some rp)  ->
        rp := Input.spos env.buf_before_blanks env.idx_before_blanks;
-       let x = try eval x tr
-               with
-                 Lex.NoParse -> next env
-               | Lex.Give_up m -> next_msg m env
-       in
-       k env x
+       k env (eval env x tr)
 
 (**  functions  to  add  [(_,_)  trans]  constructors  inside  the  continuation
     constructor *)
@@ -278,9 +275,9 @@ let posk : type a. a cont -> (Pos.t -> a) cont = fun k ->
     used for this sorting *)
 let cmp c1 c2 =
   let gn = function
-    | Gram(env,_,_) -> (1, env)
+    | Gram(env,_,_) -> (0, env)
     | Cont(env,_,_) -> (0, env)
-    | Lazy(env,_,_,_) -> (2, env)
+    | Merg(env,_,_,_) -> (1, env)
   in
   let (l1,e1) = gn c1 in
   let (l2,e2) = gn c2 in
@@ -333,7 +330,7 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
           let r =
             match todo with
             | Cont(env,k,x)   -> call k env x
-            | Lazy(env,c,k,x) -> let env = { env with cache_order = c } in
+            | Merg(env,c,k,x) -> let env = { env with cache_order = c } in
                                  let x =
                                    try Lazy.force x
                                    with Lex.NoParse -> next env
@@ -759,7 +756,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
             add_queue env
               (** we pop cache_order to ensure this continuation
                   is called after all extensions of vptr *)
-              (Lazy(env,cache_order,k,v))) l0;
+              (Merg(env,cache_order,k,v))) l0;
         raise Exit
     in
     (** safe to call g, env had cache pushed so it is a minimum *)
