@@ -366,13 +366,15 @@ let print_ast ?(no_other=false) ch s =
     match g with
     | PEmpty      -> pr "()"
     | PFail       -> pr "0"
-    | PErr m      -> pr "0(%s)" m
+    | PErr m      -> pr "0(%s)" (String.concat "," m)
     | PTerm t     -> pr "%s" t
     | PAlt(gs)    -> pr (if prio < P_Alt then "@[<h>( %a)@]" else "%a")
                         (prl (pv P_Alt) "|") gs
-    | PSeq(g1,g2) -> pr (if prio < P_Seq then "(@[<hov 2>%a@ %a@])" else "%a@ %a")
+    | PSeq(g1,g2) -> pr (if prio < P_Seq then "(@[<hov 2>%a@ %a@])"
+                         else "%a@ %a")
                          (pv P_Atom) g1 (pv P_Seq) g2
-    | PDSeq(g1)   -> pr (if prio < P_Seq then "(@[<hov 2>%a@ ...@])" else "%a@ ...")
+    | PDSeq(g1)   -> pr (if prio < P_Seq then "(@[<hov 2>%a@ ...@])"
+                         else "%a@ ...")
                        (pv P_Atom) g1
     | PLr(k,lr)   -> print_lr (k, lr) ch
     | PRkey k     -> pr "%s" k
@@ -388,7 +390,8 @@ let print_ast ?(no_other=false) ch s =
     in
     fprintf ch "%s @[<v 0>from@;%a@]" name print_matrix m
 
-  and print : ?forced:bool -> ?name:name -> prio -> formatter -> print_ast -> unit =
+  and print
+      : ?forced:bool -> ?name:name -> prio -> formatter -> print_ast -> unit =
     fun ?(forced=false) ?(name=("?",Created)) prio ch g ->
     let rec fn : name -> print_ast -> unit = fun name g ->
       let name = best name g.name in
