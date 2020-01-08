@@ -7,6 +7,9 @@
 + {!Pacomb.Lex} lexing and {!Pacomb.Lex.give_up}
 + {!Pacomb.Blank} blanks and layout record
 + {!Pacomb.Pos} positions in file and handling of exceptions
++ {!Pacomb.Keyword} Some function to parse and reserve keywords
++ {!Pacomb.Word_list} An efficient extensible dictionnary to parse words
++ {!Pacomb.Regexp} Regexp implementation above {!Pacomb.Lex}
 + {!Pacomb.Input} build input buffer from string, channel, ...
 + {!Pacomb.Charset} an efficient representation of character sets
 
@@ -49,6 +52,34 @@ it is written to a file [calc.ml]).
      ; (p=Sum ) (x::expr Sum ) '-' (y::expr Prod) => x -. y
 ]}
 
+To use the above parser, you need to define a toplevel rule,
+say which characteres to ignore and call the parser on a file or string. For
+instance the following will work and handle parse error without exiting the program:
+{[
+(* The parsing calling expression, printing the result and the next prompt. *)
+let%parser rec exprs =
+    () => ()
+  ; exprs (e::expr Sum) '\n' => Printf.printf "%f\n=> %!" e
+
+(* blanks, i.e. characteres to be ignored *)
+let blank = Blank.from_charset (Charset.singleton ' ')
+
+let _ =
+  try
+    while true do
+      let f () =
+        Printf.printf "=> %!"; (* initial prompt *)
+        Grammar.parse_channel exprs blank stdin
+      in
+      (* [Pos] module provides a function to handle exception with
+         an optional argument to call for error (default is to exit with
+         code 1 *)
+      Pos.handle_exception ~error:(fun _ -> ()) f ()
+    done
+  with
+    End_of_file -> ()
+
+]}
 This works using the extensions [[%%parser ...]] for structures and [[%parser
 ...]] for expression. These are also accessible by suffixing keywords with
 [%parser] as in the above example. These ppx extensions extends ocaml
