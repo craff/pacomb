@@ -18,7 +18,7 @@ module type Interpolation = sig
 
   val compute_coefs : (input * float) array -> interpolation
 
-  val correlation :  (input * float) array -> interpolation -> float
+  val error :  (input * float) array -> interpolation -> float
 
   val print : out_channel -> interpolation -> unit
 end

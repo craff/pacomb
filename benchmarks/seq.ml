@@ -1,5 +1,6 @@
 open Pacomb
 
+let test = Array.length Sys.argv > 1 && Sys.argv.(1) = "--test"
 
 let expr n ch =
   for _ = 1 to n do
@@ -64,7 +65,7 @@ let _ =
   let bench_ry = Bench.create () in
   let bench_dum = Bench.create () in
   let producer0 ch = let r = expr 0 ch in Printf.fprintf ch "%!"; r in
-  for n = 1 to 20 do
+  for n = 1 to (if test then 2 else 20) do
     let n = n * 200_000 in
     let producer ch = let r = expr n ch in Printf.fprintf ch "%!"; r in
     let size = Bench.size producer in
@@ -123,9 +124,12 @@ let _ =
   Bench.stats "rd   " bench_rd;
   Bench.stats "lp   " bench_lp;
   Bench.stats "rp   " bench_rp;
-  Bench.csv bench_lr   "lr.csv";
-  Bench.csv bench_rr   "rr.csv";
-  Bench.csv bench_ld   "ld.csv";
-  Bench.csv bench_rd   "rd.csv";
-  Bench.csv bench_lp   "lp.csv";
-  Bench.csv bench_rp   "rp.csv"
+  if not test then
+    begin
+      Bench.csv bench_lr   "lr.csv";
+      Bench.csv bench_rr   "rr.csv";
+      Bench.csv bench_ld   "ld.csv";
+      Bench.csv bench_rd   "rd.csv";
+      Bench.csv bench_lp   "lp.csv";
+      Bench.csv bench_rp   "rp.csv"
+    end

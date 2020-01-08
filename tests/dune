@@ -31,11 +31,6 @@
   (libraries))
 
 (executable
-  (name big_sexp)
-  (modules big_sexp)
-  (libraries))
-
-(executable
   (name scan)
   (modules scan)
   (libraries unix pacomb))
@@ -66,30 +61,3 @@
   (deps big_expr.exe calc_utf8.exe)
   (action
     (system "./big_expr.exe 4 4 4 | ./calc_utf8.exe")))
-
-(test
-  (name calc_ext_bench)
-  (modules calc_ext_bench)
-  (preprocess (pps pacomb.ppx))
-  (libraries unix pacomb)
-  (deps big_expr.exe calc_ext_bench.exe)
-  (action
-    (system "./big_expr.exe 3 4 4 | ./calc_ext_bench.exe")))
-
-(test
-  (name sexp)
-  (modules sexp)
-  (preprocess (pps pacomb.ppx))
-  (libraries unix pacomb)
-  (deps big_sexp.exe sexp.exe)
-  (action
-    (system "./big_sexp.exe 1000 | ./sexp.exe")))
-
-(test
-  (name sexp_rr)
-  (modules sexp_rr)
-  (preprocess (pps pacomb.ppx))
-  (libraries unix pacomb)
-  (deps big_sexp.exe sexp_rr.exe)
-  (action
-    (system "./big_sexp.exe 1000 | ./sexp_rr.exe")))

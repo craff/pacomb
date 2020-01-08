@@ -1,8 +1,9 @@
-(executable
+(test
   (name seq)
   (modules :standard)
   (preprocess (pps pacomb.ppx))
-  (libraries unix pacomb))
+  (libraries unix pacomb)
+  (action (run ./seq.exe --test)))
 
 (rule
  (targets lexer.ml)

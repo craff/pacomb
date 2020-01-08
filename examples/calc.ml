@@ -1,8 +1,6 @@
 open Pacomb
 
-(*  If -v  option  is given,  the  value of  expression  between parenthesis  is
-   printed. If --help is given, the grammar is printed *)
-let show_sub = ref false
+(* classical calculator example, with a non terminal for each priority level *)
 
 (* Here is the definition of the  parser with the ppx syntax extension described
    in the documentation.
@@ -11,13 +9,7 @@ let show_sub = ref false
    Starting with the grammar for atomic expressions. *)
 let%parser rec
         atom = (x::FLOAT)        => x                             (* constant *)
-             ; (!show_sub=false) '(' (e::expr) ')' => e (*   rule for parenthesis
-                                                       when show_sub is false *)
-             ; (!show_sub=true) '(' (e::expr) ')' =>(* idem with show_sub true *)
-                 (Printf.printf "%a: %f\n" (Pos.print_interval ())
-                    (Pos.interval_of_spos _pos) e;
-                                          (* ^^^^^^ to access position of l   *)
-                  e)
+             ; '(' (e::expr) ')' => e                 (* rule for parenthesis *)
 
 (* Here is the grammar for products *)
 and prod = (a::atom)               => a
@@ -49,9 +41,7 @@ let rec help () =
   Printf.eprintf "\nParsing with:\n\n%a\n%!"
     (fun ch -> Grammar.print_grammar ch) exprs
 
-and spec = [("-v", Arg.Set show_sub, "print the value and position of each \
-                                      expression inside parenthesis")
-           ;("-help", Arg.Unit help, "print help message")
+and spec = [( "-help", Arg.Unit help, "print help message")
            ;("--help", Arg.Unit help, "print help message")]
 
 let _ = Arg.parse spec (fun s -> raise (Arg.Bad s)) usage_msg
@@ -65,8 +55,11 @@ let _ =
       let f () =
         Printf.printf "=> %!"; (* initial prompt *)
         (* no need to stack the buffer of in_channel and those of Pacomb. So
-           file desciptor are preferred *)
-        Grammar.parse_fd exprs blank Unix.stdin;
+           file desciptor are preferred. *)
+        (* as we parse stdin, we need to keed the whole buffer in memory
+           to have line and column number, ~rescan:false only give byte
+           position *)
+        Grammar.parse_fd ~rescan:false exprs blank Unix.stdin;
         raise End_of_file
       in
       (* [Pos] module provides a function to handle exception with

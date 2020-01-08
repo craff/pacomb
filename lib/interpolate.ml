@@ -7,8 +7,8 @@ let solve mat vector =
     let pivot, pivot_val =
       let r = ref (-1, 0.0) in
       for j = i to dim - 1 do
-	let v = abs_float mat.(j).(i) in
-	if v > snd !r then r := (j, v)
+        let v = abs_float mat.(j).(i) in
+        if v > snd !r then r := (j, v)
       done;
       !r
     in
@@ -26,7 +26,7 @@ let solve mat vector =
       let v = mat.(j).(i) in
       mat.(j).(i) <- 0.0;
       for k = i+1 to dim-1 do
-	mat.(j).(k) <- mat.(j).(k) -. v *. mat.(i).(k) /. pivot_val
+        mat.(j).(k) <- mat.(j).(k) -. v *. mat.(i).(k) /. pivot_val
       done;
       vector.(j) <- vector.(j) -. v *. vector.(i) /. pivot_val
     done;
@@ -63,7 +63,7 @@ module type Interpolation = sig
 
   val compute_coefs : (input * float) array -> interpolation
 
-  val correlation :  (input * float) array -> interpolation -> float
+  val error :  (input * float) array -> interpolation -> float
 
   val print : out_channel -> interpolation -> unit
 end
@@ -117,66 +117,12 @@ module Make(B:Base) = struct
     done;
     Printf.fprintf ch ")"
 
-  let correlation (samples:(input * float) array) coefs =
+  let error (samples:(input * float) array) coefs =
     let nb  = float (Array.length samples) in
-    let avg = Array.fold_left (fun s (_, x) -> x +. s) 0.0 samples /. nb in
     let error = Array.fold_left (fun e (n, x) ->
-                    let dx = x -. compute coefs n in
+                    let dx = (x -. compute coefs n) /. x in
                     e +. dx *. dx) 0.0  samples
     in
-    sqrt (error /. nb) /. abs_float avg
+    sqrt (error /. nb)
 
 end
-
-(*
-let pi = acos(-1.0)
-
-module TestBase = struct
-  type input = float
-  let base = [| (fun _ -> 1.0); cos; sin |]
-end
-
-module Test = Make(TestBase)
-
-let test0 () =
-  let samples = [| (0.0, 1.0); (pi/.2.0, 1.0); (pi, 1.0) |] in
-  let coefs = Test.compute_coefs samples in
-  Printf.printf "%a\n%!" Test.print coefs;
-  for i = 0 to 100 do
-    let x = float i /. 50.0 *. pi in
-    let error = Test.compute coefs x -. 1.0 in
-    assert (abs_float error < 1e-12)
-  done
-
-let test1 () =
-  let samples = [| (0.0, 1.0); (pi/.2.0, 0.0); (pi, -1.0) |] in
-  let coefs = Test.compute_coefs samples in
-  Printf.printf "%a\n%!" Test.print coefs;
-  for i = 0 to 100 do
-    let x = float i /. 50.0 *. pi in
-    let error = Test.compute coefs x -. cos x in
-    assert (abs_float error < 1e-12)
-  done
-
-let test2 () =
-  let samples = [| (0.0, 0.0); (pi/.2.0, 1.0); (pi, 0.0) |] in
-  let coefs = Test.compute_coefs samples in
-  Printf.printf "%a\n%!" Test.print coefs;
-  for i = 0 to 100 do
-    let x = float i /. 50.0 *. pi in
-    let error = Test.compute coefs x -. sin x in
-    assert (abs_float error < 1e-12)
-  done
-
-let test3 () =
-  let samples = [| (0.0, 2.0); (pi/.2.0, 2.0); (pi, 0.0) |] in
-  let coefs = Test.compute_coefs samples in
-  Printf.printf "%a\n%!" Test.print coefs;
-  for i = 0 to 100 do
-    let x = float i /. 50.0 *. pi in
-    let error = Test.compute coefs x -. sin x -. cos x -. 1.0 in
-    assert (abs_float error < 1e-12)
-  done
-
-let _ = test0(); test1(); test2(); test3()
- *)

@@ -3,10 +3,6 @@ open Pacomb
 (*  This  example  (read  calc.ml  first)  illustrates  another  way  to  handle
    priorities with parametric grammars. *)
 
-(*  If -v  option  is given,  the  value of  expression  between parenthesis  is
-   printed. If --help is given, the grammar is printed *)
-let show_sub = ref false
-
 (* The three levels of priorities *)
 type p = Atom | Prod | Sum
 
@@ -49,9 +45,7 @@ let rec help () =
   Printf.eprintf "\nParsing with:\n\n%a\n%!"
     (fun ch -> Grammar.print_grammar ch) exprs
 
-and spec = [("-v", Arg.Set show_sub, "print the value and position of each \
-                                      expression inside parenthesis")
-           ;("-help", Arg.Unit help, "print help message")
+and spec = [( "-help", Arg.Unit help, "print help message")
            ;("--help", Arg.Unit help, "print help message")]
 
 let _ = Arg.parse spec (fun s -> raise (Arg.Bad s)) usage_msg
@@ -66,7 +60,10 @@ let _ =
         Printf.printf "=> %!"; (* initial prompt *)
         (* no need to stack the buffer of in_channel and those of Pacomb. So
            file desciptor are preferred *)
-        Grammar.parse_fd exprs blank Unix.stdin;
+        (* as we parse stdin, we need to keed the whole buffer in memory
+           to have line and column number, ~rescan:false only give byte
+           position *)
+        Grammar.parse_fd ~rescan:false exprs blank Unix.stdin;
         raise End_of_file
       in
       (* [Pos] module provides a function to handle exception with

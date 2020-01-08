@@ -1,8 +1,9 @@
-(executable
+(test
   (name sexp)
   (modules :standard)
   (preprocess (pps pacomb.ppx))
-  (libraries unix pacomb))
+  (libraries unix pacomb)
+  (action (run ./sexp.exe --test)))
 
 (rule
  (targets lexer.ml)

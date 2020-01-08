@@ -135,12 +135,14 @@ let stats msg bench =
   let coefs = compute_coefs time in
   let c = corr time in
   let coefs = get coefs in
-  Printf.printf "%s Time ~ %g N^%g (corr: %.2f)\n%!" msg (exp coefs.(0)) coefs.(1) c;
+  Printf.printf "%s Time ~ %g N^%g (corr: %.2f)\n%!"
+    msg (exp coefs.(0)) coefs.(1) c;
   let space = Array.of_list (List.map (fun (n,_,s) -> (n, log(s))) !bench) in
   let coefs = compute_coefs space in
   let c = corr space in
   let coefs = get coefs in
-  Printf.printf "%s Space ~ %g N^%g (corr: %.2f)\n%!" msg (exp coefs.(0)) coefs.(1) c
+  Printf.printf "%s Space ~ %g N^%g (corr: %.2f)\n%!"
+    msg (exp coefs.(0)) coefs.(1) c
 
 let csv bench file =
   let replace = String.map (function '.' -> ',' | c -> c) in

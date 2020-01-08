@@ -2,24 +2,30 @@ open Pacomb
 
 (* This (useless) example illustrate the use of merge on ambiguous grammars. We
    define two ambiguous grammars parsing sequences of characters to generate all
-   binary trees and ternary trees. *)
+   binary and ternary trees.
+
+   "catalan 10 2" will compute number of binary trees of size 0 to 10
+   "catalan 10 3" will compute number of ternary trees of size 0 to 10
+
+*)
 
 
 (* A parser parsing arbitrary sequence of charaters 'a' as a set of binary
-   trees. We use merge in case of ambiguity and pacomb keep sharing when we
-   parse twice the same part of the input (@merge implies @cache). We just return
-   the number of tree. *)
+   trees. We use merge in case of ambiguity and, as [@merge ...] implies
+   [@cache] pacomb parses only once each part of the input. We just return the
+   number of trees. *)
 let%parser [@merge (+.)] rec bin_seq =
     ()                              => 1.0
   ; (t1::bin_seq) 'a' (t2::bin_seq) => t1 *. t2
 
 let _ = Grammar.print_grammar stdout ~def:false bin_seq; print_newline ()
 
-(* Idem for ternary tree, we need an internal cache *)
+(* Idem for ternary tree, we need an internal cache to achieve polynomial
+   complexity. *)
 let%parser [@merge (+.)] rec ter_seq =
     ()                             => 1.0
-  ; (t1::ter_seq) (t2t3::Grammar.cache ~merge:(+.)
-                           ('a' (t2::ter_seq) (t3::ter_seq) => t2 *. t3))
+  ; (t1::ter_seq) 'a' (t2t3::Grammar.cache ~merge:(+.)
+                           ((t2::ter_seq) (t3::ter_seq) => t2 *. t3))
     => t1 *. t2t3
 
 let _ = Grammar.print_grammar stdout ~def:false ter_seq; print_newline ()
@@ -73,14 +79,13 @@ let _ =
   let (p,f) = if branches = 2 then bin_seq, catalan
               else ter_seq, catalan3
   in
+  let bench = Bench.create () in
   for i = 0 to catalan_max do
     let s = String.make i 'a' in
-    let _ = Gc.compact () in
-    let t0 = Unix.gettimeofday () in
-    let t = Grammar.parse_string p Blank.none s in
-    let t1 = Unix.gettimeofday () in
-    let w = (Gc.quick_stat ()).top_heap_words in
+    let (t,dt,w) = Bench.parse_string bench p Blank.none s in
     let k = f i in
-    Printf.printf "catalan: %d => %e=%e in %.2fms %d words \n%!"
-      i t k (1000. *. (t1 -. t0)) w;
-  done
+    Printf.printf "catalan(%d): %d => %e=%e in %.2fms %.2f Mb \n%!"
+      branches i t k (1000. *. dt) (float w /. 1024. /. 1024. *. float Sys.word_size);
+  done;
+  Bench.stats "catalan " bench;
+  Bench.csv bench (Printf.sprintf "catalan%d.csv" branches)

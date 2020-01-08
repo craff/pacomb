@@ -1,3 +1,3 @@
 (env
-  (dev     (flags :standard -w -9))
-  (release (flags :standard -w -9)))
+  (dev     (flags :standard -w -9 -g))
+  (release (flags :standard -w -9 -g)))

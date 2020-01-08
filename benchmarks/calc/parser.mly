@@ -14,7 +14,7 @@ main:
                           { () }
 | main top                { () }
 ;
-top: expr EOF             { $1 }
+top: expr EOL             { $1 }
 ;
 expr:
   FLOAT                   { $1 }

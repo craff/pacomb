@@ -1,5 +1,7 @@
 open Pacomb
 
+let test = Array.length Sys.argv > 1 && Sys.argv.(1) = "--test"
+
 let rec gen_expr n p s ch =
   let print_string s =
     output_string ch s; String.length s
@@ -30,7 +32,7 @@ let _ =
   let bench_prio   = Bench.create () in
   let bench_ext    = Bench.create () in
   let bench_yacc   = Bench.create () in
-  for n = 3 to 6 do
+  for n = (if test then 1 else 3) to (if test then 2 else 5) do
     for p = 2 to 4 do
       for s = 2 to (if n = 6 && p = 4 then 3 else 4) do
         let producer ch = let r = gen_expr n p s ch in Printf.fprintf ch "\n%!"; r in
@@ -39,11 +41,11 @@ let _ =
         Printf.printf "simple %d %d %d %.2f Mb in %.2fms %.2f Mb \n%!" n p s
           (float size /. 1024. /. 1024.)
           (1000. *. ts) (float w /. 1024. /. 1024. *. float Sys.word_size);
-        let (_,tp,w) = Bench.parse_pipe bench_simple Prio.top blank size producer in
+        let (_,tp,w) = Bench.parse_pipe bench_prio Prio.top blank size producer in
         Printf.printf "prio   %d %d %d %.2f Mb in %.2fms %.2f Mb \n%!" n p s
           (float size /. 1024. /. 1024.)
           (1000. *. tp) (float w /. 1024. /. 1024. *. float Sys.word_size);
-        let (_,te,w) = Bench.parse_pipe bench_simple Ext.top blank size producer in
+        let (_,te,w) = Bench.parse_pipe bench_ext Ext.top blank size producer in
         Printf.printf "ext    %d %d %d %.2f Mb in %.2fms %.2f Mb \n%!" n p s
           (float size /. 1024. /. 1024.)
           (1000. *. te) (float w /. 1024. /. 1024. *. float Sys.word_size);
@@ -63,7 +65,10 @@ let _ =
   Bench.stats "prio  " bench_prio;
   Bench.stats "ext   " bench_ext;
   Bench.stats "yacc  " bench_yacc;
-  Bench.csv bench_simple "simple.csv";
-  Bench.csv bench_prio   "prio.csv";
-  Bench.csv bench_ext    "ext.csv";
-  Bench.csv bench_yacc   "yacc.csv"
+  if not test then
+    begin
+      Bench.csv bench_simple "simple.csv";
+      Bench.csv bench_prio   "prio.csv";
+      Bench.csv bench_ext    "ext.csv";
+      Bench.csv bench_yacc   "yacc.csv"
+    end
