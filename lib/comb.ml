@@ -353,7 +353,8 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
 let fail : 'a t = fun env _ -> next env
 
 (** Fails and report an error *)
-let error : string -> 'a t = fun msg env _ -> next_msg msg env
+let error : string list -> 'a t = fun msgs env _ ->
+  List.iter (fun x -> record_pos_msg x env) msgs; raise Exit
 
 (** Combinator used as default field before compilation *)
 let assert_false : 'a t = fun _ _ -> assert false

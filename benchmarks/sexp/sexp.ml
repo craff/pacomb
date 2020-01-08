@@ -53,6 +53,7 @@ let blank = Blank.from_charset (Charset.from_string " \t\n")
 let _ =
   let bench_lr = Bench.create () in
   let bench_rr     = Bench.create () in
+  let bench_err    = Bench.create () in
   let bench_yacc   = Bench.create () in
   for n = 1 to (if test then 2 else 20) do
     let n = n * 50_000 in
@@ -63,23 +64,31 @@ let _ =
       (float size /. 1024. /. 1024.)
       (1000. *. ts) (float w /. 1024. /. 1024. *. float Sys.word_size);
     let (_,tr,w) = Bench.parse_pipe bench_rr Rr.top blank size producer in
-        Printf.printf "rr   %d %.2f Mb in %.2fms %.2f Mb \n%!" n
-          (float size /. 1024. /. 1024.)
-          (1000. *. tr) (float w /. 1024. /. 1024. *. float Sys.word_size);
+    Printf.printf "rr   %d %.2f Mb in %.2fms %.2f Mb \n%!" n
+      (float size /. 1024. /. 1024.)
+      (1000. *. tr) (float w /. 1024. /. 1024. *. float Sys.word_size);
+    let (_,te,w) = Bench.parse_pipe bench_err Err.top blank size producer in
+    Printf.printf "err  %d %.2f Mb in %.2fms %.2f Mb \n%!" n
+      (float size /. 1024. /. 1024.)
+      (1000. *. te) (float w /. 1024. /. 1024. *. float Sys.word_size);
     let (_,ty,w) = Bench.yacc_pipe bench_yacc Parser.main Lexer.token size producer in
     Printf.printf "yacc %d %.2f Mb in %.2fms %.2f Mb \n%!" n
       (float size /. 1024. /. 1024.)
       (1000. *. ty) (float w /. 1024. /. 1024. *. float Sys.word_size);
     Printf.printf "lr/yacc : %f " (ts /. ty);
     Printf.printf "rr/yacc : %f "     (tr /. ty);
-    Printf.printf "rr/lr: %f\n%!" (tr /. ts);
+    Printf.printf "err/yacc : %f "     (te /. ty);
+    Printf.printf "rr/lr: %f " (tr /. ts);
+    Printf.printf "err/lr: %f\n%!" (te /. ts);
   done;
   Bench.stats "lr   " bench_lr;
   Bench.stats "rr   " bench_rr;
+  Bench.stats "err  " bench_err;
   Bench.stats "yacc " bench_yacc;
   if not test then
     begin
       Bench.csv bench_lr   "lr.csv";
       Bench.csv bench_rr   "rr.csv";
+      Bench.csv bench_rr   "err.csv";
       Bench.csv bench_yacc "yacc.csv"
     end

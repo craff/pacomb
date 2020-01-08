@@ -458,6 +458,9 @@ and exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
        | [] | [_] -> acc
      in
      gn [] prios
+  | [%expr ERROR([%e? {pexp_desc = Pexp_constant (Pconst_string _)} as s])] ->
+     let loc = e.pexp_loc in
+     [ [%expr Pacomb.Grammar.error [[%e s]]] ]
   | [%expr ERROR([%e? s])] ->
      let loc = e.pexp_loc in
      [ [%expr Pacomb.Grammar.error [%e s]] ]

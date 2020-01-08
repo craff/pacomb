@@ -171,7 +171,8 @@ let handle_exception ?(error=fail_no_parse) ?(style=OCaml) f a =
       (print_buf_pos ~style ()) (buf, pos);
     if msgs <> [] then
       begin
-        Printf.eprintf "expecting:\n%!";
-        List.iter (Printf.eprintf "\t%s\n%!") msgs;
+        let open Format in
+        let prl ch l = List.iter (fprintf ch "%s@ ") l in
+        eprintf "@[<hov 2>expecting:@ %a@]@." prl msgs
       end;
     error e

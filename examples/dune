@@ -26,6 +26,14 @@
     (system "../tests/big_expr.exe 3 4 4 | ./calc_ext.exe")))
 
 (test
+  (name sexp)
+  (modules sexp)
+  (preprocess (pps pacomb.ppx))
+  (libraries unix pacomb)
+  (action
+    (system "echo 'a b (c (d e) f) (g h)' | ./sexp.exe")))
+
+(test
   (name paragraphs)
   (modules paragraphs)
   (preprocess (pps pacomb.ppx))

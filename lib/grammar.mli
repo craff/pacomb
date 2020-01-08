@@ -27,7 +27,7 @@ val print_grammar : ?no_other:bool -> ?def:bool -> out_channel ->
 val fail : ?name:string -> unit -> 'a grammar
 
 (** fails reporting an error *)
-val error : ?name:string -> string -> 'a grammar
+val error : ?name:string -> string list -> 'a grammar
 
 (** [empty a] accepts the empty input and returns [a] *)
 val empty : ?name:string -> 'a -> 'a grammar

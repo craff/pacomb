@@ -102,7 +102,8 @@ grammar ::= rule                                                          itself
        | grammar ; rule                                              Grammar.alt
 rule ::= qitems => expr                                   A rule with its action
        | expr < ... < expr                              priority order see below
-       | ERROR(m)                          report an error if parsing fails here
+       | ERROR("m")                        report an error if parsing fails here
+       | ERROR(ls)                           report errors if parsing fails here
 qitems ::= ()                                                      Grammar.empty
        | non_empty_qitems                                                 itself
        | cond non_empty_qitems                                  conditional rule
@@ -335,11 +336,42 @@ In action code (expression right of [=>]), a [lid_lpos] or [lid_rpos] will
 denote respectively the left and right position of the item named [lid].  a
 [lid_pos] will group both [lid_lpos] and [lid_rpos] in a record of type [Pos.t *
 Pos.t]. If the item is matched by a tuple and you want to use its position you
-must use [pat = lid] syntax to give a name to the whole item.
+must use [pat = lid] syntax to give a name to the whole item. The variables
+[_lpos], [_rpos] and [_pos] corresponds to the position of the input parser by
+the whole rule.
 
-The type [Pos.t] is a very light type to represent position. It contains a
-record of type [Input.infos] that is the same for the whole input and the
-position in bytes in the input of type [Input.byte_pos]. If you need line
+Here is an example parsing {e sexpr} with positions:
+{[
+type sexp = { p: Pos.t * Pos.t; e : sexp' }
+and sexp' =
+  | Idt of string
+  | Lst of sexp list
+
+let id = "[a-zA-Z_][a-zA-Z_0-9]*[']*"
+
+let%parser rec sexp
+   = ERROR("id") ; ERROR "("
+   ; (x::RE id)     => { p = _pos; e = Idt x }
+   ; '(' (l::sexps) => (ERROR(")") ; ')'
+                    => { p = _pos; e = Lst (List.rev l) })
+and sexps = () => []
+          ; (l::sexps) (e::sexp) => e::l
+]}
+
+Parsing ["a b (c + ..."] with the above grammar will give
+{[
+Parse error: Line 1, character 7.
+expecting:
+	)
+	id or (
+]}
+
+Banchmarks seems to show that adding error cost more or less 15% on the
+above example.
+
+The type {!Pacomb.Pos.t} is a very light type to represent position. It contains a
+record of type {!Pacomb.Input.infos} that is the same for the whole input and the
+position in bytes in the input of type {!Pacomb.Input.byte_pos}. If you need line
 numbers and column number, the {!Pacomb.Pos} module contains the
 necessary function to rescan the input and compute it (with a cache to
 avoid always rescanning from beginning).
@@ -360,6 +392,21 @@ channel or file descriptor. However, if you use [Grammar.parse_string] or
 closures) the type [Pos.t].  With [Grammar.parse_file] position will remain
 correct as long as the file is unchanged.
 
+{1:error Producing nice error messages}
+
+The [ERROR(m)] syntax in the ppx extension allows to add well chosen
+error messages in your code. Here is a way to use it on the
+[sexp] grammar above:
+
+{[
+let%parser rec sexp
+   = ERROR("id or (")
+   ; (x::RE id)         => { p = _pos; e = Idt x }
+   ; '(' (l::sexps) => (ERROR(")") | ')')
+                        => { p = _pos; e = Lst (List.rev l) }
+and sexps = () => []
+          ; (l::sexps) (e::sexp) => e::l
+]}
 
 {1:limitations Limitations}
 

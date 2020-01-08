@@ -87,7 +87,7 @@ type 'a grammar =
  (** Grammar constructors at definition *)
  and 'a grdf =
    | Fail : 'a grdf                        (** grammar that always fais *)
-   | Err : string -> 'a grdf               (** error reporting *)
+   | Err : string list -> 'a grdf          (** error reporting *)
    | Empty : 'a -> 'a grdf                 (** accept only the empty input *)
    | Term : 'a Lex.t -> 'a grdf            (** terminals *)
    | Alt  : 'a t list -> 'a grdf           (** alternatives *)
@@ -120,7 +120,7 @@ type 'a grammar =
      record except for recursion.  *)
  and 'a grne =
    | EFail : 'a grne
-   | EErr  : string -> 'a grne
+   | EErr  : string list -> 'a grne
    | ETerm : 'a terminal -> 'a grne
    | EAlt  : 'a grne list -> 'a grne
    | EAppl : 'a grne * ('a -> 'b) -> 'b grne
@@ -199,7 +199,7 @@ type prio = P_Atom | P_Seq | P_Alt
 
 type print_ast_aux =
   | PFail
-  | PErr of string
+  | PErr of string list
   | PEmpty
   | PTerm of string
   | PAlt of print_ast list
@@ -238,7 +238,7 @@ let print_ast_of_df : type a. a grammar -> print_ast = fun x ->
     | Frce(g)      -> PTrans("frce",gn g)
     | Layout(_,g,_)-> PTrans("blks",gn g)
     | UMrg(g)      -> PTrans("umgrl",gn g)
-    | Tmp          -> PErr "TMP in grammar"
+    | Tmp          -> PErr(["TMP in grammar"])
 
   and gn : type a. a t -> print_ast = fun g ->
     if g.recursive then
@@ -279,7 +279,7 @@ let print_ast_of_ne : type a. a grammar -> print_ast = fun x ->
     | EFrce(g)      -> PTrans("frce",fn' g)
     | ELayout(_,g,_)-> PTrans("blks",fn' g)
     | EUMrg(g)      -> PTrans("umgr",fn' g)
-    | ETmp          -> PErr "TMP in grammar"
+    | ETmp          -> PErr(["TMP in grammar"])
 
   and no_name ast =
     { name = gen_name None; ast; is_rec = false }
@@ -1153,7 +1153,7 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
   let rec fn : type a. a grne -> bool * Charset.t = fun g ->
     match g with
     | EFail -> (false, Charset.empty)
-    | EErr _ -> (false, Charset.empty)
+    | EErr _ -> (false, Charset.full)
     | ETerm(c) -> (false, c.c)
     | EAlt(gs) ->
        List.fold_left (fun (shift,s) g ->

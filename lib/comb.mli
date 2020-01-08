@@ -28,7 +28,7 @@ val parse_all_buffer : 'a t -> Blank.t -> Lex.buf -> Lex.idx -> 'a list
 val fail : 'a t
 
 (** Fails and report an error *)
-val error : string -> 'a t
+val error : string list -> 'a t
 
 val assert_false : 'a t
 
