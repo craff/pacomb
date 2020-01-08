@@ -414,7 +414,7 @@ let print_ast ?(no_other=false) ch s =
     else if (snd name0 <> Created || do_def g) && not forced then
       begin
         if not (List.mem g !adone) && not (List.mem_assq g !todo) then
-          todo := (g, name0) :: !todo;
+          todo := !todo @ [g, name0];
         if not (List.mem g !adone) then
           adone := g :: !adone;
         pr "%s" name
