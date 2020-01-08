@@ -198,7 +198,7 @@ let buffer_uid b = b.infos.uid
 
 (* The way to rescan (using seek, keeping the buffer of no rescan *)
 type 'a rescan_type =
-  | Seek of ('a -> int) * ('a -> int -> unit)
+  | Seek of ('a -> int) * ('a -> int -> unit) * (unit -> 'a)
   | Buf
   | NoRescan
 
@@ -239,10 +239,10 @@ let rescan_buf buf0 fn acc =
     done;
     !acc
 
-let rescan_seek ch pos_in seek_in mk_buf fn acc =
+let rescan_seek file pos_in seek_in mk_buf fn acc =
   let cache = ref [] in
   let set_cache i idx acc =
-    cache := (i,pos_in ch, idx, acc) :: !cache
+    cache := (i,pos_in file, idx, acc) :: !cache
   in
   let get_cache i =
     let rec fn = function
@@ -252,9 +252,9 @@ let rescan_seek ch pos_in seek_in mk_buf fn acc =
     fn !cache
   in
   fun i0 ->
-    let saved = pos_in ch in
+    let saved = pos_in file in
     let (p0,idx0,acc0) = get_cache i0 in
-    seek_in ch p0;
+    seek_in file p0;
     let buf = ref (mk_buf ()) in
     let acc = ref acc0 in
     let idx = ref idx0 in
@@ -264,7 +264,7 @@ let rescan_seek ch pos_in seek_in mk_buf fn acc =
       buf := b; idx := p;
       acc := fn i c !acc
     done;
-    seek_in ch saved;
+    seek_in file saved;
     !acc
 
 let buf_size = 0x10000
@@ -294,42 +294,48 @@ module GenericInput(M : MinimalInput) =
   struct
     include M
 
-    let st_fd rescan fd =
+    let st_fd rescan fd reopen =
       let open Unix in
       let stat = fstat fd in
       let seek fd n = ignore (Unix.lseek fd n SEEK_SET) in
       let pos fd = Unix.lseek fd 0 SEEK_CUR in
       if rescan then
-        if stat.st_kind = S_REG then Seek(pos,seek) else Buf
+        if stat.st_kind = S_REG then Seek(pos,seek,reopen) else Buf
       else
         NoRescan
 
-    let st_ch rescan ch =
+    let st_ch rescan ch reopen =
       let open Unix in
       let stat = fstat (Unix.descr_of_in_channel ch) in
-      if rescan then
-        if stat.st_kind = S_REG then Seek(pos_in,seek_in) else Buf
+      let seek = seek_in in
+      let pos = pos_in in
+       if rescan then
+        if stat.st_kind = S_REG then Seek(pos,seek,reopen) else Buf
       else
         NoRescan
+
+    let st_fn rescan fd fn =
+      let reopen () = Unix.(openfile fn [O_RDONLY] 0) in
+      st_fd rescan fd reopen
 
     let from_channel
         : ?utf8:context -> ?filename:string -> ?rescan:bool
           -> in_channel -> buffer =
       fun ?(utf8=Utf8.ASCII) ?(filename="") ?(rescan=true) ch ->
-        let st = st_ch rescan ch in
+        let st = st_ch rescan ch (fun () -> ch) in
         from_fun ignore utf8 filename input_buffer st ch
 
     let from_fd
         : ?utf8:context -> ?filename:string -> ?rescan:bool
           -> Unix.file_descr -> buffer =
       fun ?(utf8=Utf8.ASCII) ?(filename="") ?(rescan=true) fd ->
-        let st = st_fd rescan fd in
+        let st = st_fd rescan fd (fun () -> fd) in
         from_fun ignore utf8 filename fd_buffer st fd
 
     let from_file : ?utf8:context -> ?rescan:bool -> string -> buffer =
       fun ?(utf8=Utf8.ASCII) ?(rescan=true) fname ->
         let fd = Unix.(openfile fname [O_RDONLY] 0) in
-        let st = st_fd rescan fd in
+        let st = st_fn rescan fd fname in
         from_fun Unix.close utf8 fname fd_buffer st fd
 
     let from_string : ?utf8:context -> ?filename:string -> string -> buffer =
@@ -340,7 +346,7 @@ module GenericInput(M : MinimalInput) =
         in
         let seek () n = b := (n <> (-1)) in
         let pos () = (-1) in
-        let st = Seek(pos, seek) in
+        let st = Seek(pos, seek, fun () -> ()) in
         from_fun ignore utf8 filename string_buffer st ()
   end
 
@@ -374,13 +380,14 @@ include GenericInput(
           fn 0 cont
         end
       in
-      infos.rescan <- mk_rescan finalise utf8 name get_line st file buf;
+      infos.rescan <- mk_rescan finalise utf8 name get_line st buf;
       buf
 
-    and mk_rescan finalise utf8 name get_line st file buf =
+    and mk_rescan finalise utf8 name get_line st buf =
       match st with
-      | Seek (pos, seek) ->
+      | Seek (pos, seek, reopen) ->
          { f = fun fn acc i0 ->
+               let file = reopen () in
                rescan_seek file pos seek
                  (fun () -> from_fun finalise utf8 name
                               get_line st file) fn acc i0
@@ -445,12 +452,13 @@ module Make(PP : Preprocessor) =
           fn infos 0 PP.initial_state cont
         end
       in
-      infos.rescan <- mk_rescan finalise utf8 name get_line st file buf;
+      infos.rescan <- mk_rescan finalise utf8 name get_line st buf;
       buf
-   and mk_rescan finalise utf8 name get_line st file buf =
+   and mk_rescan finalise utf8 name get_line st buf =
       match st with
-      | Seek (pos, seek) ->
+      | Seek (pos, seek, reopen) ->
          { f = fun fn acc i0 ->
+               let file = reopen () in
                rescan_seek file pos seek
                  (fun () -> from_fun finalise utf8 name
                               get_line st file) fn acc i0
