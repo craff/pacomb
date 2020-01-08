@@ -217,8 +217,7 @@ and print_ast = { mutable name : name
 
 module AAssoc = Assoc.Make(struct type 'a data = print_ast end)
 
-(** printing functions, usable for debugging, not yet for documentation
-    of your code. *)
+(** printing functions, usable for debugging and documentation of your code. *)
 
 let print_ast_of_df : type a. a grammar -> print_ast = fun x ->
   let adone = ref AAssoc.empty in
