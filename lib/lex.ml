@@ -146,7 +146,7 @@ let sp = Printf.sprintf
 (** Terminal accepting a given char, remark: [char '\255'] is equivalent to
     [eof]. *)
 let char : ?name:string -> char -> unit t = fun ?name c ->
-  { n = default (sp "%C" c) name
+  { n = default (sp "'%c'" c) name
   ; c = Charset.singleton c
   ; a = Char c
   ; f = fun s n ->
@@ -216,7 +216,7 @@ let any_utf8 : ?name:string -> unit -> Uchar.t t = fun ?name () ->
 (** [string s] Accepts only the given string.*)
 let string : ?name:string -> string -> unit t = fun ?name k ->
   if k = "" then invalid_arg "Lex.string: empty string";
-  { n = default (sp "%S" k) name
+  { n = default (sp "\"%s\"" k) name
   ; c = Charset.singleton k.[0]
   ; a = String k
   ; f = fun s n ->

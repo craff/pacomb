@@ -36,7 +36,6 @@ let created2 name upname = match name with
   | None -> if snd upname <> Created then Some (fst upname, Inherited)
             else None
 
-
 (** Type for a grammar *)
 type 'a grammar =
   { mutable d : 'a grdf   (** the definition of the grammar *)
@@ -194,16 +193,6 @@ let cache ?name ?merge g =
   let name = gen_name (created name) in
   { g with cached = Cache merge; n = name }
 
-(** printing functions, usable for debugging, not yet for documentation
-    of your code. *)
-let prl pr sep ch l =
-  let rec fn ch = function
-    | [] -> ()
-    | [x] -> pr ch x
-    | x::l -> Printf.fprintf ch "%a%s%a" pr x sep fn l
-  in
-  fn ch l
-
 module AssocLr = Assoc.Make (struct type 'a data = 'a grne list * 'a t list end)
 
 type prio = P_Atom | P_Seq | P_Alt
@@ -222,11 +211,14 @@ type print_ast_aux =
 
 and print_lr = string * (string * print_ast) list
 
-and print_ast = { name : name
+and print_ast = { mutable name : name
                 ; mutable ast : print_ast_aux
                 ; is_rec : bool  }
 
 module AAssoc = Assoc.Make(struct type 'a data = print_ast end)
+
+(** printing functions, usable for debugging, not yet for documentation
+    of your code. *)
 
 let print_ast_of_df : type a. a grammar -> print_ast = fun x ->
   let adone = ref AAssoc.empty in
@@ -350,68 +342,82 @@ let print_ast_of_ne : type a. a grammar -> print_ast = fun x ->
   in gn x
 
 let print_ast ?(no_other=false) ch s =
+  let open Format in
   let adone = ref [] in
+  let namedone = ref [] in
   let todo = ref [] in
+  let prl pr sep ch l =
+    let rec fn ch = function
+      | [] -> ()
+      | [x] -> Format.fprintf ch "@[<hov 2>%a@]" pr x
+      | x::l -> Format.fprintf ch "@[<hov 2>%a@]@ %s %a" pr x sep fn l
+    in
+    Format.fprintf ch "@[<hv -2>%a@]" fn l
+  in
 
   let do_def g =
     g.is_rec ||
-      (snd g.name = Given && match g.ast with PTerm _ -> false | _ -> true)
+      (snd g.name <> Created && match g.ast with PTerm _ -> false | _ -> true)
   in
 
-  let rec print_ast : prio -> out_channel -> print_ast_aux -> unit =
+  let rec print_ast : prio -> formatter -> print_ast_aux -> unit =
     fun prio ch g ->
-    let pr x = Printf.fprintf ch x in
+    let pr x = fprintf ch x in
     let pv x = print x in
     match g with
     | PEmpty      -> pr "()"
     | PFail       -> pr "0"
     | PErr m      -> pr "0(%s)" m
     | PTerm t     -> pr "%s" t
-    | PAlt(gs)    -> pr (if prio < P_Alt then "(%a)" else "%a")
-                        (prl (pv P_Alt) " | ") gs
-    | PSeq(g1,g2) -> pr (if prio < P_Seq then "(%a %a)" else "%a %a")
+    | PAlt(gs)    -> pr (if prio < P_Alt then "@[<h>( %a)@]" else "%a")
+                        (prl (pv P_Alt) "|") gs
+    | PSeq(g1,g2) -> pr (if prio < P_Seq then "(@[<hov 2>%a@ %a@])" else "%a@ %a")
                          (pv P_Atom) g1 (pv P_Seq) g2
-    | PDSeq(g1)   -> pr (if prio < P_Seq then "(%a ...)" else "%a ...")
+    | PDSeq(g1)   -> pr (if prio < P_Seq then "(@[<hov 2>%a@ ...@])" else "%a@ ...")
                        (pv P_Atom) g1
     | PLr(k,lr)   -> print_lr (k, lr) ch
     | PRkey k     -> pr "%s" k
     | PTrans(_,g) -> pv prio ch g
 
-  and print_lr : print_lr -> out_channel -> unit =
+  and print_lr : print_lr -> formatter -> unit =
     fun (name, m) ch ->
     let print_one ch (name,g) =
-      Printf.fprintf ch "\n  %s ::= %a" name (print P_Alt) g
+      fprintf ch "%s @[<hov 0>::= %a@]@;" name (print P_Alt) g
     in
     let print_matrix ch m =
       List.iter (print_one ch) m
     in
-    Printf.fprintf ch "%s from %a" name print_matrix m
+    fprintf ch "%s @[<v 0>from@;%a@]" name print_matrix m
 
-  and print : ?forced:bool -> prio -> out_channel -> print_ast -> unit =
-    fun ?(forced=false) prio ch g ->
+  and print : ?forced:bool -> ?name:name -> prio -> formatter -> print_ast -> unit =
+    fun ?(forced=false) ?(name=("?",Created)) prio ch g ->
     let rec fn : name -> print_ast -> unit = fun name g ->
       let name = best name g.name in
       if snd name = Given && snd g.name = Given
       then print_aux forced name prio ch g
       else (match g.ast with
             | PTrans(_,g) -> fn name g
-            | _ -> print_aux forced name prio ch g)
+            | _ -> if snd g.name = Created && snd name <> Created then
+                     g.name <- name;
+                   print_aux forced name prio ch g)
     in
-    fn ("????",Created) g
+    fn name g
 
-  and print_aux : bool -> name -> prio -> out_channel -> print_ast -> unit =
+  and print_aux : bool -> name -> prio -> formatter -> print_ast -> unit =
     fun forced name0 prio ch g ->
     let name =
       if snd name0 <> Created then fst name0
       else fst g.name
     in
-    let pr x = Printf.fprintf ch x in
+    let pr x = fprintf ch x in
     let pg x = print_ast x in
-    if List.mem g !adone && not forced then Printf.fprintf ch "%s" name
+    if List.mem g !adone && not forced then fprintf ch "%s" name
     else if (snd name0 <> Created || do_def g) && not forced then
       begin
-        if not (List.mem g !adone) && not (List.memq g !todo) then todo := g :: !todo;
-        if not (List.mem g !adone) then adone := g :: !adone;
+        if not (List.mem g !adone) && not (List.mem_assq g !todo) then
+          todo := (g, name0) :: !todo;
+        if not (List.mem g !adone) then
+          adone := g :: !adone;
         pr "%s" name
       end
     else if not forced then
@@ -423,19 +429,25 @@ let print_ast ?(no_other=false) ch s =
         let rec fn g = match g.ast with
           | PTerm _ -> ()
           | PTrans(_,g) -> fn g
-          | _ -> Printf.fprintf ch "%s ::= %a\n" name (pg prio) g.ast
+          | _ ->
+             if not (List.mem name !namedone) then
+               begin
+                 fprintf ch "@[<h>%s @[<hov 0>::= %a@]@]@."
+                   name (pg prio) g.ast;
+                 namedone := name :: !namedone;
+               end
         in fn g
       end
 
   in
-  todo := s :: !todo;
+  todo := (s, s.name) :: !todo;
   adone := s :: !adone;
   while !todo != [] do
     match !todo with
       [] -> assert false
-    | s::l ->
+    | (s,name)::l ->
        todo := l; adone := s:: !adone;
-       print ~forced:true P_Alt ch s;
+       print ~forced:true ~name P_Alt ch s;
        if no_other then todo := []
   done
 
@@ -443,7 +455,7 @@ let print_grammar
     : type a. ?no_other:bool -> ?def:bool -> out_channel -> a grammar -> unit =
   fun ?(no_other=false) ?(def=true) ch g ->
     let g = if def then print_ast_of_df g else print_ast_of_ne g in
-    print_ast ~no_other ch g
+    print_ast ~no_other (Format.formatter_of_out_channel ch) g
 
 let print_grne : type a. out_channel -> a grne -> unit =
   fun ch ne ->
@@ -723,7 +735,7 @@ let plus : ?name:string -> 'a grammar -> 'a list grammar = fun ?name g ->
 
 let plus_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar =
   fun ?name sep g ->
-    let name = created2 name (fst g.n ^ "+" ^ fst sep.n, snd g.n) in
+    let name = created2 name (fst g.n ^ "[" ^ fst sep.n ^ "]+", snd g.n) in
     appl ?name
       (fixpoint (fun r ->
            alt [appl g (fun x -> [x]);
@@ -731,7 +743,7 @@ let plus_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar =
 
 let star_sep : ?name:string -> 'b grammar -> 'a grammar -> 'a list grammar =
   fun ?name sep g ->
-    let name = created2 name (fst g.n ^ "*" ^ fst sep.n, snd g.n) in
+    let name = created2 name (fst g.n ^ "[" ^ fst sep.n ^ "]*", snd g.n) in
     alt ?name [empty []; plus_sep sep g]
 
 (** a function to defined idxed grammars *)
