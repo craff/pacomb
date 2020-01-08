@@ -82,7 +82,7 @@ type 'a grammar =
  (** type for all information about mutuall recursive grammars *)
  and mlr = { left : mlr_left
            ; right : mlr_right
-           ; lpos : Pos.t Assoc.key option
+           ; lpos : bool
            ; keys : (Assoc.any_key * string) list }
 
  (** Grammar constructors at definition *)
@@ -985,16 +985,11 @@ let rec cat_right l1 l2 = match l1 with
   | RNil -> l2
   | RCns(k,k',g,r) -> RCns(k,k',g,cat_right r l2)
 
-let cat_lpos p1 p2 =
-  match p1, p2 with
-  | (Some _, _) -> p1
-  | (_     , _) -> p2
-
 let cat_mlr {left=l1;right=r1;lpos=p1;keys=k1}
             {left=l2;right=r2;lpos=p2;keys=k2} =
   { left  = cat_left l1 l2
   ; right = cat_right r1 r2
-  ; lpos  = cat_lpos p1 p2
+  ; lpos  = p1 || p2
   ; keys  = k1 @ k2
   }
 
@@ -1025,9 +1020,9 @@ let get_pk : ety list -> pos_ptr option =
             let ({lpos=p} as r, x) = Uf.find x in
             begin
               match p with
-              | None ->
-                 Uf.set_root x { r with lpos = Some (Assoc.new_key ()) };
-              | Some _ -> ()
+              | false ->
+                 Uf.set_root x { r with lpos = true };
+              | true -> ()
             end;
             Some x
 
@@ -1099,7 +1094,7 @@ let elim_left_rec : type a. a grammar -> unit = fun g ->
          else
            begin
              g.phase <- LeftRecEliminated;
-             let ptr = Uf.root { left = LNil; right = RNil; lpos = None
+             let ptr = Uf.root { left = LNil; right = RNil; lpos = false
                                  ; keys = [(K g.k,fst g.n)] } in
              let cached = g.cached <> NoCache in
              let (g',s) = fn (E (g.k, cached, ptr) :: above) g.ne in
@@ -1256,8 +1251,8 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
                let ne = compile_ne g.ne in
                let cs = first_charset g.ne in
                match r.lpos with
-               | None -> Comb.lr left k cs ne
-               | Some pk -> Comb.lr_pos left k pk cs ne
+               | false -> Comb.lr left k cs ne
+               | true  -> Comb.lr_pos left k cs ne
           end
        | _ ->
           let rec fn = function
@@ -1275,7 +1270,7 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
                                 let cs = first_charset g.ne in
                                 Comb.RCns(k,k',cs,ne,gn l)
           in
-          Comb.mlr ?lpos:r.lpos (fn r.left) (gn r.right) k
+          Comb.mlr ~lpos:r.lpos (fn r.left) (gn r.right) k
      end
   | ERkey k -> Comb.read_tbl k
   | ERef g -> compile true g
@@ -1285,9 +1280,9 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
      begin
        let (r, _) = Uf.find r in
        match r.right, r.lpos with
-       | RNil, _    -> Comb.left_pos (compile_ne g)
-       | _, None    -> assert false
-       | _, Some pk -> Comb.read_pos pk (compile_ne g)
+       | RNil, _  -> Comb.left_pos (compile_ne g)
+       | _, false -> assert false
+       | _, true  -> Comb.read_pos (compile_ne g)
      end
   | EUMrg(g) -> Comb.unmerge (compile_ne g)
   | ELazy(g) -> Comb.lazy_ (compile_ne g)
@@ -1377,16 +1372,18 @@ let parse_string
     parse_buffer g b (Input.from_string ~utf8 ?filename s) Input.init_idx
 
 let parse_channel
-    : type a. ?utf8:Utf8.context -> ?filename:string ->
+    : type a. ?utf8:Utf8.context -> ?filename:string -> ?rescan:bool ->
               a t -> Blank.t -> in_channel -> a =
-  fun ?(utf8=Utf8.ASCII) ?filename g b ic ->
-    parse_buffer g b (Input.from_channel ~utf8 ?filename ic) Input.init_idx
+  fun ?(utf8=Utf8.ASCII) ?filename ?(rescan=true) g b ic ->
+    parse_buffer g b (Input.from_channel ~utf8 ?filename ~rescan ic)
+      Input.init_idx
 
 let parse_fd
-    : type a. ?utf8:Utf8.context -> ?filename:string ->
+    : type a. ?utf8:Utf8.context -> ?filename:string -> ?rescan:bool ->
               a t -> Blank.t -> Unix.file_descr -> a =
-  fun ?(utf8=Utf8.ASCII) ?filename g b ic ->
-    parse_buffer g b (Input.from_fd ~utf8 ?filename ic) Input.init_idx
+  fun ?(utf8=Utf8.ASCII) ?filename ?(rescan=true) g b ic ->
+    let buf = Input.from_fd ~utf8 ?filename ~rescan ic in
+    parse_buffer g b buf Input.init_idx
 
 let parse_file ?(utf8=Utf8.ASCII) g b filename =
     let ic = Unix.(openfile filename [O_RDONLY] 0) in

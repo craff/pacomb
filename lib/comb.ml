@@ -64,6 +64,20 @@
  *)
 type 'a key = 'a Assoc.key
 
+type lr = LR : 'a key * 'a * Pos.t -> lr
+
+let dummy_lr = LR(Assoc.new_key (), (), Input.phantom_spos)
+
+let get_lr_pos (LR(_,_,p)) = p
+let get_lr_val : type a. a key -> lr -> a = fun k (LR(k',x,_)) ->
+  let open Assoc in
+  match k.eq k'.tok with
+  | Eq -> x
+  | NEq -> assert false
+
+let lr_val k x = LR(k,x,Input.phantom_spos)
+let lr_val_pos k x p = LR(k,x,p)
+
 type max_pos = (Input.byte_pos * Lex.buf * Lex.idx * string list ref) ref
 
 (** Environment holding information required for parsing. *)
@@ -80,7 +94,7 @@ type env =
   (** Input buffer before reading the blanks. *)
   ; idx_before_blanks : Lex.idx
   (** Position in [buf_before_blanks] before reading the blanks. *)
-  ; lr                : Assoc.t
+  ; lr                : lr
   (** semantics value to be forced after the next lexeme read *)
   ; cache_order       : Input.byte_pos * int
   (** Information used  to order cache parsing, the first  [int] is the position
@@ -218,10 +232,18 @@ let eval : type a b. a -> (a,b) trans -> b = fun x tr ->
 let call : type a.a cont -> env -> a -> res =
   fun k env x ->
     match k with
-    | C(k,tr,None)     -> k env (eval x tr)
+    | C(k,tr,None)     -> let x = try eval x tr with
+                                    Lex.NoParse -> next env
+                                  | Lex.Give_up m -> next_msg m env
+                          in k env x
     | C(k,tr,Some rp)  ->
        rp := Input.spos env.buf_before_blanks env.idx_before_blanks;
-       k env (eval x tr)
+       let x = try eval x tr
+               with
+                 Lex.NoParse -> next env
+               | Lex.Give_up m -> next_msg m env
+       in
+       k env x
 
 (**  functions  to  add  [(_,_)  trans]  constructors  inside  the  continuation
     constructor *)
@@ -312,17 +334,21 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
             match todo with
             | Cont(env,k,x)   -> call k env x
             | Lazy(env,c,k,x) -> let env = { env with cache_order = c } in
-                                 call k env (Lazy.force x)
+                                 let x =
+                                   try Lazy.force x
+                                   with Lex.NoParse -> next env
+                                      | Lex.Give_up m -> next_msg m env
+                                 in
+                                 call k env x
             | Gram(env,g,k)   -> g env k
           in
           queue := Heap.add cmp r !queue;
         with
         | Exit -> ()
-        | Lex.NoParse -> record_pos env
-        | Lex.Give_up m -> record_pos_msg m env
       done;
       assert false
     with Not_found | Exit -> !res
+       | Lex.NoParse | Lex.Give_up _ -> assert false
 
 (** {2 the combinators } *)
 
@@ -350,7 +376,7 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k ->
       in
       let env =
         { env with buf_before_blanks ; idx_before_blanks
-                   ; current_buf ; current_idx; lr = Assoc.empty }
+                   ; current_buf ; current_idx; lr = dummy_lr }
       in
       (** don't call the continuation, return to the scheduler *)
       Cont(env,k,v)
@@ -478,9 +504,9 @@ let left_pos : (Pos.t -> 'a) t -> 'a t = fun g  env k ->
   g env (arg k pos)
 
 (** Read left pos from the lr table. *)
-let read_pos : Pos.t key -> (Pos.t -> 'a) t -> 'a t =
-  fun key g env k ->
-    let pos = try Assoc.find key env.lr with Not_found -> assert false in
+let read_pos : (Pos.t -> 'a) t -> 'a t =
+  fun g env k ->
+    let pos = get_lr_pos env.lr in
     g env (arg k pos)
 
 (** [lr g  gf] is the combinator used to  eliminate left recursion. Intuitively,
@@ -488,27 +514,26 @@ let read_pos : Pos.t key -> (Pos.t -> 'a) t -> 'a t =
     defined as [seq Charset.full g cs (let rec r = seq cs r cs gf in r)].
 *)
 let lr : 'a t -> 'a key -> Charset.t -> 'a t -> 'a t = fun g key cs gf env k ->
-    let rec klr env v =
-      if test cs env then
-        begin
-          let lr = Assoc.add key v env.lr in
-          let env0 = { env with lr } in
-          add_queue env (Gram(env0,gf,ink klr))
-        end;
-      call k env v
-    in
-    g env (ink klr)
+  let rec klr env v =
+    if test cs env then
+      begin
+        let lr = lr_val key v in
+        let env0 = { env with lr } in
+        add_queue env (Gram(env0,gf,ink klr))
+      end;
+    call k env v
+  in
+  g env (ink klr)
 
 (** Same as above but incorporating the reading of the left position, stored
     in the lr table too. *)
-let lr_pos : 'a t -> 'a key -> Pos.t key -> Charset.t -> 'a t -> 'a t =
-  fun g key pkey cs gf env k ->
+let lr_pos : 'a t -> 'a key -> Charset.t -> 'a t -> 'a t =
+  fun g key cs gf env k ->
     let pos = Input.spos env.current_buf env.current_idx in
     let rec klr env v =
       if test cs env then
         begin
-          let lr = Assoc.add key v env.lr in
-          let lr = Assoc.add pkey pos lr in
+          let lr = lr_val_pos key v pos in
           let env0 = { env with lr } in
           add_queue env (Gram(env0,gf,ink klr))
         end;
@@ -579,20 +604,19 @@ let compile_mlr : mlr_left -> mlr_right -> mlr_res t = fun gl gr ->
   g0 gl
 
 (* the main combinator for mutually left recursive grammars *)
-let mlr : type a. ?lpos:Pos.t key ->
+let mlr : type a. ?lpos:bool ->
                mlr_left -> mlr_right -> a key -> a t =
-  fun ?lpos gl gr fkey ->
+  fun ?(lpos=false) gl gr fkey ->
     let g = compile_mlr gl gr in
     fun env k ->
       let pos = match lpos with
-        | None   -> Input.phantom_spos
-        | Some _ -> Input.spos env.current_buf env.current_idx
+        | false -> Input.phantom_spos
+        | true  -> Input.spos env.current_buf env.current_idx
       in
       let rec klr env (Res(key,v,g')) =
-        let lr = Assoc.add key v env.lr in
         let lr = match lpos with
-          | None -> lr
-          | Some pkey -> Assoc.add pkey pos lr
+          | false -> lr_val key v
+          | true  -> lr_val_pos key v pos
         in
         let env0 = { env with lr } in
         begin
@@ -606,7 +630,7 @@ let mlr : type a. ?lpos:Pos.t key ->
 
 (** combinator to access the value stored by lr*)
 let read_tbl : 'a key -> 'a t = fun key env k ->
-    let v = try Assoc.find key env.lr with Not_found -> assert false in
+    let v = get_lr_val key env.lr in
     call k env v
 
 (** Combinator under a refrerence used to implement recursive grammars. *)
@@ -754,7 +778,7 @@ let gen_parse_buffer
     let (buf, idx) = blank_fun buf0 idx0 in
     let env =
       { buf_before_blanks = buf0 ; idx_before_blanks = idx0
-        ; current_buf = buf ; current_idx = idx; lr = Assoc.empty
+        ; current_buf = buf ; current_idx = idx; lr = dummy_lr
         ; max_pos ; blank_fun ; cache_order = (Input.init_byte_pos,0)
         ; queue = ref Heap.empty }
     in

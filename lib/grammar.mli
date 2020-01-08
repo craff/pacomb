@@ -193,11 +193,11 @@ val parse_string  : ?utf8:Utf8.context -> ?filename:string
                     -> 'a grammar -> Blank.t -> string -> 'a
 
 (**  Parse a  whole  input  channel, reporting  postiion  according  to utf8. *)
-val parse_channel : ?utf8:Utf8.context -> ?filename:string
-                    -> 'a grammar -> Blank.t -> in_channel -> 'a
+val parse_channel : ?utf8:Utf8.context -> ?filename:string -> ?rescan:bool ->
+                    'a grammar -> Blank.t -> in_channel -> 'a
 
-val parse_fd : ?utf8:Utf8.context -> ?filename:string ->
-           'a grammar -> Blank.t -> Unix.file_descr -> 'a
+val parse_fd : ?utf8:Utf8.context -> ?filename:string -> ?rescan:bool ->
+               'a grammar -> Blank.t -> Unix.file_descr -> 'a
 
 (**  Parse a  whole  file, reporting  postiion  according  to utf8. *)
 val parse_file : ?utf8:Utf8.context ->
