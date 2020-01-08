@@ -186,6 +186,12 @@ let exp_to_rule_item is_lazy (e, loc_e) =  match e with
      let (name, pat) = exp_to_pattern None epat in
      let (_, dpat) = exp_to_pattern None dpat in
      (Some (name, pat), Some dpat, exp_to_term exp, loc_e)
+  | [%expr (lazy ([%e? dpat], [%e? epat])) >: [%e? exp]] ->
+     let (name, pat) = exp_to_pattern None epat in
+     let (_, dpat) = exp_to_pattern None dpat in
+     let loc = loc_e in
+     let exp = [%expr Pacomb.Grammar.force [%e exp]] in
+    (Some (name, pat), Some dpat, exp_to_term exp, loc_e)
   | _ ->
      (None, None, exp_to_term e, loc_e)
 
