@@ -30,6 +30,7 @@
   (modules sexp)
   (preprocess (pps pacomb.ppx))
   (libraries unix pacomb)
+  (deps sexp.exe)
   (action
     (system "echo 'a b (c (d e) f) (g h)' | ./sexp.exe")))
 
