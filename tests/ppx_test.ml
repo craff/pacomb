@@ -67,6 +67,18 @@ let%parser g = (x::INT) 'a' 'b' => x
              ; 'a' 'b' (x::INT) => x
 let _ = tests g [("42 a b",42); ("a 42 b",42); ("a b 42",42)]
 
+(* test condiiton *)
+let%parser g = (true && true) 'a' => ()
+let _ = test g "a" ()
+let%parser g = (=) true true 'a' => ()
+let _ = test g "a" ()
+let%parser g = (true = true) 'a' => ()
+let _ = test g "a" ()
+let%parser g = (true <= true) 'a' => ()
+let _ = test g "a" ()
+let%parser g = (not false) 'a' => ()
+let _ = test g "a" ()
+
 (* test positions *)
 let%parser g =
     (x::INT) 'a' 'b' => Pos.((ps x_lpos).col,x,(ps x_rpos).col)
@@ -115,7 +127,6 @@ let _ = tests g3 [("", 0); ("ab",1); ("dc",-1); ("ef", 0)]
 let _ = tests g1 [("cdefefcfedcabd",-2)]
 
 (* test right recursion and lazy *)
-
 let n = ref 0
 let%parser rec g = (c::CHAR) (l::force g) => lazy (incr n; String.make 1 c :: l)
                    ; () => lazy []

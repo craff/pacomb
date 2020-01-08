@@ -206,12 +206,13 @@ type cond =
 let rec exp_to_rule is_lazy e =
   let loc_e = e.pexp_loc in
   match e.pexp_desc with
+  (* condition with two nested app for an infix *)
   | Pexp_apply({ pexp_desc =
       Pexp_apply({ pexp_desc =
         Pexp_ident
           { txt = Lident("="|"<"|">"|"<="|">="|"<>"
                          |"=="|"!="|"<<="|">>="|"==="
-                         |"not"|"&&"|"||"|"=|" as sym)}}
+                         |"&&"|"||"|"=|" as sym)}}
                , [(Nolabel,a0);(Nolabel,a1)])}
                as cond,
       (Nolabel,a3)::rest)  ->
@@ -219,6 +220,47 @@ let rec exp_to_rule is_lazy e =
        exp_to_rule is_lazy (if rest <> [] then Exp.apply a3 rest else a3)
      in
      let cond = if sym = "=|" then CondMatch(a0,a1) else CondTest(cond) in
+     (rule, cond)
+  (* condition with two nested app for not *)
+  | Pexp_apply({ pexp_desc =
+      Pexp_apply({ pexp_desc =
+        Pexp_ident
+          { txt = Lident("not")}}
+               , [(Nolabel,_)])}
+               as cond,
+      (Nolabel,a3)::rest)  ->
+     let (rule,_) =
+       exp_to_rule is_lazy (if rest <> [] then Exp.apply a3 rest else a3)
+     in
+     let cond = CondTest(cond) in
+     (rule, cond)
+  (* condition with no nested app for an infix *)
+  | Pexp_apply({ pexp_desc =
+        Pexp_ident
+          ({ txt = Lident("="|"<"|">"|"<="|">="|"<>"
+                         |"=="|"!="|"<<="|">>="|"==="
+                         |"&&"|"||"|"=|" as sym0)})} as sym
+               , (Nolabel,a0)::(Nolabel,a1)::(Nolabel,a3)::rest)  ->
+     let (rule,_) =
+       exp_to_rule is_lazy (if rest <> [] then Exp.apply a3 rest else a3)
+     in
+     let cond =
+       if sym0 = "=|" then CondMatch(a0,a1) else
+         CondTest({ e with pexp_desc = Pexp_apply(sym,
+                           (Nolabel,a0)::(Nolabel,a1)::[])})
+     in
+     (rule, cond)
+  (* condition with no nested app for not *)
+  | Pexp_apply({ pexp_desc =
+        Pexp_ident
+          ({ txt = Lident("not")})} as sym
+               , (Nolabel,a0)::(Nolabel,a3)::rest)  ->
+     let (rule,_) =
+       exp_to_rule is_lazy (if rest <> [] then Exp.apply a3 rest else a3)
+     in
+     let cond =
+       CondTest({ e with pexp_desc = Pexp_apply(sym,(Nolabel,a0)::[])})
+     in
      (rule, cond)
   | Pexp_construct({txt = Lident "()"; loc}, None) ->
      ([None, None, [%expr Pacomb.Grammar.empty ()], loc_e], CondNone)
