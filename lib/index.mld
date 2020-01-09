@@ -2,17 +2,17 @@
 
 {1:overview Overview}
 
-PaComb implements a representation of grammars with semantic actions (values
-returned as a result of parsing). Parsing is performed by compiling to
-combinators grammars defined with the {!Pacomb.Grammar} module or preferably
-through our PPX extension. The library offers {e scanner less} parsing, but the
-{!Pacomb.Lex} module provide a notion of {e terminals} and the {!Pacomb.Blank}
-module allows to define function ignoring spaces and comments. This gives a
-simple way to write grammars in two phases, as usual.
+PaComb is a parsing libraries that compiles grammars with
+semantic actions to combintators that can be used for parsing.  Languages
+are defined with the {!Pacomb.Grammar} module or preferably through our PPX
+extension. The library offers {e scanner less} parsing, but the {!Pacomb.Lex}
+module provides a notion of {e terminals} and the {!Pacomb.Blank} module allows
+to define function ignoring spaces and comments. This and other modules like
+{!PAcomb.keywords} and {!PAcomb.Word_list} makes the scanner less approach
+very easy to use.
 
-The main advantage of PaComb and similar solutions is to offer many features
-in one tool:
-+ BNF/EBNF like syntax to define grammars directly in your ML file
+The main advantage of PaComb is to offer many features in one tool:
++ BNF/EBNF like syntax to define grammars directly in your ML file using our ppx extension
 + Parsing from left to right despite the use of combinators (hence
   the beginning of the input buffer can be collected by the GC).
 + Support for ambiguous grammars with polynomial complexity using {e cache} and {e merge}
