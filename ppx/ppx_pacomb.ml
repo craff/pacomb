@@ -646,8 +646,8 @@ let vb_to_parser rec_ vb =
     List.map gn gr @ List.map hn gr
   in
   let orig =
-    let gn (loc,_,_,vb,_,rules) =
-        Vb.mk ~loc vb.pvb_pat rules
+    let gn (_,_,_,vb,_,_) =
+        vb
     in
     List.map gn orig
   in
