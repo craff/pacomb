@@ -1,10 +1,42 @@
-(** [eq_closure] is an alternative to the polymorphic equality function [(=)],
-    that compares closures using [(==)] instead of failing. Note that equality
-    testing is consequently not perfect. *)
-let eq_closure : type a. a -> a -> bool = fun v1 v2 ->
-  try v1 = v2
-  with Invalid_argument _ ->
-    Marshal.(to_string v1 [Closures] = to_string v2 [Closures])
+(* Comparison function accepting to compare everything, in particular closures.
+   (Marshal.to_string f [Closures] = Marshal.to_string g [Closures]) does not
+   seem to work ... not enough equality detected *)
+let eq_closure : type a. a -> a -> bool =
+  fun f g ->
+    let open Obj in
+    let adone = ref [] in
+    let rec fn f g =
+      f == g ||
+        match is_int f, is_int g with
+        | true, true -> f == g
+        | false, true | true, false -> false
+        | false, false ->
+           let ft = tag f and gt = tag g in
+           if ft = forward_tag then (
+             fn (field f 0) g)
+           else if gt = forward_tag then (
+             fn f (field g 0))
+           else if ft <> gt then false
+           else
+           if ft = string_tag || ft = double_tag || ft = double_array_tag
+             then f = g
+           else if ft = abstract_tag || ft = out_of_heap_tag
+                   || ft = no_scan_tag || ft = custom_tag || ft = infix_tag
+                 (* FIXME: we could certainly do better with infix_tag
+                           i.e. mutually recursive functions *)
+             then f == g
+           else
+             size f == size g &&
+               let rec gn i =
+                 if i < 0 then true
+                 else fn (field f i) (field g i) && gn (i - 1)
+               in
+               List.exists (fun (f',g') -> f == f' && g == g') !adone ||
+                (List.for_all (fun (f',g') -> f != f' && g != g') !adone &&
+                 (adone := (f,g)::!adone;
+                  gn (size f - 1)))
+
+    in fn (repr f) (repr g)
 
 type ('a, 'b) t =
   { eq_key             : 'a -> 'a -> bool
