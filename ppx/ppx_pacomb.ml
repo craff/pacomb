@@ -82,27 +82,30 @@ let rec exp_to_pattern rml e =
   match e with
   | {pexp_desc = Pexp_ident({txt = Lident name; loc = loc_s})} ->
      if name = "__" then
-       (None, Pat.any ~loc ())
+       (None, false, Pat.any ~loc ())
      else
        let name = mkloc name loc_s in
-       (Some name, Pat.var ~loc name)
+       (Some name, true, Pat.var ~loc name)
   | [%expr [%e? e] = [%e? {pexp_desc = Pexp_ident({txt = Lident name
                                                   ;loc = loc_s})}]]
      ->
      let name = mkloc name loc_s in
-     let (_, pat) = exp_to_pattern rml e in
-     (Some name, Pat.alias pat name)
+     let (_, _, pat) = exp_to_pattern rml e in
+     (Some name, true, Pat.alias pat name)
   | [%expr ([%e? e] : [%t? t])] ->
-     let (name, pat) = exp_to_pattern rml e in
-     (name, [%pat? ([%p pat] : [%t t])])
+     let (name, has_id, pat) = exp_to_pattern rml e in
+     (name, has_id, [%pat? ([%p pat] : [%t t])])
   | {pexp_desc = Pexp_tuple(l)} ->
-     let (_,pats) = List.split (List.map (exp_to_pattern None) l) in
-     (None, Pat.tuple ~loc pats)
+     let has_id, pats = List.fold_left (fun (has_id,pats) (_,hi,pat) ->
+                            (hi || has_id, pat::pats)) (false, [])
+                          (List.map (exp_to_pattern None) l)
+     in
+     (None, has_id, Pat.tuple ~loc (List.rev pats))
   | [%expr lazy [%e? e]] ->
      (match rml with
      | None ->
-        let (name, pat) = exp_to_pattern None e in
-        (name, [%pat? lazy [%p pat]])
+        let (name, has_id, pat) = exp_to_pattern None e in
+        (name, has_id, [%pat? lazy [%p pat]])
      | Some p -> p := true; exp_to_pattern None e)
 
 (* NOTE: the next line works wirh ocaml 4.08.1 and 4.09.0, but not with
@@ -112,9 +115,11 @@ let rec exp_to_pattern rml e =
      let (name, pat) = exp_to_pattern e in
      (name, Pat.open_ ~loc m pat)*)
   | { pexp_desc = Pexp_construct(c,a) } ->
-     (None, Pat.construct c (match a with
-                     | None -> None
-                     | Some e -> Some(snd (exp_to_pattern None e))))
+     (match a with
+      | None -> (None, false, Pat.construct c None)
+      | Some e ->
+         let (_, has_id, pat) = exp_to_pattern None e in
+         (None, has_id, Pat.construct c (Some pat)))
   | _ -> warn loc "expression left of \"::\" does not represent a pattern"
 
 (* transform an expression into a terminal *)
@@ -177,21 +182,27 @@ let exp_to_rule_item is_lazy (e, loc_e) =  match e with
   | [%expr [%e? epat] :: [%e? exp]] ->
      let ptr = ref false in
      let rml = if is_lazy then Some ptr else None in
-     let (name, pat) = exp_to_pattern rml epat in
+     let (name, has_id, pat) = exp_to_pattern rml epat in
      let exp = exp_to_term exp in
      let loc = loc_e in
      let exp = if !ptr then [%expr Pacomb.Grammar.force [%e exp]] else exp in
-     (Some (name, pat), None, exp, loc_e)
+     (Some (name, has_id, pat), None, exp, loc_e)
   | [%expr ([%e? dpat], [%e? epat]) >: [%e? exp]] ->
-     let (name, pat) = exp_to_pattern None epat in
-     let (_, dpat) = exp_to_pattern None dpat in
-     (Some (name, pat), Some dpat, exp_to_term exp, loc_e)
+     let (name, has_id, pat) = exp_to_pattern None epat in
+     let (_, _, dpat) = exp_to_pattern None dpat in
+     (Some (name, has_id, pat), Some dpat, exp_to_term exp, loc_e)
+  | [%expr ([%e? epat]) <: [%e? exp]] ->
+     let loc = exp.pexp_loc in
+     let exp = [%expr Pacomb.Grammar.appl [%e exp_to_term exp] (fun x -> ((), x))] in
+     let (name, has_id, pat) = exp_to_pattern None epat in
+     let dpat = Pat.any () in
+     (Some (name, has_id, pat), Some dpat, exp, loc_e)
   | [%expr (lazy ([%e? dpat], [%e? epat])) >: [%e? exp]] ->
-     let (name, pat) = exp_to_pattern None epat in
-     let (_, dpat) = exp_to_pattern None dpat in
+     let (name, has_id, pat) = exp_to_pattern None epat in
+     let (_, _, dpat) = exp_to_pattern None dpat in
      let loc = loc_e in
      let exp = [%expr Pacomb.Grammar.force [%e exp]] in
-    (Some (name, pat), Some dpat, exp_to_term exp, loc_e)
+    (Some (name, has_id, pat), Some dpat, exp_to_term exp, loc_e)
   | _ ->
      (None, None, exp_to_term e, loc_e)
 
@@ -318,21 +329,20 @@ let rec base_rule is_lazy acts_fn rule action =
   in
   let gn (acts_fn, rule) (name, dep, item, loc_e) = match name with
     | None    ->
-       let pat = Pat.any () in
-       let acts_fn exp =
-         Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp)
+       (acts_fn, (false, false, false, dep, item, loc_e) :: rule)
+    | Some (None, has_id, pat) ->
+       let acts_fn =
+         if has_id then
+           (fun exp -> Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp))
+         else
+           acts_fn
        in
-       (acts_fn, (false, false, dep, item, loc_e) :: rule)
-    | Some (None, pat) ->
-       let acts_fn exp =
-         Exp.fun_ ~loc:loc_a Nolabel None pat (acts_fn exp)
-       in
-       (acts_fn, (false,false,dep,item,loc_e) :: rule)
-    | Some (Some id, pat) ->
+       (acts_fn, (has_id,false,false,dep,item,loc_e) :: rule)
+    | Some (Some id, has_id, pat) ->
        let id_pos = mkloc (id.txt ^ "_pos") id.loc in
        let id_lpos = mkloc (id.txt ^ "_lpos") id.loc in
        let id_rpos = mkloc (id.txt ^ "_rpos") id.loc in
-       let has_id = has_ident id.txt action in
+       let has_name = has_ident id.txt action in
        let has_id_pos = has_ident id_pos.txt action in
        let has_id_lpos = has_id_pos || has_ident id_lpos.txt action in
        let has_id_rpos = has_id_pos || has_ident id_rpos.txt action in
@@ -358,15 +368,17 @@ let rec base_rule is_lazy acts_fn rule action =
        let acts_fn exp =
          let loc = exp.pexp_loc in
          (* add ignore(id) if we only use position *)
-         if not has_id && (has_id_lpos || has_id_rpos) then
+         if not has_name && (has_id_lpos || has_id_rpos) then
            begin
              let id = Exp.ident (mkloc (Lident id.txt) id.loc) in
              [%expr fun [%p pat] -> ignore [%e id]; [%e acts_fn exp]]
            end
+         else if not has_id then
+           acts_fn exp
          else
            [%expr fun [%p pat] -> [%e acts_fn exp]]
        in
-       (acts_fn, (has_id_lpos,has_id_rpos,dep,item,loc_e) :: rule)
+       (acts_fn, (has_id,has_id_lpos,has_id_rpos,dep,item,loc_e) :: rule)
   in
   let (acts_fn, rule) = List.fold_left gn (acts_fn, []) rule in
   let rule = List.rev rule in
@@ -381,21 +393,24 @@ let rec base_rule is_lazy acts_fn rule action =
        let exp = [%expr Pacomb.Grammar.empty [%e acts_fn action]] in
        add_attribute exp att
   in
-  let fn (lpos,rpos,dep,item,loc_e) exp =
+  let fn (id,lpos,rpos,dep,item,loc_e) exp =
     let loc = merge_loc loc_e exp.pexp_loc in
-    let f = match (lpos,rpos,dep) with
-      | false, false, None -> [%expr Pacomb.Grammar.seq]
-      | true , false, None -> [%expr Pacomb.Grammar.seq_lpos]
-      | false, true , None -> [%expr Pacomb.Grammar.seq_rpos]
-      | true , true , None -> [%expr Pacomb.Grammar.seq_pos]
-      | false, false, Some(_) -> [%expr Pacomb.Grammar.dseq]
-      | true , false, Some(_) -> [%expr Pacomb.Grammar.dseq_lpos]
-      | false, true , Some(_) -> [%expr Pacomb.Grammar.dseq_rpos]
-      | true , true , Some(_) -> [%expr Pacomb.Grammar.dseq_pos]
+    let f = match (id,lpos,rpos,dep) with
+      | false, false, false, None -> [%expr Pacomb.Grammar.iseq]
+      | _    , false, false, None -> [%expr Pacomb.Grammar.seq]
+      | _    , true , false, None -> [%expr Pacomb.Grammar.seq_lpos]
+      | _    , false, true , None -> [%expr Pacomb.Grammar.seq_rpos]
+      | _    , true , true , None -> [%expr Pacomb.Grammar.seq_pos]
+      | false, false, false, Some(_) -> [%expr Pacomb.Grammar.diseq]
+      | _    , false, false, Some(_) -> [%expr Pacomb.Grammar.dseq]
+      | _    , true , false, Some(_) -> [%expr Pacomb.Grammar.dseq_lpos]
+      | _    , false, true , Some(_) -> [%expr Pacomb.Grammar.dseq_rpos]
+      | _    , true , true , Some(_) -> [%expr Pacomb.Grammar.dseq_pos]
     in
-    let exp = match dep with
-      | None     -> exp
-      | Some pat -> [%expr fun [%p pat] -> [%e exp]]
+    let exp = match dep,id,lpos,rpos with
+      | None    ,_    ,_    ,_     -> exp
+      | Some pat,false,false,false -> [%expr fun ([%p pat],()) -> [%e exp]]
+      | Some pat,_    ,_    ,_     -> [%expr fun [%p pat] -> [%e exp]]
     in
     [%expr [%e f] [%e item] [%e exp]]
   in
@@ -418,7 +433,7 @@ let rec base_rule is_lazy acts_fn rule action =
      let loc = rule.pexp_loc in
      [%expr if [%e cond] then [%e rule] else Pacomb.Grammar.fail ()]
   | CondMatch(a0,a1) ->
-     let (_,pat) = exp_to_pattern None a1 in
+     let (_,_,pat) = exp_to_pattern None a1 in
      let loc = rule.pexp_loc in
      [%expr match [%e a0] with [%p pat] -> [%e rule]
                              | _ -> Pacomb.Grammar.fail ()]
@@ -451,9 +466,8 @@ and exp_to_rules ?name_param ?(acts_fn=(fun exp -> exp)) e =
      let rec gn acc l =
        match l with
        | x::(y::_ as l) ->
-          let e = [%expr Pacomb.Grammar.seq2 (Pacomb.Grammar.cond
-                                         ([%e Exp.ident param] = [%e x]))
-                      ([%e Exp.ident name] [%e y])]
+          let e = [%expr if [%e Exp.ident param] = [%e x] then
+                      [%e Exp.ident name] [%e y] else Pacomb.Grammar.fail ()]
           in gn (e::acc) l
        | [] | [_] -> acc
      in

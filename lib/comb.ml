@@ -157,17 +157,15 @@ type env =
    | Idt  : ('a,'a) trans
    (** Identity transformer *)
    | Arg  : ('b,'c) trans * 'a -> ('a -> 'b,'c) trans
-   (*   | Arg' : ('b,'c) trans * 'a -> ('a -> 'b,'c lazy_t) trans*)
    (** [Arg(tr,x)] tranform a value of type ['a -> 'b] into a value of
        type ['c] by applying it to [x] and then applying the transformer [tr] *)
    | Pos  : ('b,'c) trans * Pos.t ref -> (Pos.t -> 'b,'c) trans
-   (*   | Pos' : ('b,'c) trans * Pos.t ref -> (Pos.t -> 'b,'c lazy_t) trans*)
    (** Same  as arg, but [x]  is a position that  will be stored in  a reference
        when calling the continuation constructed with [P] *)
    | App  : ('b,'c) trans * ('a -> 'b) -> ('a,'c) trans
-   (*   | App' : ('b,'c) trans * ('a -> 'b) -> ('a,'c lazy_t) trans*)
    (** [App(tr,f) transform  a value of type  ['a] into a value of  type ['c] by
         passing it to a [f] and then using [tr] *)
+   | Rep  : ('b,'c) trans * 'b -> ('a,'c) trans
    | Laz  : ('b lazy_t,'c) trans * ('a -> 'b) -> ('a, 'c) trans
    | Frc  : ('a,'c) trans -> ('a lazy_t, 'c) trans
  (** Type of a parser combinator with a semantic action of type ['a]. the return
@@ -211,6 +209,7 @@ let rec _print_trans : type a b. out_channel -> (a,b) trans -> unit =
   | Idt        -> Printf.fprintf ch "I"
   | Arg (tr,_) -> Printf.fprintf ch "A%a"  _print_trans tr
   | App (tr,_) -> Printf.fprintf ch "@%a"  _print_trans tr
+  | Rep (tr,_) -> Printf.fprintf ch "#%a"  _print_trans tr
   | Pos (tr,_) -> Printf.fprintf ch "P%a"  _print_trans tr
   | Laz (tr,_) -> Printf.fprintf ch "L%a"  _print_trans tr
   | Frc (tr)   -> Printf.fprintf ch "F%a"  _print_trans tr
@@ -223,6 +222,7 @@ let eval : type a b. env -> a -> (a,b) trans -> b = fun env x tr ->
     | Arg (tr,y) -> fn (x y) tr
     | Pos (tr,p) -> fn (x !p) tr
     | App (tr,f) -> fn (f x) tr
+    | Rep (tr,y) -> fn y tr
     | Laz (tr,f) -> fn (lazy (f x)) tr
     | Frc (tr)   -> fn (Lazy.force x) tr
   in
@@ -231,6 +231,15 @@ let eval : type a b. env -> a -> (a,b) trans -> b = fun env x tr ->
     with
       Lex.NoParse -> next env
     | Lex.Give_up m -> next_msg m env
+
+let rec _stack_size : type a b. (a,b) trans -> int = function
+  | Idt -> 0
+  | Arg(tr,_) -> _stack_size tr + 1
+  | Pos(tr,_) -> _stack_size tr + 1
+  | App(tr,_) -> _stack_size tr + 1
+  | Rep(tr,_) -> _stack_size tr + 1
+  | Laz(tr,_) -> _stack_size tr + 1
+  | Frc(tr)   -> _stack_size tr + 1
 
 (** function calling a  continuation. It does not evaluate any  action. It is of
     crucial importance that this function be in O(1) before calling [k]. *)
@@ -247,14 +256,23 @@ let call : type a.a cont -> env -> a -> res =
 let arg : type a b. b cont -> a -> (a -> b) cont = fun k x ->
   match k with C(k,tr,rp) ->
     match tr with
-    | Laz(tr,f)  -> C(k,Laz(tr,fun g -> f (g x)),rp)
-    | tr         -> C(k,Arg(tr,x),rp)
+    | Laz(tr,f) -> C(k,Laz(tr,fun g -> f (g x)),rp)
+    | Rep(tr,y) -> C(k,Rep(tr,y),rp)
+    | tr        -> C(k,Arg(tr,x),rp)
 
 let app : type a b. b cont -> (a -> b) -> a cont = fun k f ->
   match k with C(k,tr,rp) ->
     match tr with
     | Laz(tr,g) -> C(k,Laz(tr,fun x -> g (f x)),rp)
+    | Rep(tr,y) -> C(k,Rep(tr,y),rp)
     | tr        -> C(k,App(tr,f),rp)
+
+let rep : type a b. b cont -> b -> a cont = fun k y ->
+  match k with C(k,tr,rp) ->
+    match tr with
+    | Laz(tr,g) -> C(k,Laz(tr,fun _ -> g y),rp)
+    | Rep(tr,y) -> C(k,Rep(tr,y),rp)
+    | tr        -> C(k,Rep(tr,y),rp)
 
 let posk : type a. a cont -> (Pos.t -> a) cont = fun k ->
   match k with
@@ -266,6 +284,7 @@ let posk : type a. a cont -> (Pos.t -> a) cont = fun k ->
      in
     match tr with
     | Laz(tr,f)  -> C(k,Laz(tr,fun g -> f (g !p)),rp)
+    | Rep(tr,y) -> C(k,Rep(tr,y),rp)
     | tr         -> C(k,Pos(tr,p),rp)
 
 (** {2 Scheduler code} *)
@@ -385,13 +404,23 @@ let lexeme : 'a Lex.lexeme -> 'a t = fun lex env k ->
     the environment [env] is in the character set [cs]. *)
 let test cs e = Charset.mem cs (Input.get e.current_buf e.current_idx)
 
-(** Sequence combinator. *)
+(** Sequence combinator *)
 let seq : 'a t -> Charset.t -> ('a -> 'b) t -> 'b t = fun g1 cs g2 ->
   if Charset.equal cs Charset.full then
     fun env k -> g1 env (ink (fun env x -> g2 env (arg k x)))
  else
     fun env k -> g1 env (ink (fun env x ->
                              if test cs env then g2 env (arg k x)
+                             else next env))
+
+(** Idem ignoring semantics of first grammar, used to allow O(1)
+   space right recursion with no semantics *)
+let iseq : 'a t -> Charset.t -> 'b t -> 'b t = fun g1 cs g2 ->
+ (* if Charset.equal cs Charset.full then
+    fun env k -> g1 env (ink (fun env _ -> g2 env k))
+ else*)
+   fun env k -> g1 env (ink (fun env _ ->
+                             if test cs env then g2 env k
                              else next env))
 
 (** Dependant sequence combinator. *)
@@ -401,6 +430,17 @@ let dseq : ('a * 'b) t -> ('a -> ('b -> 'c) t) -> 'c t =
         (try
            let g = g2 v1 in
            fun () -> g env (arg k v2)
+         with Lex.NoParse -> next env
+            | Lex.Give_up m -> next_msg m env) ()))
+
+(** Idem ignoring semantics of first grammar, used to allow O(1)
+   space right recursion with no semantics *)
+let diseq : 'a t -> ('a -> 'b t) -> 'b t =
+  fun g1 g2 env k ->
+    g1 env (ink(fun env v1 ->
+        (try
+           let g = g2 v1 in
+           fun () -> g env k
          with Lex.NoParse -> next env
             | Lex.Give_up m -> next_msg m env) ()))
 
@@ -451,10 +491,12 @@ let alt : (Charset.t * 'a t) list -> 'a t = fun l ->
 
 (** Application of a semantic function to alter a combinator. *)
 let appl : 'a t -> ('a -> 'b) -> 'b t = fun g fn env k -> g env (app k fn)
+let repl : 'a t -> 'b -> 'b t = fun g y env k -> g env (rep k y)
 
 let lazy_ : type a.a t -> a lazy_t t = fun g env (C(k,tr,rp)) ->
   g env (match tr with
          | Frc(tr)   -> C(k,tr,rp)
+         | Rep(tr,y) -> C(k,Rep(tr,y),rp)
          | _         -> C(k,Laz (tr,fun x -> x),rp))
 
 let force : type a.a lazy_t t -> a t = fun g env (C(k,tr,rp)) ->

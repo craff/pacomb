@@ -92,7 +92,7 @@ let star g = fixpoint (fun r -> alt [seq r g (+); empty 0])
 
 let plus g sep =
   let g' = appl g (fun x -> [x]) in
-  fixpoint (fun r -> alt [seq r (seq2 sep g) (fun y x -> x::y); g'])
+  fixpoint (fun r -> alt [seq r (iseq sep g) (fun y x -> x::y); g'])
 
 let test6 = plus (star (char_a)) (term(Lex.char ','))
 

@@ -59,9 +59,9 @@ val alt : ?name:string -> 'a grammar list -> 'a grammar
     combine both semantics by apply the semantics of [g2] to [g1] *)
 val seq : ?name:string -> 'a grammar -> ('a -> 'b) grammar -> 'b grammar
 
-(** variation of the abover when we do not use all semantics *)
-val seq1 : ?name:string -> 'a grammar -> 'b grammar -> 'a grammar
-val seq2 : ?name:string -> 'a grammar -> 'b grammar -> 'b grammar
+(** variation  of the abover when  we do not  use all semantics, it  allows cost
+   less right recursion with no semantics *)
+val iseq : ?name:string -> 'a grammar -> 'b grammar -> 'b grammar
 
 (** [dseq  g1 g2)] is  a dependant sequence, the  grammar [g2] used  after  [g1]
     may depend  upon the semantics  of [g1]. This is  not very efficient  as the
@@ -69,6 +69,10 @@ val seq2 : ?name:string -> 'a grammar -> 'b grammar -> 'b grammar
     to partially overcome this fact. *)
 val dseq : ?name:string -> ('a * 'b) grammar
            -> ('a -> ('b -> 'c) grammar) -> 'c grammar
+
+(** variation  of the abover when  we do not  use all semantics, it  allows cost
+   less right recursion with no semantics *)
+val diseq : ?name:string -> 'a grammar -> ('a -> 'b grammar) -> 'b grammar
 
 (** [lpos  g] is identical  to [g] but passes  the position just  before parsing
     with [g] to the semantical action of [g] *)

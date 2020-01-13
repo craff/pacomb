@@ -17,22 +17,37 @@ end
 
 module Ld = struct
   let%parser rec lr = ()                => ((),())
-                    ; ((__,__)>:lr) 'a' => ((),())
+                    ; ((__)<:lr) 'a' => ((),())
 
   let%parser top = lr EOF => ()
 end
 
 module Rr = struct
-  let%parser rec rr = ()                => lazy ()
-                    ; 'a' (lazy __::rr) => lazy ()
+  let%parser rec rr = ()     => ()
+                    ; 'a' rr => ()
+
+  let%parser top = (x::rr) EOF => x
+end
+
+module Rrl = struct
+  let%parser rec rr = ()               => lazy 0
+                    ; 'a' (lazy x::rr) => lazy (x+1)
 
   let%parser top = (x::rr) EOF => Lazy.force x
 end
 
 module Rd = struct
   let%parser a = 'a' => ((), ())
-  let%parser rec rr = ()                         => lazy ()
-                    ; ((__,__)>:a) (lazy __::rr) => lazy ()
+  let%parser rec rr = ()                    => ()
+                    ; ((__,__)>:a) (__::rr) => ()
+
+  let%parser top = (x::rr) EOF => x
+end
+
+module Rdl = struct
+  let%parser a = 'a' => ((), ())
+  let%parser rec rr = ()                        => lazy 0
+                    ; ((__,__)>:a) (lazy x::rr) => lazy (x+1)
 
   let%parser top = (x::rr) EOF => Lazy.force x
 end
@@ -57,8 +72,10 @@ let blank = Blank.none
 let _ =
   let bench_lr = Bench.create () in
   let bench_rr = Bench.create () in
+  let bench_rrl = Bench.create () in
   let bench_ld = Bench.create () in
   let bench_rd = Bench.create () in
+  let bench_rdl = Bench.create () in
   let bench_lp = Bench.create () in
   let bench_rp = Bench.create () in
   let bench_ly = Bench.create () in
@@ -77,6 +94,10 @@ let _ =
         Printf.printf "rr   %d %.2f Mb in %.2fms %.2f Mb \n%!" n
           (float size /. 1024. /. 1024.)
           (1000. *. tr) (float w /. 1024. /. 1024. *. float Sys.word_size);
+    let (_,trl,w) = Bench.parse_pipe bench_rrl Rrl.top blank size producer in
+        Printf.printf "rrl  %d %.2f Mb in %.2fms %.2f Mb \n%!" n
+          (float size /. 1024. /. 1024.)
+          (1000. *. trl) (float w /. 1024. /. 1024. *. float Sys.word_size);
     let (_,tld,w) = Bench.parse_pipe bench_ld Ld.top blank size producer in
         Printf.printf "ld   %d %.2f Mb in %.2fms %.2f Mb \n%!" n
           (float size /. 1024. /. 1024.)
@@ -85,6 +106,10 @@ let _ =
         Printf.printf "rd   %d %.2f Mb in %.2fms %.2f Mb \n%!" n
           (float size /. 1024. /. 1024.)
           (1000. *. trd) (float w /. 1024. /. 1024. *. float Sys.word_size);
+    let (_,trdl,w) = Bench.parse_pipe bench_rdl Rdl.top blank size producer in
+        Printf.printf "rdl  %d %.2f Mb in %.2fms %.2f Mb \n%!" n
+          (float size /. 1024. /. 1024.)
+          (1000. *. trdl) (float w /. 1024. /. 1024. *. float Sys.word_size);
     let (_,tlp,w) = Bench.parse_pipe bench_lp Lp.top blank size producer in
         Printf.printf "lp   %d %.2f Mb in %.2fms %.2f Mb \n%!" n
           (float size /. 1024. /. 1024.)

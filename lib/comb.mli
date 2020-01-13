@@ -46,12 +46,20 @@ val lexeme : 'a Lex.lexeme -> 'a t
  *)
 val seq : 'a t -> Charset.t -> ('a -> 'b) t -> 'b t
 
+(** optimisation of the above with no argument, allows costless right recursion.
+   with no semantics *)
+val iseq : 'a t -> Charset.t -> 'b t -> 'b t
+
 (** [dseq c1 c2] is a dependant sequence, contrary to [seq c1 c2], the
     combinator used to parse after [c1] depends upon the first value returned by
     [c1]. It is a good idea to memoize the function c2.  The separation of ['a]
     and ['b] in the smeantics of [g1] allows to depend on the smallest set of
     possible vaue which is important in case of memoisation. *)
 val dseq: ('a * 'b) t -> ('a -> ('b -> 'c) t)  -> 'c t
+
+(** optimisation of the above with no argument, allows costless right recursion.
+    with no semantics *)
+val diseq: 'a t -> ('a -> 'b t)  -> 'b t
 
 (** Combinator parsing with the first combinator and in case of failure with the
     second from  the same  position.  The optionnal  charset corresponds  to the
@@ -68,6 +76,9 @@ val option: 'a -> Charset.t -> 'a t -> 'a t
 (** Parses with the given combinator and transforms the semantics with the given
     function *)
 val appl : 'a t -> ('a -> 'b) -> 'b t
+
+(** Replace the semantics of the given combinator *)
+val repl : 'a t -> 'b -> 'b t
 
 val lazy_ : 'a t -> 'a lazy_t t
 val force : 'a lazy_t t -> 'a t

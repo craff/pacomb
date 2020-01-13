@@ -92,10 +92,16 @@ type 'a grammar =
    | Term : 'a Lex.t -> 'a grdf            (** terminals *)
    | Alt  : 'a t list -> 'a grdf           (** alternatives *)
    | Appl : 'a t * ('a -> 'b) -> 'b grdf   (** application *)
+   | Repl : 'a t * 'b -> 'b grdf           (** replacement *)
    | Seq  : 'a t * ('a -> 'b) t -> 'b grdf
                                            (** sequence *)
+   | ISeq  : 'a t * 'b t -> 'b grdf
+                                           (** sequence not using the first grammar *)
    | DSeq : ('a * 'b) t * ('a -> ('b -> 'c) t) -> 'c grdf
                                            (** dependant sequence *)
+   | DISeq : 'a t * ('a -> 'b t) -> 'b grdf
+                                           (** dependant sequence nt using
+                                               the semantics of the first grammar *)
    | Rkey : 'a key -> 'a grdf              (** access to the lr table *)
    | LPos : mlr Uf.t option * (Pos.t -> 'a) t -> 'a grdf
                                            (** read the postion before parsing,
@@ -124,8 +130,11 @@ type 'a grammar =
    | ETerm : 'a terminal -> 'a grne
    | EAlt  : 'a grne list -> 'a grne
    | EAppl : 'a grne * ('a -> 'b) -> 'b grne
+   | ERepl : 'a grne * 'b -> 'b grne
    | ESeq  : 'a grne * ('a -> 'b) t -> 'b grne
+   | EISeq  : 'a grne * 'b t -> 'b grne
    | EDSeq : ('a * 'b) grne * ('a -> ('b -> 'c) t) -> 'c grne
+   | EDISeq : 'a grne * ('a -> 'b t) -> 'b grne
    | ERkey : 'a key -> 'a grne
    | ERef  : 'a t -> 'a grne
    | ELPos : mlr Uf.t option * (Pos.t -> 'a) grne -> 'a grne
@@ -152,6 +161,12 @@ let rec eq : type a b.a grammar -> b grammar -> (a, b) Assoc.eq =
          match g1.d, g2.d with
          | Term t1, Term t2 -> Lex.eq t1 t2
          | Seq(g11,g12), Seq(g21,g22) ->
+            begin
+              match eq g11 g21, eq g12 g22 with
+              | Eq, Eq -> Eq
+              | _ -> NEq
+            end
+         | ISeq(g11,g12), ISeq(g21,g22) ->
             begin
               match eq g11 g21, eq g12 g22 with
               | Eq, Eq -> Eq
@@ -228,9 +243,12 @@ let print_ast_of_df : type a. a grammar -> print_ast = fun x ->
     | Term t       -> PTerm (t.n)
     | Alt(gs)      -> PAlt (List.map gn gs)
     | Seq(g1,g2)   -> PSeq(gn g1, gn g2)
+    | ISeq(g1,g2)  -> PSeq(gn g1, gn g2)
     | DSeq(g1,_)   -> PDSeq(gn g1)
+    | DISeq(g1,_)  -> PDSeq(gn g1)
     | Rkey _       -> assert false
     | Appl(g,_)    -> PTrans("appl",gn g)
+    | Repl(g,_)    -> PTrans("repl",gn g)
     | RPos(g)      -> PTrans("rpos",gn g)
     | LPos(_,g)    -> PTrans("lpos",gn g)
     | Test(_,g)    -> PTrans("test",gn g)
@@ -267,11 +285,14 @@ let print_ast_of_ne : type a. a grammar -> print_ast = fun x ->
     | ETerm t       -> PTerm (t.n)
     | EAlt(gs)      -> PAlt (List.map fn' gs)
     | ESeq(g1,g2)   -> PSeq(fn' g1, gn g2)
+    | EISeq(g1,g2)  -> PSeq(fn' g1, gn g2)
     | EDSeq(g1,_)   -> PDSeq(fn' g1)
+    | EDISeq(g1,_)  -> PDSeq(fn' g1)
     | ERkey k       -> PRkey (get_name k)
     | ELr(k,uf)     -> PLr(hn k uf)
     | ERef g        -> PTrans("ref" ,gn g)
     | EAppl(g,_)    -> PTrans("appl",fn' g)
+    | ERepl(g,_)    -> PTrans("repl",fn' g)
     | ERPos(g)      -> PTrans("rpos",fn' g)
     | ELPos(_,g)    -> PTrans("lpos",fn' g)
     | ETest(_,g)    -> PTrans("test",fn' g)
@@ -499,11 +520,30 @@ let appl : type a b. ?name:name -> a t -> (a -> b) -> b t =
     match g.d with
     | Fail         -> Fail, best name g.n
     | Appl(g',f')  -> Appl(g',(fun x -> f (f' x))), best name g.n
-    | Empty x      -> Empty (f x), best name g.n
+    | Repl(g',y)  -> (try Repl(g',f y) with NoParse | Give_up _ -> Fail),
+                     best name g.n
+    | Empty x      -> (try Empty (f x) with NoParse | Give_up _ -> Fail),
+                      best name g.n
     (* | Seq(g1,g2)   -> Seq(g1,appl g2 (fun h x -> f (h x))) *)
     (* | LPos(None,g) -> LPos(None, appl g (fun h x -> f (h x))) *)
     (* | RPos(g)      -> RPos(appl g (fun h x -> f (h x))) *)
     | _            -> Appl(g,f), name
+  in
+  mkg ~name df
+
+let repl : type a b. ?name:name -> a t -> b -> b t =
+  fun ?name g y ->
+  let name = gen_name name in
+  let df, name =
+    match g.d with
+    | Fail         -> Fail, best name g.n
+    | Appl(g',_)   -> Repl(g',y), best name g.n
+    | Repl(g',_)   -> Repl(g',y), best name g.n
+    | Empty _      -> Empty y, best name g.n
+    (* | Seq(g1,g2)   -> Seq(g1,appl g2 (fun h x -> f (h x))) *)
+    (* | LPos(None,g) -> LPos(None, appl g (fun h x -> f (h x))) *)
+    (* | RPos(g)      -> RPos(appl g (fun h x -> f (h x))) *)
+    | _            -> Repl(g,y), name
   in
   mkg ~name df
 
@@ -516,9 +556,22 @@ let seq ?name g1 g2 =
   | _, Empty y -> appl ?name g1 y
   | _          -> mkg ?name (Seq(g1,g2))
 
+let iseq ?name g1 g2 =
+  let name = created name in
+  match g1.d,g2.d with
+  | Fail, _    -> mkg ?name Fail
+  | _, Fail    -> mkg ?name Fail
+  | Empty _, _ -> g2
+  | _, Empty y -> repl g1 y
+  | _          -> mkg ?name (ISeq(g1,g2))
+
 let dseq ?name g1 g2 =
   let name = created name in
   mkg ?name (if g1.d = Fail then Fail else DSeq(g1,g2))
+
+let diseq ?name g1 g2 =
+  let name = created name in
+  mkg ?name (if g1.d = Fail then Fail else DISeq(g1,g2))
 
 let lpos ?name ?pk g =
   let name = created2 name g.n in
@@ -531,12 +584,14 @@ let rpos ?name g =
 type (_,_) plist =
   | PE : ('a, 'a) plist
   | PC : 'a t * ('b, 'c) plist -> ('a -> 'b,'c) plist
+  | PI : 'a t * ('b, 'c) plist -> ('b,'c) plist
   | PL : ('b, 'c) plist -> (Pos.t -> 'b,'c) plist
   | PR : ('b, 'c) plist -> (Pos.t -> 'b,'c) plist
 
 let rec alt : type a. ?name:name -> a t list -> a t = fun ?name l ->
   let l = List.filter (fun g -> g.d <> Fail) l in
-  let l = List.map (function { n = (_,(Given|Inherited))
+  let l = List.map (function { recursive  = false
+                             ; n = (_,(Created|Inherited))
                              ; d = Alt(ls) } -> ls | x -> [x]) l in
   let l = List.flatten l in
   match l with
@@ -551,12 +606,14 @@ and left_factorise : type a.a t list -> a t list = fun l ->
         fun acc r -> match acc with
         | PE      -> r
         | PC(g,l) -> fn l (seq g r)
+        | PI(g,l) -> fn l (iseq g r)
         | PL l    -> fn l (lpos r)
         | PR l    -> fn l (rpos r)
       in
       let rec test : type a b. (a, b) plist -> unit =
         function
         | PC _ -> ()
+        | PI _ -> ()
         | PL l -> test l
         | PR l -> test l
         | PE -> raise Not_found
@@ -590,10 +647,23 @@ and left_factorise : type a.a t list -> a t list = fun l ->
          | Assoc.Eq -> common_prefix (PC(l1,acc)) r1 r2
          | _  -> recompose acc g1 g2
        end
+    | ISeq(l1, r1), ISeq(l2,r2) ->
+       begin
+         match eq l1 l2 with
+         | Assoc.Eq -> common_prefix (PI(l1,acc)) r1 r2
+         | _  -> recompose acc g1 g2
+       end
     | Seq(l1, r1), Appl(g2',f) ->
        begin
          match eq l1 g2' with
          | Assoc.Eq -> recompose (PC(l1,acc)) r1 (empty f)
+         | _  -> recompose acc g1 g2
+       end
+    | ISeq(l1, r1), Appl(g2',f) ->
+       begin
+         match eq l1 g2' with
+         | Assoc.Eq ->
+            recompose (PC(l1,acc)) (appl r1 (fun x _ -> x)) (empty f)
          | _  -> recompose acc g1 g2
        end
     | Seq(l1, r1), _ ->
@@ -602,16 +672,34 @@ and left_factorise : type a.a t list -> a t list = fun l ->
          | Assoc.Eq -> recompose (PC(l1,acc)) r1 (empty (fun x -> x))
          | _  -> recompose acc g1 g2
        end
+    | ISeq(l1, r1), _ ->
+       begin
+         match eq l1 g2 with
+         | Assoc.Eq -> recompose (PC(l1,acc)) (appl r1 (fun x _ -> x)) (empty (fun x -> x))
+         | _  -> recompose acc g1 g2
+       end
     | Appl(g1',f), Seq(l2, r2) ->
        begin
          match eq l2 g1' with
          | Assoc.Eq -> recompose (PC(l2,acc)) (empty f) r2
          | _  -> recompose acc g1 g2
        end
+    | Appl(g1',f), ISeq(l2, r2) ->
+       begin
+         match eq l2 g1' with
+         | Assoc.Eq -> recompose (PC(l2,acc)) (empty f) (appl r2 (fun x _ -> x))
+         | _  -> recompose acc g1 g2
+       end
     | _, Seq(l2, r2) ->
        begin
          match eq l2 g1 with
          | Assoc.Eq -> recompose (PC(l2,acc)) (empty (fun x -> x)) r2
+         | _  -> recompose acc g1 g2
+       end
+    | _, ISeq(l2, r2) ->
+       begin
+         match eq l2 g1 with
+         | Assoc.Eq -> recompose (PC(l2,acc)) (empty (fun x -> x)) (appl r2 (fun x _ -> x))
          | _  -> recompose acc g1 g2
        end
     | _ -> recompose acc g1 g2
@@ -631,10 +719,6 @@ and left_factorise : type a.a t list -> a t list = fun l ->
        fn [] (factor l)
   in
   factor l
-
-let seq1 ?name g1 g2 = seq ?name g1 (appl g2 (fun _ x -> x))
-
-let seq2 ?name g1 g2 = seq ?name g1 (appl g2 (fun x _ -> x))
 
 let seq_rpos ?name g1 g2 =
   seq ?name (rpos (appl g1 (fun x rpos -> (x, rpos)))) g2
@@ -713,6 +797,7 @@ let memo g =
       let r = g x in Hashtbl_eq.add tbl x r; r)
 
 let dseq ?name g1 g2 = dseq ?name g1 (memo g2)
+let diseq ?name g1 g2 = diseq ?name g1 (memo g2)
 
 let option : ?name:string -> 'a grammar -> 'a option grammar = fun ?name g ->
   let name = created name in
@@ -786,7 +871,15 @@ let ne_appl g f =
   match g with
   | EFail           -> EFail
   | EAppl(g,h)      -> EAppl(g,fun x -> f (h x))
+  | ERepl(g,h)      -> (try ERepl(g,f h) with NoParse | Give_up _ -> EFail)
   | _               -> EAppl(g,f)
+
+let ne_repl g f =
+  match g with
+  | EFail           -> EFail
+  | EAppl(g,_)      -> ERepl(g,f)
+  | ERepl(g,_)      -> ERepl(g,f)
+  | _               -> ERepl(g,f)
 
 let ne_seq g1 g2 = match(g1,g2) with
   | EFail, _            -> EFail
@@ -794,9 +887,18 @@ let ne_seq g1 g2 = match(g1,g2) with
   | _, {e=[y];ne=EFail} -> ne_appl g1 y
   | _, _                -> ESeq(g1,g2)
 
+let ne_iseq g1 g2 = match(g1,g2) with
+  | EFail, _            -> EFail
+  | _, {e=[];ne=EFail}  -> EFail
+  | _, _                -> EISeq(g1,g2)
+
 let ne_dseq g1 g2 = match g1 with
   | EFail -> EFail
   | _     -> EDSeq(g1,g2)
+
+let ne_diseq g1 g2 = match g1 with
+  | EFail -> EFail
+  | _     -> EDISeq(g1,g2)
 
 let ne_lpos ?pk g1 = match g1 with
   | EFail -> EFail
@@ -867,13 +969,20 @@ let factor_empty g =
                    List.fold_left gn [] gs
     | Appl(g,f) -> fn g; List.fold_left (fun acc x ->
                              try f x :: acc
-                             with Lex.NoParse | Give_up _ -> acc) [] g.e
+                             with NoParse | Give_up _ -> acc) [] g.e
+    | Repl(g,f) -> fn g; if g.e <> [] then [f] else []
     | Seq(g1,g2) -> fn g1; fn g2;
                     List.fold_left (fun acc x ->
                         List.fold_left (fun acc y ->
                             try y x :: acc
                             with NoParse | Give_up _ -> acc) acc g2.e)
                       [] g1.e
+    | ISeq(g1,g2) -> fn g1; fn g2;
+                     if g1.e <> [] then
+                       List.fold_left (fun acc y ->
+                           try y :: acc
+                           with NoParse | Give_up _ -> acc) [] g2.e
+                     else []
     | DSeq(g1,g2) -> fn g1;
                        List.fold_left (fun acc (x,x') ->
                            try
@@ -881,6 +990,16 @@ let factor_empty g =
                              fn g2;
                              List.fold_left (fun acc y ->
                                  try y x' :: acc
+                                 with NoParse | Give_up _ -> acc) acc g2.e
+                         with NoParse | Give_up _ -> acc)
+                         [] g1.e
+    | DISeq(g1,g2) -> fn g1;
+                       List.fold_left (fun acc x ->
+                           try
+                             let g2 = g2 x in
+                             fn g2;
+                             List.fold_left (fun acc y ->
+                                 try y :: acc
                                  with NoParse | Give_up _ -> acc) acc g2.e
                          with NoParse | Give_up _ -> acc)
                          [] g1.e
@@ -923,11 +1042,16 @@ let factor_empty g =
     | Term(x) -> ETerm(x)
     | Alt(gs) -> List.iter hn gs; ne_alt (List.map get gs)
     | Appl(g,f) -> hn g; ne_appl (get g) f
+    | Repl(g,f) -> hn g; ne_repl (get g) f
     | Seq(g1,g2) -> hn g1; hn g2;
                     let ga = ne_seq (get g1) g2 in
                     let gb = ne_alt (List.map (fun x ->
                                          ne_appl (get g2) (fun y -> y x)) g1.e)
                     in
+                    ne_alt [ga; gb]
+    | ISeq(g1,g2) -> hn g1; hn g2;
+                    let ga = ne_iseq (get g1) g2 in
+                    let gb = if g1.e <> [] then get g2 else EFail in
                     ne_alt [ga; gb]
     | DSeq(g1,g2) -> hn g1;
                         let ga = ne_dseq (get g1) g2 in
@@ -937,6 +1061,18 @@ let factor_empty g =
                                      let g2 = g2 x in
                                      fn g2; hn g2;
                                      ne_appl (get g2) (fun y -> y x') :: acc
+                                   with NoParse -> acc) [] g1.e)
+                                (* FIXME, fn called twice on g2 x *)
+                       in
+                       ne_alt [ga; gb]
+    | DISeq(g1,g2) -> hn g1;
+                        let ga = ne_diseq (get g1) g2 in
+                        let gb =
+                          ne_alt (List.fold_left (fun acc x ->
+                                   try
+                                     let g2 = g2 x in
+                                     fn g2; hn g2;
+                                     get g2 :: acc
                                    with NoParse -> acc) [] g1.e)
                                 (* FIXME, fn called twice on g2 x *)
                        in
@@ -1049,9 +1185,15 @@ let elim_left_rec : type a. a grammar -> unit = fun g ->
       | ESeq(g1,g2) ->
          let (g1, s1) = fn above g1 in
          (ne_seq g1 g2, map_elr (fun g -> seq g g2) s1)
+      | EISeq(g1,g2) ->
+         let (g1, s1) = fn above g1 in
+         (ne_iseq g1 g2, map_elr (fun g -> iseq g g2) s1)
       | EDSeq(g1,g2) ->
          let (g1, s1) = fn above g1 in
          (ne_dseq g1 g2, map_elr (fun g -> dseq g g2) s1)
+      | EDISeq(g1,g2) ->
+         let (g1, s1) = fn above g1 in
+         (ne_diseq g1 g2, map_elr (fun g -> diseq g g2) s1)
       | EAlt(gs) ->
          let (gs,ss) = List.fold_left (fun (gs,ss) g ->
                               let (g,s) = fn above g in
@@ -1064,6 +1206,9 @@ let elim_left_rec : type a. a grammar -> unit = fun g ->
       | EAppl(g1,f) ->
          let (g1,s) = fn above g1 in
          (ne_appl g1 f, map_elr (fun g -> appl g f) s)
+      | ERepl(g1,f) ->
+         let (g1,s) = fn above g1 in
+         (ne_repl g1 f, map_elr (fun g -> repl g f) s)
       | ERef(g) -> gn above g
       | EUMrg(g1) ->
          let (g1,s) = fn above g1 in
@@ -1168,9 +1313,21 @@ let first_charset : type a. a grne -> Charset.t = fun g ->
            (false, Charset.union s s')
          end
        else r
+    | EISeq(g,g2) ->
+       let (shift, s as r) = fn g in
+       if shift then
+         begin
+           let (shift, s') = fn g2.ne in
+           assert (not shift);
+           (false, Charset.union s s')
+         end
+       else r
     | EDSeq(g,_) ->
        let (shift, _ as r) = fn g in if shift then (true, Charset.full) else r
+    | EDISeq(g,_) ->
+       let (shift, _ as r) = fn g in if shift then (true, Charset.full) else r
     | EAppl(g,_) -> fn g
+    | ERepl(g,_) -> fn g
     | ELr(_,x) ->
        let rec gn = function
          | LNil -> (false, Charset.empty)
@@ -1232,13 +1389,23 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
   | ESeq(g1,g2) -> Comb.seq (compile_ne g1)
                      (if g2.e = [] then first_charset g2.ne else Charset.full)
                      (compile false g2)
+  | EISeq(g1,g2) -> Comb.iseq (compile_ne g1)
+                     (if g2.e = [] then first_charset g2.ne else Charset.full)
+                     (compile false g2)
   | EDSeq(g1,g2) ->
      let memo = Hashtbl_eq.create 16 in
      Comb.dseq (compile_ne g1)
        (fun x -> try Hashtbl_eq.find memo x with Not_found ->
                    let cg = compile false (g2 x) in
                    Hashtbl_eq.add memo x cg; cg)
+  | EDISeq(g1,g2) ->
+     let memo = Hashtbl_eq.create 16 in
+     Comb.diseq (compile_ne g1)
+       (fun x -> try Hashtbl_eq.find memo x with Not_found ->
+                   let cg = compile false (g2 x) in
+                   Hashtbl_eq.add memo x cg; cg)
   | EAppl(g1,f) -> Comb.appl (compile_ne g1) f
+  | ERepl(g1,f) -> Comb.repl (compile_ne g1) f
   | ELr(k,x) ->
      begin
        let (r, _) = Uf.find x in
