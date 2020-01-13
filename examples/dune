@@ -26,6 +26,18 @@
     (system "../tests/big_expr.exe 3 4 4 | ./calc_ext.exe")))
 
 (test
+  (name calc_ext2)
+  (modules calc_ext2)
+  (preprocess (pps pacomb.ppx))
+  (libraries unix pacomb)
+  (deps ../tests/big_expr.exe calc_ext2.exe)
+  (action
+    (system "echo 'rule 2.0 : Exp 2.0 Str \"*\" Exp 1.9 => Op2 \"*\"\n\
+                  rule 2.0 : Exp 2.0 Str \"/\" Exp 1.9 => Op2 \"/\"\n\
+                  rule 4.0 : Exp 4.0 Str \"+\" Exp 3.9 => Op2 \"+\"\n\
+                  rule 4.0 : Exp 4.0 Str \"-\" Exp 3.9 => Op2 \"-\"\n' && ../tests/big_expr.exe 3 4 4 | ./calc_ext2.exe")))
+
+(test
   (name sexp)
   (modules sexp)
   (preprocess (pps pacomb.ppx))
