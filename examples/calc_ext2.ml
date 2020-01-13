@@ -3,6 +3,7 @@
 
 open Pacomb
 
+(** Access to float functions for the action of rules *)
 let get_op2 = function
   | "*" -> ( *. )
   | "+" -> ( +. )
@@ -52,20 +53,13 @@ let next_prio p env =
   let rec fn = function
     | x::(y::_) when x = p -> y
     | x::l                 -> assert (x >= p); fn l
-    | _ -> 0.0
+    | _                    -> 0.0
   in
   fn env.prios
 
-(** get the priority nearest to p . For associativity,
-    we will use [p - epsilon] to get the priority below p,
-    and get_prio will fetch the priority below p *)
-let get_prio p env =
-  let rec fn = function
-    | x::_      when x <= p -> x
-    | _::l                  -> fn l
-    | _                     -> 0.0
-  in
-  fn env.prios
+(** get the priority nearest to p . For associativity, we will use [p] of [<p]
+   and get_prio will fetch the first priority below [p] is needed *)
+let get_prio leq p env = if leq then p else next_prio p env
 
 (** the maximum priority *)
 let max_prio env = match env.prios with
@@ -90,7 +84,7 @@ let rm_rule name env =
 
 (** get all the rule of a given priority *)
 let get_rule : prio -> env -> float Grammar.t = fun p env ->
-  let rules = List.assoc p env.rules in
+  let rules = try List.assoc p env.rules with Not_found -> [] in
   let rules = List.map (fun (_,r) -> r env) rules in
   Grammar.alt rules
 
@@ -104,8 +98,8 @@ let%parser [@print_param pr] rec expr env (prio:prio) =
  ; (prio = 0.) '(' (x::expr env (max_prio env)) ')' => x
    (* incluse next priority level *)
  ; (prio > 0.) (x::expr env (next_prio prio env))   => x
-   (* get all the rule for the level *)
- ; (prio > 0.) (x::get_rule prio env)               => x
+   (* get all the rule for the level (including 0.0) *)
+ ;             (x::get_rule prio env)               => x
 
 (** a type of type *)
 type _ ty =
@@ -129,8 +123,8 @@ let%parser rec action : type a. a ty -> a Grammar.t
     for that BNF, parametrized by the current environment *)
 let%parser rec rule : type a. a ty -> (env -> a Grammar.t) Grammar.t
   = fun t ->
-    "Exp" (prio<:FLOAT) (r::rule (Arr(Flt,t))) =>
-      (fun env -> (x::expr env (get_prio prio env)) (f::r env) => f x)
+    "Exp" (leq:: ~? [true] ("<" => false)) (prio<:FLOAT) (r::rule (Arr(Flt,t))) =>
+      (fun env -> (x::expr env (get_prio leq prio env)) (f::r env) => f x)
   ; "Str" (s<:STRING_LIT) (r::rule t) =>
       (fun env -> (STR s) (x::r env) => x)
   ; "=>" (a::action t) => (fun _ -> () => a)

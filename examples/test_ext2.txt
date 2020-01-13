@@ -2,14 +2,14 @@
 3
 (4)
 5
-rule "suc" 1.0 : Str "S" Exp 1.0 => Cst 1.0 Op2 "+"
-rule "pre" 1.0 : Str "P" Exp 1.0 => Cst 1.0 Op2 "-"
+rule "suc" 1 : Str "S" Exp 1 => Cst 1 Op2 "+"
+rule "pre" 1 : Str "P" Exp 1 => Cst 1 Op2 "-"
 SPPS6
-rule "pow" 2.0 : Exp 1.9 Str "^" Exp 2.0 => Op2 "^"
-rule "mul" 3.0 : Exp 3.0 Str "*" Exp 2.9 => Op2 "*"
-rule "div" 3.0 : Exp 3.0 Str "/" Exp 2.9 => Op2 "/"
-rule "add" 4.0 : Exp 4.0 Str "+" Exp 3.9 => Op2 "+"
-rule "sub" 4.0 : Exp 4.0 Str "-" Exp 3.9 => Op2 "-"
+rule "pow" 2 : Exp <2 Str "^" Exp  2 => Op2 "^"
+rule "mul" 3 : Exp  3 Str "*" Exp <3 => Op2 "*"
+rule "div" 3 : Exp  3 Str "/" Exp <3 => Op2 "/"
+rule "add" 4 : Exp  4 Str "+" Exp <4 => Op2 "+"
+rule "sub" 4 : Exp  4 Str "-" Exp <4 => Op2 "-"
 3*3
 2+2
 2+3*3
