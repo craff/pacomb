@@ -659,11 +659,24 @@ and left_factorise : type a.a t list -> a t list = fun l ->
          | Assoc.Eq -> recompose (PC(l1,acc)) r1 (empty f)
          | _  -> recompose acc g1 g2
        end
+    | Seq(l1, r1), Repl(g2',y) ->
+       begin
+         match eq l1 g2' with
+         | Assoc.Eq -> recompose (PC(l1,acc)) r1 (empty (fun _ -> y))
+         | _  -> recompose acc g1 g2
+       end
     | ISeq(l1, r1), Appl(g2',f) ->
        begin
          match eq l1 g2' with
          | Assoc.Eq ->
             recompose (PC(l1,acc)) (appl r1 (fun x _ -> x)) (empty f)
+         | _  -> recompose acc g1 g2
+       end
+    | ISeq(l1, r1), Repl(g2',y) ->
+       begin
+         match eq l1 g2' with
+         | Assoc.Eq ->
+            recompose (PI(l1,acc)) r1 (empty y)
          | _  -> recompose acc g1 g2
        end
     | Seq(l1, r1), _ ->
@@ -675,7 +688,8 @@ and left_factorise : type a.a t list -> a t list = fun l ->
     | ISeq(l1, r1), _ ->
        begin
          match eq l1 g2 with
-         | Assoc.Eq -> recompose (PC(l1,acc)) (appl r1 (fun x _ -> x)) (empty (fun x -> x))
+         | Assoc.Eq -> recompose (PC(l1,acc))
+                         (appl r1 (fun x _ -> x)) (empty (fun x -> x))
          | _  -> recompose acc g1 g2
        end
     | Appl(g1',f), Seq(l2, r2) ->
@@ -684,10 +698,22 @@ and left_factorise : type a.a t list -> a t list = fun l ->
          | Assoc.Eq -> recompose (PC(l2,acc)) (empty f) r2
          | _  -> recompose acc g1 g2
        end
+    | Repl(g1',y), Seq(l2, r2) ->
+       begin
+         match eq l2 g1' with
+         | Assoc.Eq -> recompose (PC(l2,acc)) (empty (fun _ -> y)) r2
+         | _  -> recompose acc g1 g2
+       end
     | Appl(g1',f), ISeq(l2, r2) ->
        begin
          match eq l2 g1' with
          | Assoc.Eq -> recompose (PC(l2,acc)) (empty f) (appl r2 (fun x _ -> x))
+         | _  -> recompose acc g1 g2
+       end
+    | Repl(g1',y), ISeq(l2, r2) ->
+       begin
+         match eq l2 g1' with
+         | Assoc.Eq -> recompose (PI(l2,acc)) (empty y) r2
          | _  -> recompose acc g1 g2
        end
     | _, Seq(l2, r2) ->
@@ -699,7 +725,8 @@ and left_factorise : type a.a t list -> a t list = fun l ->
     | _, ISeq(l2, r2) ->
        begin
          match eq l2 g1 with
-         | Assoc.Eq -> recompose (PC(l2,acc)) (empty (fun x -> x)) (appl r2 (fun x _ -> x))
+         | Assoc.Eq -> recompose (PC(l2,acc))
+                         (empty (fun x -> x)) (appl r2 (fun x _ -> x))
          | _  -> recompose acc g1 g2
        end
     | _ -> recompose acc g1 g2
