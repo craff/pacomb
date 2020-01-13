@@ -96,12 +96,14 @@ type 'a grammar =
    | Seq  : 'a t * ('a -> 'b) t -> 'b grdf
                                            (** sequence *)
    | ISeq  : 'a t * 'b t -> 'b grdf
-                                           (** sequence not using the first grammar *)
+                                           (** sequence not using the
+                                               first grammar *)
    | DSeq : ('a * 'b) t * ('a -> ('b -> 'c) t) -> 'c grdf
                                            (** dependant sequence *)
    | DISeq : 'a t * ('a -> 'b t) -> 'b grdf
-                                           (** dependant sequence nt using
-                                               the semantics of the first grammar *)
+                                           (** dependant sequence not using
+                                               the semantics of the first
+                                               grammar *)
    | Rkey : 'a key -> 'a grdf              (** access to the lr table *)
    | LPos : mlr Uf.t option * (Pos.t -> 'a) t -> 'a grdf
                                            (** read the postion before parsing,
