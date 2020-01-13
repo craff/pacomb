@@ -35,7 +35,8 @@ type prios = prio list
 (** a parsing rule: a grammar from an environment *)
 type 'a rule = env -> 'a Grammar.t
 
-and rules = (float * float rule list) list
+(** list of rule, with a name for each rule *)
+and rules = (float * (string * float rule) list) list
 
 (** parsing environment: all rules and all prios sorted in
     decreasing order (lowest priority first). *)
@@ -71,16 +72,26 @@ let max_prio env = match env.prios with
   | x::_ -> x | [] -> 0.0
 
 (** add a rule with the given priority *)
-let add_rule prio r env =
+let add_rule name prio r env =
   let old = try List.assoc prio env.rules with Not_found ->  [] in
   let rules = (List.filter (fun (p,_) -> prio <> p) env.rules) in
   let env = add_prio prio env in
-  { env with rules = (prio, r::old) :: rules }
+  { env with rules = (prio, (name,r)::old) :: rules }
+
+let rm_rule name env =
+  let count = ref 0 in
+  let rm l = List.filter (fun (n,_) -> if n = name then incr count;
+                                       n <> name) l
+  in
+  let rules = List.map (fun (p,l) -> (p, rm l)) env.rules in
+  let rules = List.filter (fun (_,l) -> l <> []) rules in
+  let prios = List.rev (List.sort_uniq compare (List.map fst rules)) in
+  { rules; prios }, !count
 
 (** get all the rule of a given priority *)
 let get_rule : prio -> env -> float Grammar.t = fun p env ->
   let rules = List.assoc p env.rules in
-  let rules = List.map (fun r -> r env) rules in
+  let rules = List.map (fun (_,r) -> r env) rules in
   Grammar.alt rules
 
 let pr (_, p) = Printf.sprintf "%g" p
@@ -102,6 +113,9 @@ type _ ty =
 | Arr : 'a ty * 'b ty -> ('a -> 'b) ty
 
 (** action of a given type , syntaxe, HP style *)
+(** Remark: we need fake, dependant sequence (<:) because otherwise
+    the construction of the grammar loops producing bigger
+    and bigger types. Dependant sequence builds the grammar lazily *)
 let%parser rec action : type a. a ty -> a Grammar.t
   = fun t ->
     "Cst" (x<:FLOAT) (f::action (Arr(Flt,t))) => f x
@@ -113,9 +127,6 @@ let%parser rec action : type a. a ty -> a Grammar.t
 
 (** the magic parsing : parse a BNF rule and return the parser
     for that BNF, parametrized by the current environment *)
-(** Remark: we need fake, dependant sequence (<:) because other
-    with the construction of the grammar loops producing bigger
-    and bigger types. Dependant sequence builds the grammar lazily *)
 let%parser rec rule : type a. a ty -> (env -> a Grammar.t) Grammar.t
   = fun t ->
     "Exp" (prio<:FLOAT) (r::rule (Arr(Flt,t))) =>
@@ -123,9 +134,6 @@ let%parser rec rule : type a. a ty -> (env -> a Grammar.t) Grammar.t
   ; "Str" (s<:STRING_LIT) (r::rule t) =>
       (fun env -> (STR s) (x::r env) => x)
   ; "=>" (a::action t) => (fun _ -> () => a)
-
-(** reference use to keep the env in case of parse error *)
-let env_ref = ref empty_env
 
 (* A subtlety : we want to parse expression, one by one and print the
    result. Pacomb needs to do things that require buffer examination after
@@ -137,23 +145,36 @@ let env_ref = ref empty_env
 let nl _ b i _ _ =
   let (c,_,_) = Input.read b i in c = '\n'
 
+(** the command parsing an expression and printing it *)
 let%parser top_expr env =
   (x::Grammar.test_after nl (expr env (max_prio env))) =>
     Printf.printf "%g\n=> %!" x
 
+(** reference only uses to keep the env in case of parse error *)
+let env_ref = ref empty_env
+
 (** The command parsing a new rule *)
 let%parser new_rule env =
-  "rule" (p::FLOAT) ":" (r::Grammar.test_after nl (rule Flt)) =>
-       let env = add_rule p r env in
+  "rule" (n::STRING_LIT) (p::FLOAT) ":" (r::Grammar.test_after nl (rule Flt)) =>
+       let env = add_rule n p r env in
        env_ref := env;
        Printf.printf "new rule accepted\n=> %!";
        (env, ())
+
+         (** The command parsing removing all rules with a given name *)
+let%parser rem_rule env =
+  "remove" "rule" (n::STRING_LIT) =>
+    let (env, nb) = rm_rule n env in
+    env_ref := env;
+    Printf.printf "%d rule(s) removed\n=> %!" nb;
+    (env, ())
 
 (** main parsing, right recursion with no action is ok now *)
 let%parser rec cmds env =
     ()                                          => ()
   ; (top_expr env) '\n' (cmds env)              => ()
   ; ((env,()) >: new_rule env) '\n' (cmds env)  => ()
+  ; ((env,()) >: rem_rule env) '\n' (cmds env)  => ()
 
 let top = cmds empty_env
 
