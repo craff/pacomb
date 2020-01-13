@@ -1,0 +1,22 @@
+2
+3
+(4)
+5
+rule 1.0 : Str "S" Exp 1.0 => Cst 1.0 Op2 "+"
+rule 1.0 : Str "P" Exp 1.0 => Cst 1.0 Op2 "-"
+SPPS6
+rule 2.0 : Exp 1.9 Str "^" Exp 2.0 => Op2 "^"
+rule 3.0 : Exp 3.0 Str "*" Exp 2.9 => Op2 "*"
+rule 3.0 : Exp 3.0 Str "/" Exp 2.9 => Op2 "/"
+rule 4.0 : Exp 4.0 Str "+" Exp 3.9 => Op2 "+"
+rule 4.0 : Exp 4.0 Str "-" Exp 3.9 => Op2 "-"
+3*3
+2+2
+2+3*3
+2+3*5/2-1
+(5+5)
+SPS6 * 3 + S1
+2^2^2
+2^3^2
+(2^3)^2
+2^(3^2)
