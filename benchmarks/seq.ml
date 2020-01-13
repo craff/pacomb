@@ -16,8 +16,8 @@ module Lr = struct
 end
 
 module Ld = struct
-  let%parser rec lr = ()                => ((),())
-                    ; ((__)<:lr) 'a' => ((),())
+  let%parser rec lr = ()           => ()
+                    ; (__<:lr) 'a' => ()
 
   let%parser top = lr EOF => ()
 end
@@ -37,17 +37,15 @@ module Rrl = struct
 end
 
 module Rd = struct
-  let%parser a = 'a' => ((), ())
-  let%parser rec rr = ()                    => ()
-                    ; ((__,__)>:a) (__::rr) => ()
+  let%parser rec rr = ()                 => ()
+                    ; (__<:'a') (__::rr) => ()
 
   let%parser top = (x::rr) EOF => x
 end
 
 module Rdl = struct
-  let%parser a = 'a' => ((), ())
-  let%parser rec rr = ()                        => lazy 0
-                    ; ((__,__)>:a) (lazy x::rr) => lazy (x+1)
+  let%parser rec rr = ()                     => lazy 0
+                    ; (__<:'a') (lazy x::rr) => lazy (x+1)
 
   let%parser top = (x::rr) EOF => Lazy.force x
 end
