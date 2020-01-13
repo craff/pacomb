@@ -9,13 +9,19 @@ let get_op2 = function
   | "/" -> ( /. )
   | "-" -> ( -. )
   | "^" -> ( ** )
+  | "atan2" -> atan2
   |  _  -> failwith "invalid binary op"
 
 let get_op1 = function
+  | "sqrt" -> sqrt
   | "cos" -> cos
+  | "acos" -> acos
   | "sin" -> sin
+  | "asin" -> asin
   | "tan" -> tan
+  | "atan" -> atan
   | "ln"  -> log
+  | "log"  -> log10
   | "exp" -> exp
   |  _  -> failwith "invalid unary op"
 
@@ -51,7 +57,7 @@ let next_prio p env =
 
 (** get the priority nearest to p . For associativity,
     we will use [p - epsilon] to get the priority below p,
-    and get_prio ill fetch the priority below p *)
+    and get_prio will fetch the priority below p *)
 let get_prio p env =
   let rec fn = function
     | x::_      when x <= p -> x
@@ -68,6 +74,7 @@ let max_prio env = match env.prios with
 let add_rule prio r env =
   let old = try List.assoc prio env.rules with Not_found ->  [] in
   let rules = (List.filter (fun (p,_) -> prio <> p) env.rules) in
+  let env = add_prio prio env in
   { env with rules = (prio, r::old) :: rules }
 
 (** get all the rule of a given priority *)
@@ -104,7 +111,6 @@ let%parser rec action : type a. a ty -> a Grammar.t
       (let g = get_op2 s in (fun x y -> f (g y x) : a))
   ; (t =| Arr(Flt,Flt)) () => (fun x -> x)
 
-
 (** the magic parsing : parse a BNF rule and return the parser
     for that BNF, parametrized by the current environment *)
 (** Remark: we need fake, dependant sequence (<:) because other
@@ -139,7 +145,6 @@ let%parser top_expr env =
 let%parser new_rule env =
   "rule" (p::FLOAT) ":" (r::Grammar.test_after nl (rule Flt)) =>
        let env = add_rule p r env in
-       let env = add_prio p env in
        env_ref := env;
        Printf.printf "new rule accepted\n=> %!";
        (env, ())
