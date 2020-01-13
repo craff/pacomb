@@ -250,6 +250,20 @@ A ssimilar problem arises if you want to evaluate an action immediatly after
 a newline has been parsed. As [Pacomb] is trying to read the blank characteres
 after the newline, the evaluation of the action is retarted.
 
+Remark: right recursion for sequence not using any semantics is optimized and
+works in O(1) memory. For instance, the following to parse a list of command
+with dependant grammar (hence right recursion is mandatory) works:
+{[
+let%parser rec cmds env =
+    ()                                          => ()
+  ; (top_expr env) '\n' (cmds env)              => ()
+  ; ((env,()) >: new_rule env) '\n' (cmds env)  => ()
+  ; ((env,()) >: rem_rule env) '\n' (cmds env)  => ()
+}]
+It works for one main reason: we do not use any semantics
+for any item in the rule. The first member of the pair for
+dependant grammar is used soon enough and does not need a stack.
+
 For instance, if you do not want to use [input_line] as above for your calculator,
 you may want to write:
 {[
