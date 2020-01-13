@@ -109,12 +109,14 @@ qitems ::= ()                                                      Grammar.empty
        | cond non_empty_qitems                                  conditional rule
 cond ::= expr bool_op expr
        | not expr
+       | expr =| expr                                           pattern matching
 non_empty_qitems ::= qitem                                                itself
        | non_empty_qitems qitems                                     Grammar.seq
 qitem ::= item                                                            itself
        | (epat :: item)                        give a name if used in the action
        | ((epat,epat) >: item)                            as above, but for dseq
        | (lazy (epat,epat) >: item)                  as above, but for lazy dseq
+       | (epat <: item)                                   dseq with no real deps
 item ::= CHAR                                           Grammar.term(Lex.any ())
        | CHAR(c) or 'c'                                 Grammar.term(Lex.char c)
        | CHARSET(s)                                  Grammar.term(Lex.charset s)
@@ -148,8 +150,11 @@ epat ::= lid
        | M.epat
 ]}
 [epat] correspond to an encoding of patterns in expressions. Beware that [_] is
-invalid, use [__] instead. [cond] is an expression using any test operator:
-"="|"<"|">"|"<="|">="|"<>"|"=="|"!="|"not"|"&&"|"||".
+invalid, use [__] instead. [bool_op] is an expression using any test operator:
+"="|"<"|">"|"<="|">="|"<>"|"=="|"!="|"&&"|"||".
+
+Condition using (e =| epat) allows for rule garder by pattern matching. This
+has also been tested with GADT (see examples/calc_ext2.ml).
 
 Action code needs parenthesis or [begin ... end] if it uses [if .. then],
 pattern matching or sequences.
@@ -293,6 +298,24 @@ Note: one can fairly well control when action are evaluated and therefore the
 parsing may depends upon global references that are modified by your parser
 itsel. However, purely functional code should be prefered, even for extensible
 grammars.
+
+Dependant sequences are also useful to prevent construction of infinite grammar.
+For instance in this code from [examples/calc_ext2.ml]:
+{[
+let%parser rec rule : type a. a ty -> (env -> a Grammar.t) Grammar.t
+  = fun t ->
+    "Exp" (prio<:FLOAT) (r::rule (Arr(Flt,t))) =>
+      (fun env -> (x::expr env (get_prio prio env)) (f::r env) => f x)
+  ; "Str" (s<:STRING_LIT) (r::rule t) =>
+      (fun env -> (STR s) (x::r env) => x)
+  ; "=>" (a::action t) => (fun _ -> () => a)
+]}
+
+The construction for the grammar for [rule] would loop in the ["Exp"] rule if we
+were not using [<:]. [epat<:item] is equivalent to [((),epat)>:((x::item) =>
+((),x))].  This represent a grammar depending from [()], i.e. a constant
+grammar.  The only effect if to delay the construction of the grammar right of
+[<:] until it is really used.
 
 {1:ambiguous Cache and merge for ambiguous grammars}
 

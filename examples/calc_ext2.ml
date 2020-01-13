@@ -94,6 +94,17 @@ type _ ty =
   Flt : float ty
 | Arr : 'a ty * 'b ty -> ('a -> 'b) ty
 
+(** action of a given type , syntaxe, HP style *)
+let%parser rec action : type a. a ty -> a Grammar.t
+  = fun t ->
+    "Cst" (x<:FLOAT) (f::action (Arr(Flt,t))) => f x
+  ; (t =| Arr(Flt,t1)) "Op1" (s<:STRING_LIT) (f::action (Arr(Flt,t1))) =>
+      (let g = get_op1 s in (fun x -> f (g x) : a))
+  ; (t =| Arr(Flt,Arr(Flt,t1))) "Op2" (s<:STRING_LIT) (f::action (Arr(Flt,t1))) =>
+      (let g = get_op2 s in (fun x y -> f (g y x) : a))
+  ; (t =| Arr(Flt,Flt)) () => (fun x -> x)
+
+
 (** the magic parsing : parse a BNF rule and return the parser
     for that BNF, parametrized by the current environment *)
 (** Remark: we need fake, dependant sequence (<:) because other
@@ -106,16 +117,6 @@ let%parser rec rule : type a. a ty -> (env -> a Grammar.t) Grammar.t
   ; "Str" (s<:STRING_LIT) (r::rule t) =>
       (fun env -> (STR s) (x::r env) => x)
   ; "=>" (a::action t) => (fun _ -> () => a)
-
-(** action, syntaxe style calculette HP *)
-and action : type a. a ty -> a Grammar.t
-  = fun t ->
-    "Cst" (x<:FLOAT) (f::action (Arr(Flt,t))) => f x
-  ; (t =| Arr(Flt,t1)) "Op1" (s<:STRING_LIT) (f::action (Arr(Flt,t1))) =>
-      (let g = get_op1 s in (fun x -> f (g x) : a))
-  ; (t =| Arr(Flt,Arr(Flt,t1))) "Op2" (s<:STRING_LIT) (f::action (Arr(Flt,t1))) =>
-      (let g = get_op2 s in (fun x y -> f (g y x) : a))
-  ; (t =| Arr(Flt,Flt)) () => (fun x -> x)
 
 (** reference use to keep the env in case of parse error *)
 let env_ref = ref empty_env
