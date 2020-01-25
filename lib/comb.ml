@@ -54,18 +54,14 @@
 
 (** {2 main types } *)
 
-(** priority for ordering:
-    (p, (p', d)) : p position at end of parsing
-                   p' position at the beginning of parsing with
-                      the latest cached grammar
-                   d  depth of cached grammar, when two cached grammar
-                      start parsing from the same position, the one
-                      calling the other as a smaller depth
- *)
+(** short cut *)
 type 'a key = 'a Assoc.key
 
+(** type for holding the semantics of the left-hand-side of a value/position
+   parsed by the lr, lr_pos and mlr combinators, use *)
 type lr = LR : 'a key * 'a * Pos.t -> lr
 
+(** functions related to the lr type*)
 let dummy_lr = LR(Assoc.new_key (), (), Input.phantom_spos)
 
 let get_lr_pos (LR(_,_,p)) = p
@@ -78,7 +74,14 @@ let get_lr_val : type a. a key -> lr -> a = fun k (LR(k',x,_)) ->
 let lr_val k x = LR(k,x,Input.phantom_spos)
 let lr_val_pos k x p = LR(k,x,p)
 
+(** type of a reference to hold the further position reached during parsing *)
 type max_pos = (Input.byte_pos * Lex.buf * Lex.idx * string list ref) ref
+
+(** Information  used to  order cache  parsing, the  [byte_pos] is  the position
+    where we started to parse the  cached grammar, the second int is increased
+    when we parse a cached grammar that was called at same position by another
+    cached grammar. Recall that current position is also use see [cmp] below. *)
+type cache_order = Input.byte_pos * int
 
 (** Environment holding information required for parsing. *)
 type env =
@@ -96,11 +99,9 @@ type env =
   (** Position in [buf_before_blanks] before reading the blanks. *)
   ; lr                : lr
   (** semantics value to be forced after the next lexeme read *)
-  ; cache_order       : Input.byte_pos * int
-  (** Information used  to order cache parsing, the first  [int] is the position
-      where we started to parse the  cached grammar, the second int is increased
-      when we parse a cached grammar that was called at same position by another
-      cached grammar. *)
+  ; cache_order       : cache_order
+  (** the information for ordering task in the scheduler for cached/merged
+      grammar to work *)
   ; queue : res Heap.t ref
   (** the  heap holding continuation  and alternative branch for  parsing. All
       environments share the same heap.  *)
@@ -114,40 +115,43 @@ type env =
     parallel. *)
  and res =
    | Cont : env * 'a cont * 'a -> res
-   | Merg : env * (Input.byte_pos * int) * 'a cont * 'a lazy_t -> res
    (**  Cont(env,k,x)  the value  and  environment  resulting from  parsing  the
       beginning of the  input and the continuation to finish  parsing It must be
       used instead of calling immediatly  the continuation because the scheduler
       needs to order parsing. *)
+   | Merg : env * cache_order * 'a cont * 'a lazy_t -> res
+   (** same as above, but some merge from the given cache order level are waiting.
+       The scheduler need this to ensure all continuation are build for that merge
+       before doing the actual merge. the cache_order to be restored when the
+       continuation is called is kept. The action is lazy as it will call merge
+       and we must be sure that all value to be merged were produced. *)
    | Gram : env * 'a t * 'a cont -> res
    (** This contructor represents an alternative branch of parsing, with both a
    grammar and a continuation *)
 
- (** Type  of a  parsing continuation. A  value of type  ['a cont]  represents a
-    function  waiting for  a parsing  environment and  a value  of type  ['a] to
+ (** Type of a parsing continuation. A value of type ['a cont] represents a
+    function waiting for a parsing environment and a value of type ['a] to
     continue parsing.  To avoid quadratic behavior with right recursion, this is
     splitted in two parts:
 
     - a transformer of type [('a,'b) trans] representing a function from ['a] to
     ['b]
 
-    - a continuation  that expect a  lazy value,  evaluation is retarded  to the
-    parsing of the next lexeme.
+    - a continuation that expect a value,  evaluation is retarded to the parsing
+    of the next lexeme.
 
-    - A special continuation [P] is used when we need to store the position when
-    we will call the continuation.
+    - An option is used when we need to store the position when we will call the
+    continuation.
 
     With this type for continuation, we have two benefits:
 
     - most  combinator  can transform  the  continuation  in O(1)  time  without
     introducing a nested closure.
 
-    - evaluation of action being retarded to the next lexeme, prefix of right
+    - evaluation of  action being retarded to  the next lexeme, prefix  of right
     recursive grammar also transform the continuation in O(1).  *)
  and 'a cont =
    | C : (env -> 'b -> res) * ('a,'b) trans * Pos.t ref option -> 'a cont
- (** [P] is used when the position when calling the continuation (right position
-       of some grammar) is needed. *)
 
  (** [('a,'b) args] is the type of a transformer from a value of type ['a] to a
     value of type ['b]. To keep amortized O(1) semantics of eval_lrgs, we mark
@@ -291,7 +295,17 @@ let posk : type a. a cont -> (Pos.t -> a) cont = fun k ->
 
 (** the scheduler stores what remains to do in a list sorted by position in the
     buffer, and vptr key list (see cache below) here are the comparison function
-    used for this sorting *)
+    used for this sorting
+ priority for ordering:
+    (p, (p', d)) : p position at end of parsing
+                   p' position at the beginning of parsing with
+                      the cached grammar
+                   d  depth of cached grammar, when two cached grammar
+                      start parsing from the same position, the one
+                      calling the other as a smaller depth
+ *)
+
+
 let cmp c1 c2 =
   let gn = function
     | Gram(env,_,_) -> (0, env)
