@@ -38,7 +38,7 @@ let interval (p1 : pos) (p2 : pos) =
   { name       = p1.name
   ; start_line = p1.line
   ; start_col  = p1.col
-  ; end_line   = p1.line
+  ; end_line   = p2.line
   ; end_col    = p2.col
   ; phantom    = p1.phantom || p2.phantom }
 

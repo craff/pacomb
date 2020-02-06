@@ -221,18 +221,18 @@ let rescan_buf buf0 fn acc =
   in
   let get_cache i =
     let rec fn = function
-        []                -> (buf0, 0, acc)
-      | (j,buf,idx,acc)::ls -> if j <= i then (buf, idx, acc) else fn ls
+        []                -> (0, buf0, 0, acc)
+      | (j,buf,idx,acc)::ls -> if j <= i then (j, buf, idx, acc) else fn ls
     in
     fn !cache
   in
   fun i0 ->
-    let (buf0,idx0,acc0) = get_cache i0 in
+    let (j,buf0,idx0,acc0) = get_cache i0 in
     let buf = ref buf0 in
     let acc = ref acc0 in
     let idx = ref idx0 in
-    for i = 0 to i0 - 1 do
-      if i mod 1024 = 0 then set_cache i !buf !idx !acc;
+    for i = j to i0 - 1 do
+      if i > j && i mod 1024 = 0 then set_cache i !buf !idx !acc;
       let (c,b,p) = read !buf !idx in
       buf := b; idx := p;
       acc := fn i c !acc
@@ -246,20 +246,20 @@ let rescan_seek file pos_in seek_in mk_buf fn acc =
   in
   let get_cache i =
     let rec fn = function
-        []                -> (0, 0, acc)
-      | (j,p,idx,acc)::ls -> if j <= i then (p, idx, acc) else fn ls
+        []                -> (0, 0, 0, acc)
+      | (j,p,idx,acc)::ls -> if j <= i then (j,p, idx, acc) else fn ls
     in
     fn !cache
   in
   fun i0 ->
     let saved = pos_in file in
-    let (p0,idx0,acc0) = get_cache i0 in
+    let (j,p0,idx0,acc0) = get_cache i0 in
     seek_in file p0;
     let buf = ref (mk_buf ()) in
     let acc = ref acc0 in
     let idx = ref idx0 in
-    for i = 0 to i0 - 1 do
-      if i mod 1024 = 0 then set_cache i !idx !acc;
+    for i = j to i0 - 1 do
+      if i > j && i mod 1024 = 0 then set_cache i !idx !acc;
       let (c,b,p) = read !buf !idx in
       buf := b; idx := p;
       acc := fn i c !acc
