@@ -105,19 +105,29 @@ let [@inline] byte_pos b p = b.boff + p
 let [@inline] spos b p = (b.infos, b.boff + p)
 
 (* Get the current line number of a buffer, rescanning the file *)
-let line_num infos i0 =
-  let fn i c (l,ls) =
-    match ls with
-    | (j,l)::ls when i = j -> (l, ls)
-    | _ -> if c = '\n' then (l+1, ls) else (l,ls)
-  in
-  let lnum_skip = List.rev infos.lnum_skip in
-  fst (infos.rescan.f fn (1,lnum_skip) i0)
+let really_cache fn =
+  let cache = ref [] in
+  fun infos i0 ->
+    try List.assq infos !cache i0 with Not_found ->
+      let fn = fn infos in
+      cache := (infos,fn)::!cache; fn i0
+
+let line_num =
+  really_cache (fun infos ->
+      let fn i c (l,ls) =
+        match ls with
+        | (j,l)::ls when i = j -> (l, ls)
+        | _ -> if c = '\n' then (l+1, ls) else (l,ls)
+      in
+      let lnum_skip = List.rev infos.lnum_skip in
+      let rescan = infos.rescan.f fn (1,lnum_skip) in
+      fun i0 -> fst (rescan i0))
 
 (* Get the current ascii column number of a buffer, rescanning *)
-let ascii_col_num infos i0 =
-  let fn _ c p = if c = '\n' then 0 else p+1 in
-  infos.rescan.f fn 0 i0
+let ascii_col_num =
+  really_cache (fun infos ->
+      let fn _ c p = if c = '\n' then 0 else p+1 in
+      infos.rescan.f fn 0)
 
 exception Splitted_end
 exception Splitted_begin
@@ -164,24 +174,27 @@ let utf8_len context data =
   in find 0 0
 
 (* Get the utf8 column number corresponding to the given position. *)
-let utf8_col_num infos i0 =
-  let fn _ c cs = if c = '\n' then [] else c::cs in
-  let cs = infos.rescan.f fn [] i0 in
-  let len = List.length cs in
-  let str = Bytes.create len in
-  let rec fn cs p =
-    match cs with
-    | [] -> assert (p=0); ()
-    | c::cs -> let p = p - 1 in
-               Bytes.set str p c;
-               fn cs p
-  in
-  fn cs len;
-  utf8_len infos.utf8 (Bytes.unsafe_to_string str)
+let utf8_col_num =
+  really_cache (fun infos ->
+      let fn _ c cs = if c = '\n' then [] else c::cs in
+      let rescan = infos.rescan.f fn [] in
+      (fun i0 ->
+        let cs = rescan i0 in
+        let len = List.length cs in
+        let str = Bytes.create len in
+        let rec fn cs p =
+          match cs with
+          | [] -> assert (p=0); ()
+          | c::cs -> let p = p - 1 in
+                     Bytes.set str p c;
+                 fn cs p
+        in
+        fn cs len;
+        utf8_len infos.utf8 (Bytes.unsafe_to_string str)))
 
 (* general column number *)
-let col_num infos i0 =
-  if infos.utf8 = ASCII then ascii_col_num infos i0 else utf8_col_num infos i0
+let col_num infos =
+  if infos.utf8 = ASCII then ascii_col_num infos else utf8_col_num infos
 
 (* Equality of buffers. *)
 let buffer_equal b1 b2 =
@@ -241,25 +254,25 @@ let rescan_buf buf0 fn acc =
 
 let rescan_seek file pos_in seek_in mk_buf fn acc =
   let cache = ref [] in
-  let set_cache i idx acc =
-    cache := (i,pos_in file, idx, acc) :: !cache
+  let set_cache i acc =
+    cache := (i, acc) :: !cache
   in
   let get_cache i =
     let rec fn = function
-        []                -> (0, 0, 0, acc)
-      | (j,p,idx,acc)::ls -> if j <= i then (j,p, idx, acc) else fn ls
+        []                -> (0, acc)
+      | (j,acc)::ls -> if j <= i then (j, acc) else fn ls
     in
     fn !cache
   in
   fun i0 ->
     let saved = pos_in file in
-    let (j,p0,idx0,acc0) = get_cache i0 in
-    seek_in file p0;
+    let (j,acc0) = get_cache i0 in
+    seek_in file j;
     let buf = ref (mk_buf ()) in
     let acc = ref acc0 in
-    let idx = ref idx0 in
+    let idx = ref 0 in
     for i = j to i0 - 1 do
-      if i > j && i mod 1024 = 0 then set_cache i !idx !acc;
+      if i > j && i mod 1024 = 0 then set_cache i !acc;
       let (c,b,p) = read !buf !idx in
       buf := b; idx := p;
       acc := fn i c !acc
@@ -386,13 +399,13 @@ include GenericInput(
     and mk_rescan finalise utf8 name get_line st buf =
       match st with
       | Seek (pos, seek, reopen) ->
-         { f = fun fn acc i0 ->
+         { f = fun fn acc ->
                let file = reopen () in
                rescan_seek file pos seek
                  (fun () -> from_fun finalise utf8 name
-                              get_line st file) fn acc i0
+                              get_line st file) fn acc
          }
-      | Buf              -> { f = fun fn acc i0 -> rescan_buf buf fn acc i0 }
+      | Buf              -> { f = fun fn acc -> rescan_buf buf fn acc }
       | NoRescan         -> { f = rescan_no }
 
   end)
