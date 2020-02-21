@@ -153,6 +153,22 @@ type 'a grammar =
        when we discover they are mutually left dependant *)
    | ELr   : 'a key * mlr Uf.t -> 'a grne
 
+let rec len_seq : type a. a grammar -> int =
+  fun g ->
+    match g.d with
+    | Seq(g,_)   -> 1 + len_seq g
+    | ISeq(g,_)  -> 1 + len_seq g
+    | LPos(_,g)  -> 1 + len_seq g
+    | RPos(g)    -> 1 + len_seq g
+    | Appl(g,_)  -> 1 + len_seq g
+    | Repl(g,_)  -> 1 + len_seq g
+    | DSeq(g,_)  -> 1 + len_seq g
+    | DISeq(g,_) -> 1 + len_seq g
+    | Test(_,g)  -> 1 + len_seq g
+    | Lazy(g)    -> 1 + len_seq g
+    | Frce(g)    -> 1 + len_seq g
+    | _          -> 0
+
 let rec eq : type a b.a grammar -> b grammar -> (a, b) Assoc.eq =
   fun g1 g2 ->
     let open Assoc in
@@ -189,10 +205,24 @@ let rec eq : type a b.a grammar -> b grammar -> (a, b) Assoc.eq =
               match eq g1 g2 with
               | Eq -> Eq | _ -> NEq
             end
+         | Alt(gs1), Alt(gs2) ->
+            let rec fn : type a b. a grammar list -> b grammar list -> (a,b) eq = function
+              | []     -> (fun _ -> NEq)
+              | g1::l1 -> let rec gn : type b. b grammar list -> (a,b) eq = function
+                            | []     -> NEq
+                            | g2::l2 -> match eq g1 g2 with
+                                        | Eq  -> Eq
+                                        | NEq -> gn l2
+                          in
+                          (fun gs2 -> match gn gs2 with Eq -> fn l1 gs2 | NEq -> NEq)
+            in
+            (match fn gs1 gs2 with
+            | Eq  -> fn gs2 gs1
+            | NEq -> NEq)
          | _ -> NEq
        end
 
-let is_eq : type a b.a grammar -> b grammar -> bool =
+and is_eq : type a b.a grammar -> b grammar -> bool =
   fun g1 g2 -> match eq g1 g2 with
                | Eq -> true
                | NEq -> false
@@ -718,21 +748,25 @@ and left_factorise : type a.a t list -> a t list = fun l ->
          | Assoc.Eq -> recompose (PI(l2,acc)) (empty y) r2
          | _  -> assert false
        end
-    | _, LPos(None,g2) -> common_prefix (PL acc) (appl g1 (fun f _ -> f)) g2
-    | _, RPos(g2) -> common_prefix (PR acc) (appl g1 (fun f _ -> f)) g2
+    | LPos(None,g1), LPos(None,g2) -> common_prefix (PL acc) g1 g2
+    | RPos(g1), RPos(g2) -> common_prefix (PR acc) g1 g2
+    | _, LPos(None,g2a) when len_seq g1 < len_seq g2 ->
+       common_prefix (PL acc) (appl g1 (fun f _ -> f)) g2a
+    | _, RPos(g2a)  when len_seq g1 < len_seq g2 ->
+       common_prefix (PR acc) (appl g1 (fun f _ -> f)) g2a
     | LPos(None,g1), _ -> common_prefix (PL acc) g1 (appl g2 (fun f _ -> f))
     | RPos(g1), _ -> common_prefix (PR acc) g1 (appl g2 (fun f _ -> f))
-    | Seq(l1, r1), Seq(l2,r2) ->
+    | Seq(l1, r1), Seq(l2,r2) when is_eq l1 l2 ->
        begin
          match eq l1 l2 with
          | Assoc.Eq -> common_prefix (PC(l1,acc)) r1 r2
-         | _  -> recompose acc g1 g2
+         | _  -> assert false
        end
-    | ISeq(l1, r1), ISeq(l2,r2) ->
+    | ISeq(l1, r1), ISeq(l2,r2) when is_eq l1 l2 ->
        begin
          match eq l1 l2 with
          | Assoc.Eq -> common_prefix (PI(l1,acc)) r1 r2
-         | _  -> recompose acc g1 g2
+         | _  -> assert false
        end
     | Appl({d=Seq(g1a,g1b)},f), _ ->
        common_prefix acc (seq g1a (appl g1b (fun h x -> f (h x)))) g2
