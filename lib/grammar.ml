@@ -205,6 +205,7 @@ let rec eq : type a b.a grammar -> b grammar -> (a, b) Assoc.eq =
               match eq g1 g2 with
               | Eq -> Eq | _ -> NEq
             end
+(*  need adone list ... not really useful if Empty is not managed
          | Alt(gs1), Alt(gs2) ->
             let rec fn : type a b. a grammar list -> b grammar list -> (a,b) eq = function
               | []     -> (fun _ -> NEq)
@@ -214,11 +215,12 @@ let rec eq : type a b.a grammar -> b grammar -> (a, b) Assoc.eq =
                                         | Eq  -> Eq
                                         | NEq -> gn l2
                           in
-                          (fun gs2 -> match gn gs2 with Eq -> fn l1 gs2 | NEq -> NEq)
+                          (fun l2 -> match gn l2 with Eq -> fn l1 l2 | NEq -> NEq)
             in
             (match fn gs1 gs2 with
             | Eq  -> fn gs2 gs1
             | NEq -> NEq)
+ *)
          | _ -> NEq
        end
 
