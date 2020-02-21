@@ -192,6 +192,11 @@ let rec eq : type a b.a grammar -> b grammar -> (a, b) Assoc.eq =
          | _ -> NEq
        end
 
+let is_eq : type a b.a grammar -> b grammar -> bool =
+  fun g1 g2 -> match eq g1 g2 with
+               | Eq -> true
+               | NEq -> false
+
 (** grammar renaming *)
 let give_name n g = g.n <- (n, Given); g
 
@@ -533,7 +538,7 @@ let appl : type a b. ?name:name -> a t -> (a -> b) -> b t =
   in
   mkg ~name df
 
-let repl : type a b. ?name:name -> a t -> b -> b t =
+let rec repl : type a b. ?name:name -> a t -> b -> b t =
   fun ?name g y ->
   let name = gen_name name in
   let df, name =
@@ -542,7 +547,7 @@ let repl : type a b. ?name:name -> a t -> b -> b t =
     | Appl(g',_)   -> Repl(g',y), best name g.n
     | Repl(g',_)   -> Repl(g',y), best name g.n
     | Empty _      -> Empty y, best name g.n
-    (* | Seq(g1,g2)   -> Seq(g1,appl g2 (fun h x -> f (h x))) *)
+    | Seq(g1,g2)   -> Seq(g1,repl g2 (fun _ -> y)), best name g.n
     (* | LPos(None,g) -> LPos(None, appl g (fun h x -> f (h x))) *)
     (* | RPos(g)      -> RPos(appl g (fun h x -> f (h x))) *)
     | _            -> Repl(g,y), name
@@ -637,12 +642,86 @@ and left_factorise : type a.a t list -> a t list = fun l ->
     let adone = (Assoc.K g1.k,Assoc.K g2.k) :: adone in
     let common_prefix acc g1 g2 = common_prefix adone acc g1 g2 in
     match (g1.d,g2.d) with
-    | LPos(None,g1), LPos(None,g2) -> common_prefix (PL acc) g1 g2
-    | RPos(g1), RPos(g2) -> common_prefix (PR acc) g1 g2
-    | LPos(None,g1), _ -> common_prefix (PL acc) g1 (appl g2 (fun f _ -> f))
-    | RPos(g1), _ -> common_prefix (PR acc) g1 (appl g2 (fun f _ -> f))
+    | _, Seq(l2, r2) when is_eq l2 g1 ->
+       begin
+         match eq l2 g1 with
+         | Assoc.Eq -> recompose (PC(l2,acc)) (empty (fun x -> x)) r2
+         | _  -> assert false
+       end
+    | _, ISeq(l2, r2) when is_eq l2 g1 ->
+       begin
+         match eq l2 g1 with
+         | Assoc.Eq -> recompose (PC(l2,acc))
+                         (empty (fun x -> x)) (appl r2 (fun x _ -> x))
+         | _  -> assert false
+       end
+    | Seq(l1, r1), _ when is_eq l1 g2 ->
+       begin
+         match eq l1 g2 with
+         | Assoc.Eq -> recompose (PC(l1,acc)) r1 (empty (fun x -> x))
+         | _  -> assert false
+       end
+    | ISeq(l1, r1), _ when is_eq l1 g2 ->
+       begin
+         match eq l1 g2 with
+         | Assoc.Eq -> recompose (PC(l1,acc))
+                         (appl r1 (fun x _ -> x)) (empty (fun x -> x))
+         | _  -> assert false
+       end
+    | Seq(l1, r1), Appl(g2',f) when is_eq l1 g2' ->
+       begin
+         match eq l1 g2' with
+         | Assoc.Eq -> recompose (PC(l1,acc)) r1 (empty f)
+         | _  -> assert false
+       end
+    | Seq(l1, r1), Repl(g2',y) when is_eq l1 g2' ->
+       begin
+         match eq l1 g2' with
+         | Assoc.Eq -> recompose (PC(l1,acc)) r1 (empty (fun _ -> y))
+         | _  -> assert false
+       end
+    | ISeq(l1, r1), Appl(g2',f) when is_eq l1 g2' ->
+       begin
+         match eq l1 g2' with
+         | Assoc.Eq ->
+            recompose (PC(l1,acc)) (appl r1 (fun x _ -> x)) (empty f)
+         | _  -> assert false
+       end
+    | ISeq(l1, r1), Repl(g2',y) when is_eq l1 g2' ->
+       begin
+         match eq l1 g2' with
+         | Assoc.Eq ->
+            recompose (PI(l1,acc)) r1 (empty y)
+         | _  -> assert false
+       end
+    | Appl(g1',f), Seq(l2, r2) when is_eq l2 g1' ->
+       begin
+         match eq l2 g1' with
+         | Assoc.Eq -> recompose (PC(l2,acc)) (empty f) r2
+         | _  -> assert false
+       end
+    | Repl(g1',y), Seq(l2, r2) when is_eq l2 g1' ->
+       begin
+         match eq l2 g1' with
+         | Assoc.Eq -> recompose (PC(l2,acc)) (empty (fun _ -> y)) r2
+         | _  -> assert false
+       end
+    | Appl(g1',f), ISeq(l2, r2) when is_eq l2 g1 ->
+       begin
+         match eq l2 g1' with
+         | Assoc.Eq -> recompose (PC(l2,acc)) (empty f) (appl r2 (fun x _ -> x))
+         | _  -> assert false
+       end
+    | Repl(g1',y), ISeq(l2, r2) when is_eq l2 g1' ->
+       begin
+         match eq l2 g1' with
+         | Assoc.Eq -> recompose (PI(l2,acc)) (empty y) r2
+         | _  -> assert false
+       end
     | _, LPos(None,g2) -> common_prefix (PL acc) (appl g1 (fun f _ -> f)) g2
     | _, RPos(g2) -> common_prefix (PR acc) (appl g1 (fun f _ -> f)) g2
+    | LPos(None,g1), _ -> common_prefix (PL acc) g1 (appl g2 (fun f _ -> f))
+    | RPos(g1), _ -> common_prefix (PR acc) g1 (appl g2 (fun f _ -> f))
     | Seq(l1, r1), Seq(l2,r2) ->
        begin
          match eq l1 l2 with
@@ -655,83 +734,16 @@ and left_factorise : type a.a t list -> a t list = fun l ->
          | Assoc.Eq -> common_prefix (PI(l1,acc)) r1 r2
          | _  -> recompose acc g1 g2
        end
-    | Seq(l1, r1), Appl(g2',f) ->
-       begin
-         match eq l1 g2' with
-         | Assoc.Eq -> recompose (PC(l1,acc)) r1 (empty f)
-         | _  -> recompose acc g1 g2
-       end
-    | Seq(l1, r1), Repl(g2',y) ->
-       begin
-         match eq l1 g2' with
-         | Assoc.Eq -> recompose (PC(l1,acc)) r1 (empty (fun _ -> y))
-         | _  -> recompose acc g1 g2
-       end
-    | ISeq(l1, r1), Appl(g2',f) ->
-       begin
-         match eq l1 g2' with
-         | Assoc.Eq ->
-            recompose (PC(l1,acc)) (appl r1 (fun x _ -> x)) (empty f)
-         | _  -> recompose acc g1 g2
-       end
-    | ISeq(l1, r1), Repl(g2',y) ->
-       begin
-         match eq l1 g2' with
-         | Assoc.Eq ->
-            recompose (PI(l1,acc)) r1 (empty y)
-         | _  -> recompose acc g1 g2
-       end
-    | Seq(l1, r1), _ ->
-       begin
-         match eq l1 g2 with
-         | Assoc.Eq -> recompose (PC(l1,acc)) r1 (empty (fun x -> x))
-         | _  -> recompose acc g1 g2
-       end
-    | ISeq(l1, r1), _ ->
-       begin
-         match eq l1 g2 with
-         | Assoc.Eq -> recompose (PC(l1,acc))
-                         (appl r1 (fun x _ -> x)) (empty (fun x -> x))
-         | _  -> recompose acc g1 g2
-       end
-    | Appl(g1',f), Seq(l2, r2) ->
-       begin
-         match eq l2 g1' with
-         | Assoc.Eq -> recompose (PC(l2,acc)) (empty f) r2
-         | _  -> recompose acc g1 g2
-       end
-    | Repl(g1',y), Seq(l2, r2) ->
-       begin
-         match eq l2 g1' with
-         | Assoc.Eq -> recompose (PC(l2,acc)) (empty (fun _ -> y)) r2
-         | _  -> recompose acc g1 g2
-       end
-    | Appl(g1',f), ISeq(l2, r2) ->
-       begin
-         match eq l2 g1' with
-         | Assoc.Eq -> recompose (PC(l2,acc)) (empty f) (appl r2 (fun x _ -> x))
-         | _  -> recompose acc g1 g2
-       end
-    | Repl(g1',y), ISeq(l2, r2) ->
-       begin
-         match eq l2 g1' with
-         | Assoc.Eq -> recompose (PI(l2,acc)) (empty y) r2
-         | _  -> recompose acc g1 g2
-       end
-    | _, Seq(l2, r2) ->
-       begin
-         match eq l2 g1 with
-         | Assoc.Eq -> recompose (PC(l2,acc)) (empty (fun x -> x)) r2
-         | _  -> recompose acc g1 g2
-       end
-    | _, ISeq(l2, r2) ->
-       begin
-         match eq l2 g1 with
-         | Assoc.Eq -> recompose (PC(l2,acc))
-                         (empty (fun x -> x)) (appl r2 (fun x _ -> x))
-         | _  -> recompose acc g1 g2
-       end
-    | _ -> recompose acc g1 g2
+    | Appl({d=Seq(g1a,g1b)},f), _ ->
+       common_prefix acc (seq g1a (appl g1b (fun h x -> f (h x)))) g2
+    | Appl({d=ISeq(g1a,g1b)},f), _ ->
+       common_prefix acc (iseq g1a (appl g1b f)) g2
+    | _, Appl({d=Seq(g2a,g2b)},f) ->
+       common_prefix acc g1 (seq g2a (appl g2b (fun h x -> f (h x))))
+    | _, Appl({d=ISeq(g2a,g2b)},f) ->
+       common_prefix acc g1 (iseq g2a (appl g2b f))
+    | _ ->
+       recompose acc g1 g2
   in
   let rec factor l = match l with
     | [] -> l
