@@ -227,9 +227,11 @@ let rec eq : type a b.a grammar -> b grammar -> (a, b) Assoc.eq =
  *      (fun l2 -> match gn l2 with Eq -> sub_list l1 l2 | NEq -> NEq) *)
 
 and is_eq : type a b.a grammar -> b grammar -> bool =
-  fun g1 g2 -> match eq g1 g2 with
-               | Eq -> true
-               | NEq -> false
+  fun g1 g2 ->
+    let open Assoc in
+    match eq g1 g2 with
+    | Eq -> true
+    | NEq -> false
 
 (** grammar renaming *)
 let give_name n g = g.n <- (n, Given); g
