@@ -47,9 +47,9 @@ type pos_info =
    field within the position if it is true. Otherwise the [text] field is set to
    the empty string.
 
-    This function may raise [No_detailled_position] is the file can not
-   be reopen or [File_changed] if the file is present but changed its last modificatio
-   time of size. *)
+    This function may raise [No_detailled_position] is the file can not be
+   reopen or [File_changed] if the file is present but changed its last
+   modification time of size. *)
 exception No_detailed_position
 exception File_changed
 
@@ -89,17 +89,20 @@ type style = OCaml (** like OCaml *)
 
 (** printing for the three kind of positions, and the current position
     of a buffer.  *)
-val print_pos_info   : ?style:style -> ?quote:quote -> unit -> out_channel -> pos_info -> unit
+val print_pos_info   : ?style:style -> ?quote:quote -> unit
+                       -> out_channel -> pos_info -> unit
 (** The three functions below will print only the byte_pos if the file
     cannot be reopenned. The exception File_changed is raised if the file
     changed since last openning.
 
     If quote is given, the file is quoted.
 *)
-val print_pos  : ?style:style -> ?quote:quote -> unit -> out_channel -> pos -> unit
-val print_spos  : ?style:style -> ?quote:quote -> unit -> out_channel -> spos -> unit
-val print_buf_pos : ?style:style -> ?quote:quote -> unit -> out_channel
-                    -> (Input.buffer * Input.idx) -> unit
+val print_pos     : ?style:style -> ?quote:quote -> unit
+                    -> out_channel -> pos -> unit
+val print_spos    : ?style:style -> ?quote:quote -> unit
+                    -> out_channel -> spos -> unit
+val print_buf_pos : ?style:style -> ?quote:quote -> unit
+                    -> out_channel -> (Input.buffer * Input.idx) -> unit
 
 (** Exception raised when parsing fails *)
 exception Parse_error of Input.buffer * Input.idx * string list

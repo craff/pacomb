@@ -120,11 +120,12 @@ type env =
       used instead of calling immediatly  the continuation because the scheduler
       needs to order parsing. *)
    | Merg : env * cache_order * 'a cont * 'a lazy_t -> res
-   (** same as above, but some merge from the given cache order level are waiting.
-       The scheduler need this to ensure all continuation are build for that merge
-       before doing the actual merge. the cache_order to be restored when the
-       continuation is called is kept. The action is lazy as it will call merge
-       and we must be sure that all value to be merged were produced. *)
+   (**  same as  above, but  some merge  from the  given cache  order level  are
+      waiting.  The scheduler need this to ensure all continuation are build for
+      that merge before  doing the actual merge. the cache_order  to be restored
+      when the  continuation is called  is kept. The action  is lazy as  it will
+      call  merge  and  we must  be  sure  that  all  value to  be  merged  were
+      produced. *)
    | Gram : env * 'a t * 'a cont -> res
    (** This contructor represents an alternative branch of parsing, with both a
    grammar and a continuation *)

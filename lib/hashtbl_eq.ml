@@ -22,7 +22,7 @@ let eq_closure : type a. a -> a -> bool =
              then f = g
            else if ft = abstract_tag || ft = out_of_heap_tag
                    || ft = no_scan_tag || ft = custom_tag || ft = infix_tag
-                 (* FIXME: we could certainly do better with infix_tag
+                 (* FIXME #22: we could certainly do better with infix_tag
                            i.e. mutually recursive functions *)
              then f == g
            else

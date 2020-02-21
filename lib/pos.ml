@@ -1,27 +1,27 @@
 (** Functions managing positions *)
 
-(** Position in AST resulting from parsetree may be a non negligible part of
-    parsing complexity, both in speed and space. For instance:
-    - computing column number in Unicode is costly
-    - all information about a position takes a lot of machine words (up to 10)
+(** Position  in AST resulting  from parsetree may be  a non negligible  part of
+   parsing complexity, both in speed and space. For instance: - computing column
+   number in Unicode is costly - all information about a position takes a lot of
+   machine words (up to 10)
 
     Moreover, in most cases, position are only used in error messages!
 
     Pacomb proposes to use three levels of positions to minimise the costs:
 
-    1°) the type Pos.t = Input.spos is the type return to action. It is a position
-    in bytes together with some information about the file.
+    1°)  the type  Pos.t =  Input.spos is  the type  return to  action. It  is a
+   position in bytes together with some information about the file.
 
     2°) type type 'a located (or pos = unit located) is some data decorated with
-    a start and end position. This is the type recommended to be used in AST.
-    it can be constructed by the in_pos, no_pos and mk_pos functions below.
-    Each AST node located with a position costs 5 words.
+   a start and end position. This is the type recommended to be used in AST.  it
+   can be  constructed by the in_pos,  no_pos and mk_pos functions  below.  Each
+   AST node located with a position costs 5 words.
 
-    3°) the type pos_info contain all the information about a position. It is
-    produced by rescanning the file (or the string). If one parses a stream which
-    is not a regular file, or if the regular file is no more available, the position
-    is not really useful and pacomb will still print the byte position.
- *)
+    3°) the  type pos_info contain all  the information about a  position. It is
+   produced by rescanning the file (or the string). If one parses a stream which
+   is not  a regular  file, or  if the regular  file is  no more  available, the
+   position is not really useful and pacomb will still print the byte position.
+   *)
 
 (** byte position from input, type type returned by parsing combinator *)
 type spos = Input.spos
@@ -194,7 +194,6 @@ let pos_info
     let text      = if text then sub_string start_line_offset (to_eol n1)
                     else ""
     in
-    (*Printf.printf "%d %d %d %d %d %d\n%s\n%!" n0 n1 start_line start_line_offset end_line end_line_offset text;*)
     { start_line; start_col; start_line_offset
     ; end_line  ; end_col  ; end_line_offset
     ; start_byte = n0; end_byte = n1

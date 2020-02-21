@@ -109,7 +109,7 @@ type 'a grammar =
                                            (** read the postion before parsing,
                                                the key is present, the position
                                                is stored in the lr table *)
-   | RPos : (Pos.spos -> 'a) t -> 'a grdf     (** read the postion after parsing *)
+   | RPos : (Pos.spos -> 'a) t -> 'a grdf  (** read the postion after parsing *)
    | Layout : Blank.t * 'a t * Blank.layout_config -> 'a grdf
                                            (** changes the blank function *)
    | Test : 'a test * 'a t -> 'a grdf      (** test, before or after *)
@@ -205,24 +205,26 @@ let rec eq : type a b.a grammar -> b grammar -> (a, b) Assoc.eq =
               match eq g1 g2 with
               | Eq -> Eq | _ -> NEq
             end
-(*  need adone list ... not really useful if Empty is not managed
-         | Alt(gs1), Alt(gs2) ->
-            let rec fn : type a b. a grammar list -> b grammar list -> (a,b) eq = function
-              | []     -> (fun _ -> NEq)
-              | g1::l1 -> let rec gn : type b. b grammar list -> (a,b) eq = function
-                            | []     -> NEq
-                            | g2::l2 -> match eq g1 g2 with
-                                        | Eq  -> Eq
-                                        | NEq -> gn l2
-                          in
-                          (fun l2 -> match gn l2 with Eq -> fn l1 l2 | NEq -> NEq)
-            in
-            (match fn gs1 gs2 with
-            | Eq  -> fn gs2 gs1
-            | NEq -> NEq)
- *)
+         (* | Alt(gs1), Alt(gs2) ->
+          *    begin
+          *      match sub_list gs1 gs2 with
+          *      | Eq  -> sub_list gs2 gs1
+          *      | NEq -> NEq
+          *    end *)
          | _ -> NEq
        end
+
+(* and sub_list : type a b. a grammar list -> b grammar list -> (a,b) Assoc.eq
+ *   = function
+ *   | []     -> (fun _ -> NEq)
+ *   | g1::l1 ->
+ *      let rec gn : type b. b grammar list -> (a,b) Assoc.eq = function
+ *        | []     -> NEq
+ *        | g2::l2 -> match eq g1 g2 with
+ *                    | Eq  -> Eq
+ *                    | NEq -> gn l2
+ *      in
+ *      (fun l2 -> match gn l2 with Eq -> sub_list l1 l2 | NEq -> NEq) *)
 
 and is_eq : type a b.a grammar -> b grammar -> bool =
   fun g1 g2 -> match eq g1 g2 with
@@ -798,15 +800,18 @@ and left_factorise : type a.a t list -> a t list = fun l ->
   factor l
 
 let mk_pos ?name g =
-  lpos ?name (rpos (appl g (fun x (_,rpos) (infos,lpos) -> x (Pos.mk_pos lpos rpos infos))))
+  lpos ?name (rpos (appl g (fun x (_,rpos) (infos,lpos)
+                            -> x (Pos.mk_pos lpos rpos infos))))
 
 
 let seq_pos ?name g1 g2 =
-  seq ?name (lpos (rpos (appl g1 (fun x (_,rpos) (infos,lpos) -> (Pos.mk_pos lpos rpos infos, x)))))
+  seq ?name (lpos (rpos (appl g1 (fun x (_,rpos) (infos,lpos)
+                                  -> (Pos.mk_pos lpos rpos infos, x)))))
     g2
 
 let dseq_pos ?name g1 g2 =
-  dseq ?name (lpos (rpos (appl g1 (fun (x,y) (_,rpos) (infos,lpos) -> (x, (Pos.mk_pos lpos rpos infos, y))))))
+  dseq ?name (lpos (rpos (appl g1 (fun (x,y) (_,rpos) (infos,lpos)
+                                   -> (x, (Pos.mk_pos lpos rpos infos, y))))))
     g2
 
 let error ?name m =
