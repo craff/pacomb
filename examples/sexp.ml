@@ -1,6 +1,6 @@
 open Pacomb
 
-type sexp = { p: Pos.t * Pos.t; e : sexp' }
+type sexp = { p: Pos.pos; e : sexp' }
 and sexp' =
   | Idt of string
   | Lst of sexp list

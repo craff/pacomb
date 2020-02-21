@@ -28,7 +28,7 @@ let test pos l0 =
     let rec fn = function
       | [] -> []
       | []::_ -> Printf.eprintf "unexpected empty at %a\n%!"
-                   (Pos.print_pos ()) (Pos.pos_of_spos pos);
+                   (Pos.print_pos ()) pos;
                  good := false;
                  raise Exit
       | [x]::l -> (x,true)::fn l
@@ -39,7 +39,7 @@ let test pos l0 =
     let l = fn l in
     if l <> l0 then
       begin
-        Printf.eprintf "break fail at %a\n%!" (Pos.print_spos ()) pos;
+        Printf.eprintf "break fail at %a\n%!" (Pos.print_pos ()) pos;
         List.iter (fun (l,b) -> Printf.eprintf "%x %b " (Uchar.to_int l) b) l;
         Printf.eprintf " <> ";
         List.iter (fun (l,b) -> Printf.eprintf "%x %b " (Uchar.to_int l) b) l0;
@@ -50,7 +50,7 @@ let test pos l0 =
   with Exit -> ()
 
   (* Single mapping parser *)
-let%parser test = (l::sample) (~+ '\n' => ()) => test l_lpos l
+let%parser test = (l::sample) (~+ '\n' => ()) => test l_pos l
 
 let%parser tests =
   (star ('\n' => ())) (star test) => ()

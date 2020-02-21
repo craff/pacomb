@@ -59,7 +59,7 @@ type 'a key = 'a Assoc.key
 
 (** type for holding the semantics of the left-hand-side of a value/position
    parsed by the lr, lr_pos and mlr combinators, use *)
-type lr = LR : 'a key * 'a * Pos.t -> lr
+type lr = LR : 'a key * 'a * Pos.spos -> lr
 
 (** functions related to the lr type*)
 let dummy_lr = LR(Assoc.new_key (), (), Input.phantom_spos)
@@ -151,7 +151,7 @@ type env =
     - evaluation of  action being retarded to  the next lexeme, prefix  of right
     recursive grammar also transform the continuation in O(1).  *)
  and 'a cont =
-   | C : (env -> 'b -> res) * ('a,'b) trans * Pos.t ref option -> 'a cont
+   | C : (env -> 'b -> res) * ('a,'b) trans * Pos.spos ref option -> 'a cont
 
  (** [('a,'b) args] is the type of a transformer from a value of type ['a] to a
     value of type ['b]. To keep amortized O(1) semantics of eval_lrgs, we mark
@@ -163,7 +163,7 @@ type env =
    | Arg  : ('b,'c) trans * 'a -> ('a -> 'b,'c) trans
    (** [Arg(tr,x)] tranform a value of type ['a -> 'b] into a value of
        type ['c] by applying it to [x] and then applying the transformer [tr] *)
-   | Pos  : ('b,'c) trans * Pos.t ref -> (Pos.t -> 'b,'c) trans
+   | Pos  : ('b,'c) trans * Pos.spos ref -> (Pos.spos -> 'b,'c) trans
    (** Same  as arg, but [x]  is a position that  will be stored in  a reference
        when calling the continuation constructed with [P] *)
    | App  : ('b,'c) trans * ('a -> 'b) -> ('a,'c) trans
@@ -278,7 +278,7 @@ let rep : type a b. b cont -> b -> a cont = fun k y ->
     | Rep(tr,y) -> C(k,Rep(tr,y),rp)
     | tr        -> C(k,Rep(tr,y),rp)
 
-let posk : type a. a cont -> (Pos.t -> a) cont = fun k ->
+let posk : type a. a cont -> (Pos.spos -> a) cont = fun k ->
   match k with
   | C(k,tr,rp) ->
      let (p,rp) =
@@ -549,16 +549,16 @@ let test_after : ('a -> Lex.buf -> Lex.idx -> Lex.buf -> Lex.idx -> bool)
     g env k
 
 (** Read the position after parsing. *)
-let right_pos : type a.(Pos.t -> a) t -> a t = fun g env k ->
+let right_pos : type a.(Pos.spos -> a) t -> a t = fun g env k ->
     g env (posk k)
 
 (** Read the position before parsing. *)
-let left_pos : (Pos.t -> 'a) t -> 'a t = fun g  env k ->
+let left_pos : (Pos.spos -> 'a) t -> 'a t = fun g  env k ->
   let pos = Input.spos env.current_buf env.current_idx in
   g env (arg k pos)
 
 (** Read left pos from the lr table. *)
-let read_pos : (Pos.t -> 'a) t -> 'a t =
+let read_pos : (Pos.spos -> 'a) t -> 'a t =
   fun g env k ->
     let pos = get_lr_pos env.lr in
     g env (arg k pos)

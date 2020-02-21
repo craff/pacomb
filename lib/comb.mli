@@ -90,16 +90,16 @@ val unmerge : 'a list t -> 'a t
 
 (** Parses  as the given  combinator and  give the position  to the left  of the
     parsing input as argument to the action *)
-val left_pos : (Pos.t -> 'a) t -> 'a t
+val left_pos : (Pos.spos -> 'a) t -> 'a t
 
 (** Same as above with the position to the right *)
-val right_pos : (Pos.t -> 'a) t -> 'a t
+val right_pos : (Pos.spos -> 'a) t -> 'a t
 
 (** To eliminate left  recursion, lpos has to be left factored.   if lpos is one
     single combinator, this adds a lot of closures in action code. To solve this
     problem, lpos is  splitted in two combinators, one that  pushes the position
     to a stack and pops after parsing and another that reads the position. *)
-val read_pos : (Pos.t -> 'a) t -> 'a t
+val read_pos : (Pos.spos -> 'a) t -> 'a t
 
 (** key used by lr below *)
 type 'a key = 'a Assoc.key

@@ -125,7 +125,7 @@ let%parser new_rule env =
        (env, ())
 
 let%parser top_expr env =
-  (x::expr env (max_prio env)) '\n' => Printf.printf "%g\n%!" x
+  (x::expr env (max_prio env)) '\n' => x
 
 (** main parsing, right recursion with no action is ok now *)
 let%parser rec cmds env =

@@ -105,11 +105,11 @@ type 'a grammar =
                                                the semantics of the first
                                                grammar *)
    | Rkey : 'a key -> 'a grdf              (** access to the lr table *)
-   | LPos : mlr Uf.t option * (Pos.t -> 'a) t -> 'a grdf
+   | LPos : mlr Uf.t option * (Pos.spos -> 'a) t -> 'a grdf
                                            (** read the postion before parsing,
                                                the key is present, the position
                                                is stored in the lr table *)
-   | RPos : (Pos.t -> 'a) t -> 'a grdf     (** read the postion after parsing *)
+   | RPos : (Pos.spos -> 'a) t -> 'a grdf     (** read the postion after parsing *)
    | Layout : Blank.t * 'a t * Blank.layout_config -> 'a grdf
                                            (** changes the blank function *)
    | Test : 'a test * 'a t -> 'a grdf      (** test, before or after *)
@@ -139,8 +139,8 @@ type 'a grammar =
    | EDISeq : 'a grne * ('a -> 'b t) -> 'b grne
    | ERkey : 'a key -> 'a grne
    | ERef  : 'a t -> 'a grne
-   | ELPos : mlr Uf.t option * (Pos.t -> 'a) grne -> 'a grne
-   | ERPos : (Pos.t -> 'a) grne -> 'a grne
+   | ELPos : mlr Uf.t option * (Pos.spos -> 'a) grne -> 'a grne
+   | ERPos : (Pos.spos -> 'a) grne -> 'a grne
    | ELayout : Blank.t * 'a grne * Blank.layout_config -> 'a grne
    | ETest : 'a test * 'a grne -> 'a grne
    | ELazy : 'a grne -> 'a lazy_t grne
@@ -587,8 +587,8 @@ type (_,_) plist =
   | PE : ('a, 'a) plist
   | PC : 'a t * ('b, 'c) plist -> ('a -> 'b,'c) plist
   | PI : 'a t * ('b, 'c) plist -> ('b,'c) plist
-  | PL : ('b, 'c) plist -> (Pos.t -> 'b,'c) plist
-  | PR : ('b, 'c) plist -> (Pos.t -> 'b,'c) plist
+  | PL : ('b, 'c) plist -> (Pos.spos -> 'b,'c) plist
+  | PR : ('b, 'c) plist -> (Pos.spos -> 'b,'c) plist
 
 let rec alt : type a. ?name:name -> a t list -> a t = fun ?name l ->
   let l = List.filter (fun g -> g.d <> Fail) l in
@@ -749,14 +749,16 @@ and left_factorise : type a.a t list -> a t list = fun l ->
   in
   factor l
 
-let seq_rpos ?name g1 g2 =
-  seq ?name (rpos (appl g1 (fun x rpos -> (x, rpos)))) g2
+let mk_pos ?name g =
+  lpos ?name (rpos (appl g (fun x (_,rpos) (infos,lpos) -> x (Pos.mk_pos lpos rpos infos))))
 
-let seq_lpos ?name g1 g2 =
-  seq ?name (lpos (appl g1 (fun x lpos -> (lpos, x)))) g2
 
 let seq_pos ?name g1 g2 =
-  seq ?name (lpos (rpos (appl g1 (fun x rpos lpos -> (lpos, x, rpos)))))
+  seq ?name (lpos (rpos (appl g1 (fun x (_,rpos) (infos,lpos) -> (Pos.mk_pos lpos rpos infos, x)))))
+    g2
+
+let dseq_pos ?name g1 g2 =
+  dseq ?name (lpos (rpos (appl g1 (fun (x,y) (_,rpos) (infos,lpos) -> (x, (Pos.mk_pos lpos rpos infos, y))))))
     g2
 
 let error ?name m =
@@ -1582,28 +1584,27 @@ let parse_all_buffer
     Comb.parse_all_buffer g blank_fun buf0 col0
 
 let parse_string
-    : type a. ?utf8:Utf8.context -> ?filename:string ->
-              a t -> Blank.t -> string -> a =
-  fun ?(utf8=Utf8.ASCII) ?filename g b s ->
-    parse_buffer g b (Input.from_string ~utf8 ?filename s) Input.init_idx
+    : type a. ?utf8:Utf8.context -> a t -> Blank.t -> string -> a =
+  fun ?(utf8=Utf8.ASCII) g b s ->
+    parse_buffer g b (Input.from_string ~utf8 s) Input.init_idx
 
 let parse_channel
-    : type a. ?utf8:Utf8.context -> ?filename:string -> ?rescan:bool ->
+    : type a. ?utf8:Utf8.context -> ?filename:string ->
               a t -> Blank.t -> in_channel -> a =
-  fun ?(utf8=Utf8.ASCII) ?filename ?(rescan=true) g b ic ->
-    parse_buffer g b (Input.from_channel ~utf8 ?filename ~rescan ic)
+  fun ?(utf8=Utf8.ASCII) ?filename g b ic ->
+    parse_buffer g b (Input.from_channel ~utf8 ?filename ic)
       Input.init_idx
 
 let parse_fd
-    : type a. ?utf8:Utf8.context -> ?filename:string -> ?rescan:bool ->
+    : type a. ?utf8:Utf8.context -> ?filename:string ->
               a t -> Blank.t -> Unix.file_descr -> a =
-  fun ?(utf8=Utf8.ASCII) ?filename ?(rescan=true) g b ic ->
-    let buf = Input.from_fd ~utf8 ?filename ~rescan ic in
+  fun ?(utf8=Utf8.ASCII) ?filename g b ic ->
+    let buf = Input.from_fd ~utf8 ?filename ic in
     parse_buffer g b buf Input.init_idx
 
 let parse_file ?(utf8=Utf8.ASCII) g b filename =
-    let ic = Unix.(openfile filename [O_RDONLY] 0) in
-    parse_fd ~utf8 ~filename g b ic
+    let buf = Input.from_file ~utf8 filename in
+    parse_buffer g b buf Input.init_idx
 
 let lpos ?name g = lpos ?name ?pk:None g
 let appl ?name = appl ?name:(created name)

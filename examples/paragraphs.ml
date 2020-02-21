@@ -33,6 +33,6 @@ let _ =
   Printf.printf "%d paragraphs\n%!" (List.length t);
   List.iteri (fun i (p,pos) -> Printf.printf "  paragraph %d at %a: %d word(s)\n%!"
                                  i
-                                 (Pos.print_interval ~style:Short ())
-                                 (Pos.interval_of_spos pos)
+                                 (Pos.print_pos ~style:Short ())
+                                 pos
                                  (List.length p)) t

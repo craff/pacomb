@@ -45,7 +45,7 @@ val to_list : string -> Uchar.t list
 
 val fold : ('a -> Uchar.t -> 'a) -> 'a -> string -> 'a
 
-val length : string -> int
+val length : context -> string -> int
 
 val sub : string -> int -> int -> string
 

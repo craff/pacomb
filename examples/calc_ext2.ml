@@ -185,7 +185,7 @@ let _ =
         (* as we parse stdin, we need to keed the whole buffer in memory
            to have line and column number, ~rescan:false only give byte
            position *)
-        Grammar.parse_fd ~rescan:false (cmds !env_ref) blank Unix.stdin;
+        Grammar.parse_fd (cmds !env_ref) blank Unix.stdin;
         raise End_of_file
       in
       (* [Pos] module provides a function to handle exception with

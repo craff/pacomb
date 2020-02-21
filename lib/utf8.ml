@@ -6709,8 +6709,9 @@ let fold_grapheme : ('a -> string -> 'a) -> 'a -> string -> 'a =
           done;
         !res
 
-let length : string -> int = fun s ->
-  fold (fun i _ -> i + 1) 0 s
+let length : context -> string -> int = fun context s ->
+  if context = ASCII then String.length s else
+  fold (fun i c -> i + width ~context c) 0 s
 
 let sub s start len =
   let slen = String.length s in

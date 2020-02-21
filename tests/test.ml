@@ -28,7 +28,7 @@ let char_c = term(Lex.appl (fun _ -> 1) (Lex.char 'c'))
 let eof = term (Lex.eof ())
 let na n = String.make n 'a'
 
-let cp spos = (Pos.pos_of_spos spos).col
+let cp spos = Input.int_of_byte_pos (snd spos)
 
 let test0 = alt [char_a; char_b]
 
@@ -226,7 +226,9 @@ let _ = assert (parse_string test5 "ababa" = 5)
 let _ = assert (parse_string test6 "a" = [1])
 let _ = assert (parse_string test6 "a,aa,aaa,aa,a," =
                   List.rev [1;2;3;2;1;0])
-let _ = assert (parse_string test7 "b" = [(0,0,0)])
+let _ = Grammar.compile test7
+let _ = Printf.printf "test7\n%!"
+let _ = assert (parse_string test7 "ab" = [(0,1,1)])
 let _ = assert (parse_string test7 "ab" = [(0,1,1)])
 let _ = assert (parse_string test7 "a,aa,aaab" =
                   List.rev [(0,1,1);(2,2,4);(5,3,8)])

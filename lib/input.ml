@@ -1,16 +1,52 @@
 type context = Utf8.context
 
+type stream_infos =
+  | File of { name               : string
+            ; length             : int
+            ; date               : float
+            }
+  | String of string
+  | Stream
+
+let stream_infos_of_fd file_name fd =
+  let open Unix in
+  let s = fstat fd in
+  File { name       = file_name
+       ; length     = s.st_size
+       ; date       = s.st_mtime }
+
+let stream_infos_of_ch file_name ch =
+  stream_infos_of_fd file_name (Unix.descr_of_in_channel ch)
+
+let stream_infos_of_str str =
+  String str
+
 type infos =
-  { utf8         : context(** Uses utf8 for positions                 *)
-  ; name         : string (** The name of the buffer (e.g. file name) *)
-  ; uid          : int    (** Unique identifier                       *)
-  ; mutable rescan  : rescan
-  ; lnum_skip    : (int * int) list
+  { utf8         : Utf8.context (** Uses utf8 for positions                 *)
+  ; stream_infos : stream_infos (** The name of the buffer (e.g. file name) *)
+  ; uid          : int          (** Unique identifier                       *)
+  ; mutable directives : (int * int option * string option) list
+                                (** line number and file directives         *)
   }
 
-and rescan =
-  { f : 'a. (int -> char -> 'a -> 'a) -> 'a -> int -> 'a }
-    [@@unboxed]
+let stream_infos infos = infos.stream_infos
+
+let filename infos = match infos.stream_infos with
+  | File { name } -> name
+  | _             -> ""
+
+let utf8 infos = infos.utf8
+
+let find_directives infos n ln name=
+  let rec fn = function
+    | (p, ln', name')::_ when p = n ->
+       let ln = match ln' with None -> ln | Some ln -> ln in
+       let name = match name' with None -> name | Some n -> n in
+       (ln, name)
+    | _::l -> fn l
+    | []   -> (ln, name)
+  in
+  fn infos.directives
 
 type buffer =
   { boff         : int    (* Offset to the line ( bytes )            *)
@@ -30,11 +66,11 @@ let new_uid =
 let infos b = b.infos
 
 let phantom_infos =
-  { utf8 = Utf8.ASCII
-  ; name = ""
-  ; uid = new_uid ()
-  ; rescan = { f = fun _ -> assert false }
-  ; lnum_skip = [] }
+  { utf8         = Utf8.ASCII
+  ; stream_infos = Stream
+  ; uid          = new_uid ()
+  ; directives   = []  }
+
 
 (** idx type and constant *)
 type idx = int
@@ -95,106 +131,11 @@ let sub b i len =
   in
   fn b i 0
 
-(* Get the name of a buffer. *)
-let filename infos = infos.name
-
 (* byte position *)
 let [@inline] byte_pos b p = b.boff + p
 
 (* short position *)
 let [@inline] spos b p = (b.infos, b.boff + p)
-
-(* Get the current line number of a buffer, rescanning the file *)
-let really_cache fn =
-  let cache = ref [] in
-  fun infos i0 ->
-    try List.assq infos !cache i0 with Not_found ->
-      let fn = fn infos in
-      cache := (infos,fn)::!cache; fn i0
-
-let line_num =
-  really_cache (fun infos ->
-      let fn i c (l,ls) =
-        match ls with
-        | (j,l)::ls when i = j -> (l, ls)
-        | _ -> if c = '\n' then (l+1, ls) else (l,ls)
-      in
-      let lnum_skip = List.rev infos.lnum_skip in
-      let rescan = infos.rescan.f fn (1,lnum_skip) in
-      fun i0 -> fst (rescan i0))
-
-(* Get the current ascii column number of a buffer, rescanning *)
-let ascii_col_num =
-  really_cache (fun infos ->
-      let fn _ c p = if c = '\n' then 0 else p+1 in
-      infos.rescan.f fn 0)
-
-exception Splitted_end
-exception Splitted_begin
-
-(** length of a utf8 string *)
-let utf8_len context data =
-  let len = String.length data in
-  let rec find num pos =
-    if pos < len then
-      let cc = Char.code data.[pos] in
-      let code i =
-        if (pos+i) >= String.length data then raise Splitted_end;
-        let n = match i with
-          1 -> cc land 0b0111_1111
-        | 2 -> (cc land (0b0001_1111) lsl 6) lor
-                 (Char.code data.[pos+1] land 0b0011_1111)
-        | 3 -> (cc land (0b0000_1111) lsl 12) lor
-                 ((Char.code data.[pos+1] land 0b0011_1111) lsl 6)  lor
-                   (Char.code data.[pos+2] land 0b0011_1111)
-        | 4 -> (cc land (0b0000_0111) lsl 18) lor
-                 ((Char.code data.[pos+1] land 0b0011_1111) lsl 12) lor
-                   ((Char.code data.[pos+2] land 0b0011_1111) lsl 6)  lor
-                     (Char.code data.[pos+3] land 0b0011_1111)
-        | _ -> raise Splitted_begin
-        in
-        Uchar.of_int n
-      in
-      let (num, pos) =
-        try
-          if cc lsr 7 = 0 then
-            (num+Utf8.width ~context (code 1), pos + 1)
-          else if (cc lsr 5) land 1 = 0 then
-            (num+Utf8.width ~context (code 2), pos + 2)
-          else if (cc lsr 4) land 1 = 0 then
-            (num+Utf8.width ~context (code 3), pos + 3)
-          else if (cc lsr 3) land 1 = 0 then
-            (num+Utf8.width ~context (code 4), pos + 4)
-          else (num, pos+1) (* Invalid utf8 character. *)
-        with Splitted_begin -> (num, pos+1)
-           | Splitted_end   -> (num+1, String.length data)
-      in
-      find num pos
-    else num
-  in find 0 0
-
-(* Get the utf8 column number corresponding to the given position. *)
-let utf8_col_num =
-  really_cache (fun infos ->
-      let fn _ c cs = if c = '\n' then [] else c::cs in
-      let rescan = infos.rescan.f fn [] in
-      (fun i0 ->
-        let cs = rescan i0 in
-        let len = List.length cs in
-        let str = Bytes.create len in
-        let rec fn cs p =
-          match cs with
-          | [] -> assert (p=0); ()
-          | c::cs -> let p = p - 1 in
-                     Bytes.set str p c;
-                 fn cs p
-        in
-        fn cs len;
-        utf8_len infos.utf8 (Bytes.unsafe_to_string str)))
-
-(* general column number *)
-let col_num infos =
-  if infos.utf8 = ASCII then ascii_col_num infos else utf8_col_num infos
 
 (* Equality of buffers. *)
 let buffer_equal b1 b2 =
@@ -209,76 +150,14 @@ let buffer_compare b1 b2 =
 (* Get the unique identifier of the buffer. *)
 let buffer_uid b = b.infos.uid
 
-(* The way to rescan (using seek, keeping the buffer of no rescan *)
-type 'a rescan_type =
-  | Seek of ('a -> int) * ('a -> int -> unit) * (unit -> 'a)
-  | Buf
-  | NoRescan
-
 module type MinimalInput =
   sig
-    val from_fun : ('a -> unit) -> context -> string
-                   -> ('a -> string)
-                   -> 'a rescan_type -> 'a -> buffer
+    val from_fun : ('a -> unit) -> context -> stream_infos
+                   -> ('a -> string) -> 'a -> buffer
   end
 
 exception NoLineNorColumnNumber
 
-let rescan_no _ _ _ = raise NoLineNorColumnNumber
-
-
-let rescan_buf buf0 fn acc =
-  let cache = ref [] in
-  let set_cache i buf idx acc =
-    cache := (i,buf, idx, acc) :: !cache
-  in
-  let get_cache i =
-    let rec fn = function
-        []                -> (0, buf0, 0, acc)
-      | (j,buf,idx,acc)::ls -> if j <= i then (j, buf, idx, acc) else fn ls
-    in
-    fn !cache
-  in
-  fun i0 ->
-    let (j,buf0,idx0,acc0) = get_cache i0 in
-    let buf = ref buf0 in
-    let acc = ref acc0 in
-    let idx = ref idx0 in
-    for i = j to i0 - 1 do
-      if i > j && i mod 1024 = 0 then set_cache i !buf !idx !acc;
-      let (c,b,p) = read !buf !idx in
-      buf := b; idx := p;
-      acc := fn i c !acc
-    done;
-    !acc
-
-let rescan_seek file pos_in seek_in mk_buf fn acc =
-  let cache = ref [] in
-  let set_cache i acc =
-    cache := (i, acc) :: !cache
-  in
-  let get_cache i =
-    let rec fn = function
-        []                -> (0, acc)
-      | (j,acc)::ls -> if j <= i then (j, acc) else fn ls
-    in
-    fn !cache
-  in
-  fun i0 ->
-    let saved = pos_in file in
-    let (j,acc0) = get_cache i0 in
-    seek_in file j;
-    let buf = ref (mk_buf ()) in
-    let acc = ref acc0 in
-    let idx = ref 0 in
-    for i = j to i0 - 1 do
-      if i > j && i mod 1024 = 0 then set_cache i !acc;
-      let (c,b,p) = read !buf !idx in
-      buf := b; idx := p;
-      acc := fn i c !acc
-    done;
-    seek_in file saved;
-    !acc
 
 let buf_size = 0x10000
 
@@ -307,70 +186,45 @@ module GenericInput(M : MinimalInput) =
   struct
     include M
 
-    let st_fd rescan fd reopen =
-      let open Unix in
-      let stat = fstat fd in
-      let seek fd n = ignore (Unix.lseek fd n SEEK_SET) in
-      let pos fd = Unix.lseek fd 0 SEEK_CUR in
-      if rescan then
-        if stat.st_kind = S_REG then Seek(pos,seek,reopen) else Buf
-      else
-        NoRescan
-
-    let st_ch rescan ch reopen =
-      let open Unix in
-      let stat = fstat (Unix.descr_of_in_channel ch) in
-      let seek = seek_in in
-      let pos = pos_in in
-       if rescan then
-        if stat.st_kind = S_REG then Seek(pos,seek,reopen) else Buf
-      else
-        NoRescan
-
-    let st_fn rescan fd fn =
-      let reopen () = Unix.(openfile fn [O_RDONLY] 0) in
-      st_fd rescan fd reopen
-
     let from_channel
-        : ?utf8:context -> ?filename:string -> ?rescan:bool
-          -> in_channel -> buffer =
-      fun ?(utf8=Utf8.ASCII) ?(filename="") ?(rescan=true) ch ->
-        let st = st_ch rescan ch (fun () -> ch) in
-        from_fun ignore utf8 filename input_buffer st ch
+        : ?utf8:context -> ?filename:string -> in_channel -> buffer =
+      fun ?(utf8=Utf8.ASCII) ?(filename="") ch ->
+        let filename = stream_infos_of_ch filename ch in
+        from_fun ignore utf8 filename input_buffer ch
 
     let from_fd
-        : ?utf8:context -> ?filename:string -> ?rescan:bool
-          -> Unix.file_descr -> buffer =
-      fun ?(utf8=Utf8.ASCII) ?(filename="") ?(rescan=true) fd ->
-        let st = st_fd rescan fd (fun () -> fd) in
-        from_fun ignore utf8 filename fd_buffer st fd
+        : ?utf8:context -> ?filename:string -> Unix.file_descr -> buffer =
+      fun ?(utf8=Utf8.ASCII) ?(filename="") fd ->
+        let filename = stream_infos_of_fd filename fd in
+        from_fun ignore utf8 filename fd_buffer fd
 
-    let from_file : ?utf8:context -> ?rescan:bool -> string -> buffer =
-      fun ?(utf8=Utf8.ASCII) ?(rescan=true) fname ->
-        let fd = Unix.(openfile fname [O_RDONLY] 0) in
-        let st = st_fn rescan fd fname in
-        from_fun Unix.close utf8 fname fd_buffer st fd
+    let from_file : ?utf8:context -> string -> buffer =
+      fun ?(utf8=Utf8.ASCII) filename ->
+        let fd = Unix.(openfile filename [O_RDONLY] 0) in
+        let filename = stream_infos_of_fd filename fd in
+        from_fun Unix.close utf8 filename fd_buffer fd
 
-    let from_string : ?utf8:context -> ?filename:string -> string -> buffer =
-      fun ?(utf8=Utf8.ASCII) ?(filename="") str ->
-      let b = ref true in
-        let string_buffer =
-          fun () -> if !b then (b := false; str) else raise End_of_file
+
+    let from_string : ?utf8:context -> string -> buffer =
+      fun ?(utf8=Utf8.ASCII) str ->
+        let stream_infos = stream_infos_of_str str in
+        let b = ref true in
+        let string_buffer () =
+          if !b then (b := false; str) else raise End_of_file
         in
-        let seek () n = b := (n <> (-1)) in
-        let pos () = (-1) in
-        let st = Seek(pos, seek, fun () -> ()) in
-        from_fun ignore utf8 filename string_buffer st ()
+        from_fun ignore utf8 stream_infos string_buffer ()
   end
 
 
 include GenericInput(
   struct
-    let rec from_fun finalise utf8 name get_line st file =
-      let infos = { utf8; name; uid = new_uid ()
-                  ; rescan = { f = rescan_no }; lnum_skip = [] }
+    let from_fun finalise utf8 stream_infos get_line file =
+      let infos = { utf8; stream_infos; uid = new_uid (); directives = [] } in
+      let cont boff =
+        finalise file;
+        empty_buffer infos boff
       in
-      let rec  fn boff cont =
+      let rec  fn boff =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
@@ -378,106 +232,56 @@ include GenericInput(
             let llen = String.length data in
             fun () ->
               { boff; data ; infos
-              ; next = lazy (fn (boff + llen) cont)
+              ; next = lazy (fn (boff + llen))
               ; ctnr = [||] }
           with End_of_file ->
-            finalise file;
             fun () -> cont boff
         end ()
       in
-      let buf =
-        begin
-          let cont boff =
-            empty_buffer infos boff
-          in
-          fn 0 cont
-        end
-      in
-      infos.rescan <- mk_rescan finalise utf8 name get_line st buf;
-      buf
-
-    and mk_rescan finalise utf8 name get_line st buf =
-      match st with
-      | Seek (pos, seek, reopen) ->
-         { f = fun fn acc ->
-               let file = reopen () in
-               rescan_seek file pos seek
-                 (fun () -> from_fun finalise utf8 name
-                              get_line st file) fn acc
-         }
-      | Buf              -> { f = fun fn acc -> rescan_buf buf fn acc }
-      | NoRescan         -> { f = rescan_no }
-
+      fn 0
   end)
 
 module type Preprocessor =
   sig
     type state
     val initial_state : state
-    val update : state -> string -> string
-                 -> state * (string option * int option * string) list
-    val check_final : state -> string -> unit
+    val update : state -> string ->
+                 state * (string option * int option * string) list
+    val check_final : state -> unit
   end
 
 module Make(PP : Preprocessor) =
   struct
-    let rec from_fun finalise utf8 name get_line st file =
-      let infos = { utf8; name; uid = new_uid (); rescan = { f = rescan_no }
-                    ; lnum_skip = [] }
+    let from_fun finalise utf8 stream_infos get_line file =
+      let infos = { utf8; stream_infos; uid = new_uid (); directives = [] } in
+      let cont boff st =
+        PP.check_final st;
+        finalise file;
+        empty_buffer infos boff
       in
-      let rec fn infos boff st cont =
+      let rec fn boff st =
         begin
           (* Tail rec exception trick to avoid stack overflow. *)
           try
             let data = get_line file in
-            let (st, ls) = PP.update st infos.name data in
-            let rec gn infos boff = function
-              | [] -> fn infos boff st cont
+            let (st, ls) = PP.update st data in
+            let rec gn boff = function
+              | [] -> fn boff st
               | (name, lnum, data) :: ls ->
-                 let infos = match name with
-                   | None      -> infos
-                   | Some name -> { infos with name }
-                 in
-                 let infos = match lnum with
-                   | None   -> infos
-                   | Some l ->
-                      { infos with lnum_skip = (boff, l) :: infos.lnum_skip }
-                 in
-                 if data = "" then gn infos boff ls
+                 infos.directives <- (boff, lnum, name) :: infos.directives;
+                 if data = "" then gn boff ls
                  else
                    let llen = String.length data in
                    { boff; data ; infos
-                     ; next = lazy (gn infos (boff + llen) ls)
+                     ; next = lazy (gn (boff + llen) ls)
                      ; ctnr = [||] }
             in
-            fun () -> gn infos boff ls
+            fun () -> gn boff ls
           with End_of_file ->
-            finalise file;
-            fun () -> cont infos boff st
+            fun () -> cont boff st
         end ()
       in
-      let buf =
-        begin
-          let cont infos boff st =
-            PP.check_final st infos.name;
-            empty_buffer infos boff
-          in
-          fn infos 0 PP.initial_state cont
-        end
-      in
-      infos.rescan <- mk_rescan finalise utf8 name get_line st buf;
-      buf
-   and mk_rescan finalise utf8 name get_line st buf =
-      match st with
-      | Seek (pos, seek, reopen) ->
-         { f = fun fn acc i0 ->
-               let file = reopen () in
-               rescan_seek file pos seek
-                 (fun () -> from_fun finalise utf8 name
-                              get_line st file) fn acc i0
-         }
-      | Buf              -> { f = fun fn acc i0 -> rescan_buf buf fn acc i0 }
-      | NoRescan         -> { f = rescan_no }
+      fn 0 PP.initial_state
   end
 
 module WithPP(PP : Preprocessor) = GenericInput(Make(PP))

@@ -2,8 +2,7 @@ open Pacomb
 open Pos
 open Grammar
 
-let ps = Pos.pos_of_spos
-let is = Pos.interval_of_spos
+let ps pos = (pos.offset_start, pos.offset_end)
 
 let bspace = Blank.from_charset (Charset.singleton ' ')
 
@@ -44,16 +43,16 @@ let _ = test (g 0 1) "42.0" 42.0
 
 (* test patterns in terminals *)
 let%parser g0 : (int * int) grammar =
-  (x::INT) => Pos.((ps x_lpos).col, (ps x_rpos).col)
+  (x::INT) => ps x_pos
 let _ = test g0 " 123 " (1,4)
 
 let%parser g : (int * int) grammar = ((x,y)::g0) => (y,x)
 let _ = test g " 123 " (4,1)
 let%parser g : (int * int * int) grammar =
-  (((x,y)=z)::g0) => Pos.(y,x,(ps z_rpos).col)
+  (((x,y)=z)::g0) => (y,x,snd (ps z_pos))
 let _ = test g " 123 " (4,1,4)
 let%parser g : (int * int * int) grammar =
-  ((((x:int),(y:int))=z)::g0) => Pos.(y,x,(ps z_rpos).col)
+  ((((x:int),(y:int))=z)::g0) => (y,x,snd (ps z_pos))
 let _ = test g " 123 " (4,1,4)
 
 (* test rules and sequences *)
@@ -81,20 +80,20 @@ let _ = test g "a" ()
 
 (* test positions *)
 let%parser g =
-    (x::INT) 'a' 'b' => Pos.((ps x_lpos).col,x,(ps x_rpos).col)
-  ; 'a' (x::INT) (b::'b') => Pos.((ps x_lpos).col,x,(ps b_rpos).col)
-  ; (a::'a') 'b' (x::INT) => Pos.((ps a_lpos).col,x,(ps x_rpos).col)
+    (x::INT) 'a' 'b' => (fst (ps x_pos),x,snd (ps x_pos))
+  ; 'a' (x::INT) (b::'b') => (fst (ps x_pos),x,snd (ps b_pos))
+  ; (a::'a') 'b' (x::INT) => (fst (ps a_pos),x,snd (ps x_pos))
 let _ = tests g [("42 a b ",(0,42,2))
                ; ("a 42 b ",(2,42,6))
                ; ("a b 42 ",(0,42,6))]
 let%parser g =
-    (x::bin) 'a' 'b' => Pos.((ps x_lpos).col,x,(ps x_rpos).col)
-  ; 'a' (x::bin) (b::'b') => Pos.((ps x_lpos).col,x,(ps b_rpos).col)
-  ; (a::'a') 'b' (x::bin) => Pos.((ps a_lpos).col,x,(ps x_rpos).col)
+    (x::bin) 'a' 'b' => (fst (ps x_pos),x,snd (ps x_pos))
+  ; 'a' (x::bin) (b::'b') => (fst (ps x_pos),x,snd (ps b_pos))
+  ; (a::'a') 'b' (x::bin) => (fst (ps a_pos),x,snd (ps x_pos))
 let _ = tests g [("42+13 a b ",(0,(42,Add,13),5))
                ; ("a 42 * 4 b ",(2,(42,Mul,4),10))
                ; ("a b 42 / 2 ",(0,(42,Div,2),10))]
-let%parser g = 'a' 'b' => Pos.((is _pos).start_col,(is _pos).end_col)
+let%parser g = 'a' 'b' => Pos.(_pos.offset_start,_pos.offset_end)
 let _ = tests g [("a b ",(0,3))]
 
 (* test recursion *)

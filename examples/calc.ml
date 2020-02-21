@@ -56,10 +56,7 @@ let _ =
         Printf.printf "=> %!"; (* initial prompt *)
         (* no need to stack the buffer of in_channel and those of Pacomb. So
            file desciptor are preferred. *)
-        (* as we parse stdin, we need to keed the whole buffer in memory
-           to have line and column number, ~rescan:false only give byte
-           position *)
-        Grammar.parse_fd ~rescan:false exprs blank Unix.stdin;
+        Grammar.parse_fd exprs blank Unix.stdin;
         raise End_of_file
       in
       (* [Pos] module provides a function to handle exception with

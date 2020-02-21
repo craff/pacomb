@@ -1,15 +1,14 @@
 /* File parser.mly */
 %{
 open Ast
-let mkloc e = { l=Parsing.symbol_start_pos ()
-              ; r=Parsing.symbol_end_pos  ()
+let mkloc e = { p= (Parsing.symbol_start_pos (), Parsing.symbol_end_pos  ())
               ; e}
 %}
 %token <string> ID
 %token LPAREN RPAREN
 %token EOL
 %start main             /* the entry point */
-%type <Lexing.position Ast.sexp> main
+%type <(Lexing.position*Lexing.position) Ast.sexp> main
 %%
 
   main:

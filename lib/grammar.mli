@@ -76,19 +76,21 @@ val diseq : ?name:string -> 'a grammar -> ('a -> 'b grammar) -> 'b grammar
 
 (** [lpos  g] is identical  to [g] but passes  the position just  before parsing
     with [g] to the semantical action of [g] *)
-val lpos : ?name:string -> (Pos.t -> 'a) grammar -> 'a grammar
+val lpos : ?name:string -> (Pos.spos -> 'a) grammar -> 'a grammar
 
 (** [rpos g] is identical to [g] but passes the position just after parsing with
     [g] to the semantical action of [g] *)
-val rpos : ?name:string -> (Pos.t -> 'a) grammar -> 'a grammar
+val rpos : ?name:string -> (Pos.spos -> 'a) grammar -> 'a grammar
+
+val mk_pos : ?name:string -> (Pos.pos -> 'a) grammar  -> 'a grammar
 
 (** variants of seq with the position of the first iterm *)
-val seq_pos : ?name:string -> 'a grammar -> (Pos.t * 'a * Pos.t -> 'b) grammar
+val seq_pos : ?name:string -> 'a grammar -> (Pos.pos * 'a -> 'b) grammar
               -> 'b grammar
-val seq_lpos : ?name:string -> 'a grammar -> (Pos.t * 'a -> 'b) grammar
-               -> 'b grammar
-val seq_rpos : ?name:string -> 'a grammar -> ('a * Pos.t -> 'b) grammar
-               -> 'b grammar
+
+(** variants of dseq with the position of the first iterm *)
+val dseq_pos  : ?name:string -> ('a * 'b) grammar
+               -> ('a -> (Pos.pos * 'b -> 'c) grammar) -> 'c grammar
 
 (** [cache  g] avoids to parse twice  the same input  with [g] by  memoizing the
     result of  the first parsing. The  optional [merge] parameter is  applied to
@@ -193,16 +195,21 @@ val parse_all_buffer : 'a grammar -> Blank.t -> Lex.buf -> Lex.idx -> 'a list
 
 (**  Parse a  whole string,  reporting position  according to  utf8 if  optional
     argument [utf8] is given and [Utf8.UTF8 or Utf8.CJK_UTF8] *)
-val parse_string  : ?utf8:Utf8.context -> ?filename:string
-                    -> 'a grammar -> Blank.t -> string -> 'a
+val parse_string  : ?utf8:Utf8.context -> 'a grammar -> Blank.t -> string -> 'a
 
-(**  Parse a  whole  input  channel, reporting  postiion  according  to utf8. *)
-val parse_channel : ?utf8:Utf8.context -> ?filename:string -> ?rescan:bool ->
+(**  Parse a  whole  input  channel, reporting  postiion  according  to utf8.
+     After closing the file position reporting by parsing cannot be transformed
+     bash to line/column number. *)
+val parse_channel : ?utf8:Utf8.context -> ?filename:string ->
                     'a grammar -> Blank.t -> in_channel -> 'a
 
-val parse_fd : ?utf8:Utf8.context -> ?filename:string -> ?rescan:bool ->
+(**  Parse a  whole  Unix.file_desc, reporting  postiion  according  to utf8.
+     After closing the file position reporting by parsing cannot be transformed
+     bash to line/column number. *)
+val parse_fd : ?utf8:Utf8.context -> ?filename:string ->
                'a grammar -> Blank.t -> Unix.file_descr -> 'a
 
-(**  Parse a  whole  file, reporting  postiion  according  to utf8. *)
+(**  Parse a  whole  file, reporting  postiion  according  to utf8.
+     File is reopen to read position. So the file should not change on disk *)
 val parse_file : ?utf8:Utf8.context ->
                     'a grammar -> Blank.t -> string -> 'a
