@@ -1,42 +1,48 @@
-(* Comparison function accepting to compare everything, in particular closures.
-   (Marshal.to_string f [Closures] = Marshal.to_string g [Closures]) does not
-   seem to work ... not enough equality detected *)
-let eq_closure : type a. a -> a -> bool =
-  fun f g ->
-    let open Obj in
-    let adone = ref [] in
-    let rec fn f g =
-      f == g ||
-        match is_int f, is_int g with
-        | true, true -> f == g
-        | false, true | true, false -> false
-        | false, false ->
-           let ft = tag f and gt = tag g in
-           if ft = forward_tag then (
-             fn (field f 0) g)
-           else if gt = forward_tag then (
-             fn f (field g 0))
-           else if ft <> gt then false
-           else
-           if ft = string_tag || ft = double_tag || ft = double_array_tag
-             then f = g
-           else if ft = abstract_tag || ft = out_of_heap_tag
-                   || ft = no_scan_tag || ft = custom_tag || ft = infix_tag
-                 (* FIXME #22: we could certainly do better with infix_tag
-                           i.e. mutually recursive functions *)
-             then f == g
-           else
-             size f == size g &&
-               let rec gn i =
-                 if i < 0 then true
-                 else fn (field f i) (field g i) && gn (i - 1)
-               in
-               List.exists (fun (f',g') -> f == f' && g == g') !adone ||
-                (List.for_all (fun (f',g') -> f != f' && g != g') !adone &&
-                 (adone := (f,g)::!adone;
-                  gn (size f - 1)))
-
-    in fn (repr f) (repr g)
+(** [eq_closure] is an alternative to the polymorphic equality function [(=)],
+    that compares closures using [(==)] instead of failing. Note that equality
+    testing is consequently not perfect. *)
+let eq_closure : type a. a -> a -> bool = fun v1 v2 ->
+  (* We remember encountered values in [eq_done] to handle cyclicity. *)
+  let eq_done : (Obj.t * Obj.t) list ref = ref [] in
+  let rec eq : Obj.t -> Obj.t -> bool = fun v1 v2 ->
+    (* Physical equality is tested first. *)
+    v1 == v2 ||
+    (* We then look at tags, and unfold potential forward blocks. *)
+    let t1 = Obj.tag v1 in
+    if t1 = Obj.forward_tag then eq (Obj.field v1 0) v2 else
+    let t2 = Obj.tag v2 in
+    if t2 = Obj.forward_tag then eq v1 (Obj.field v2 0) else
+    (* Tags must otherwise be the same to have equality. *)
+    t1 == t2 &&
+    (* Strings, doubles and arrays of doubles are compared using [=]. *)
+    if t1 = Obj.string_tag then v1 = v2 else
+    if t1 = Obj.double_tag then v1 = v2 else
+    if t1 = Obj.double_array_tag then v1 = v2 else
+    (* For everything that is not a non-constant constructors, equality failed
+    at this point (e.g., for closures or sealed values).  Such values are only
+    considered equal if physical equality succeeds (it was tested already). *)
+    Obj.first_non_constant_constructor_tag <= t1 &&
+    t1 <= Obj.last_non_constant_constructor_tag &&
+    Obj.size v1 == Obj.size v2 && (* Number of fields should be equal. *)
+    (* We recursively explore the fields. *)
+    let rec fn = function
+      | (v1', v2')::l ->
+         begin
+           match (v1 == v1', v2 == v2') with
+           | (true , true ) -> true
+           | (true , false) -> false
+           | (false, true ) -> false
+           | (_    , _    ) -> fn l
+         end
+      | []            ->
+         let rec gn i =
+           i < 0 || (eq (Obj.field v1 i) (Obj.field v2 i) && gn (i-1))
+         in
+         eq_done := (v1, v2) :: !eq_done; gn (Obj.size v1 - 1)
+    in
+    fn !eq_done
+  in
+  eq (Obj.repr v1) (Obj.repr v2)
 
 type ('a, 'b) t =
   { eq_key             : 'a -> 'a -> bool
