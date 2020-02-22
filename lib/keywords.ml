@@ -8,19 +8,21 @@ let keyword_uid = ref 0
 
 module Make(S : Spec) =
   struct
-    let reserved : string list ref = ref S.reserved
+    let reserved = Word_list.create ()
 
     let uid = incr keyword_uid; !keyword_uid
 
     let mem : string -> bool = fun s ->
-      List.mem s !reserved
+      Word_list.mem_ascii reserved s
 
     let reserve : string -> unit = fun s ->
-      if mem s then invalid_arg "already reserved";
-      reserved := s :: !reserved
+      try Word_list.add_ascii reserved s ()
+      with Word_list.Already_bound -> invalid_arg "already reserved"
+
+    let _ = List.iter reserve S.reserved
 
     let check : string -> unit = fun s ->
-      if List.mem s !reserved then Lex.give_up ()
+      if mem s then Lex.give_up ()
 
     let special : string -> unit Grammar.t = fun s ->
       if s = "" then invalid_arg "empty word";
