@@ -35,11 +35,6 @@ val filename : infos -> string
 (** [utf8 infos] return the unicode context in use for this file *)
 val utf8 : infos -> Utf8.context
 
-(** [find_directives infos offset line name] returns [line', name']
-    according to a line directive as byte offset n, of the given
-    [line] and [name] is no line directive exists at this position *)
-val find_directives : infos -> int -> int -> string -> int * string
-
 (** The abstract type position relative to the current buffer *)
 type idx
 
@@ -109,52 +104,6 @@ val from_fd : ?utf8:context -> ?filename:string
     [str]. The optional [filename] is only used as a reference to the channel in
     error messages. *)
 val from_string : ?utf8:context -> string -> buffer
-
-(** Specification of a preprocessor. *)
-module type Preprocessor =
-  sig
-    (** Type for the internal state of the preprocessor. *)
-    type state
-
-    (** Initial state of the preprocessor. *)
-    val initial_state : state
-
-    (** [update st name data] takes as input the state [st] of the preprocessor,
-       the file name [name] and the next input [data] itself. It returns the new
-       state,  a list  tuples  [(new_filename, new_linenum,  new_data)] with  an
-       optional new file name  and line number and the data  which can be empty.
-       This allows ofor include directive or line number directives.
-
-       Beware that the preprocessor is rerun  when getting position so it should
-       be reentrant.
-    *)
-    val update : state -> string
-                 -> state * (string option * int option * string) list
-
-    (** [check_final st name]  check that [st] indeed is a  correct state of the
-        preprocessor for  the end  of input of  file [name].  If  it is  not the
-        case, then this function shoud raise an exception of your choice. *)
-    val check_final : state -> unit
-  end
-
-(** Functor for building buffers with a preprocessor. *)
-module WithPP : functor (PP : Preprocessor) ->
-  sig
-    (** Same as [Input.from_channel] but uses the preprocessor. *)
-    val from_channel : ?utf8:context -> ?filename:string
-                       -> in_channel -> buffer
-
-    (** Same as [Input.fd] but uses the preprocessor. *)
-    val from_fd : ?utf8:context -> ?filename:string
-                  -> Unix.file_descr -> buffer
-
-    (** Same as [Input.from_file] but uses the preprocessor. *)
-    val from_file : ?utf8:context
-                    -> string -> buffer
-
-    (** Same as [Input.from_string] but uses the preprocessor. *)
-    val from_string : ?utf8:context -> string -> buffer
-  end
 
 (** {2 Buffer manipulation functions} *)
 

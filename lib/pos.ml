@@ -151,21 +151,20 @@ let pos_info
     if n0 = -1 || n1 = -1 then raise No_detailed_position;
     let utf8 = Input.utf8 pos.infos in
     let rec fn n = function
-      | (p, _ , _, _)::ls when p > n -> fn n ls
-      | c            ::_             -> c
-      | []                           -> (0, 0,  1, file_name)
+      | (p, _ , _)::ls when p > n -> fn n ls
+      | c         ::_             -> c
+      | []                        -> (0, 0,  1)
     in
-    let rec gn n p lo ln name =
-      let (ln, name) = Input.find_directives pos.infos p ln name in
-      if p mod cache_interval = 0 then cache := (p, lo, ln, name) :: !cache;
-      if p = n then (lo, ln, name) else
+    let rec gn n p lo ln =
+      if p mod cache_interval = 0 then cache := (p, lo, ln) :: !cache;
+      if p = n then (lo, ln) else
         begin
           assert(p < n);
           let c = try input_char () with End_of_file -> assert false in
           (*Printf.printf "%d %d %d %d %C\n" n p lo ln c;*)
           let p = p + 1 in
-          if c = '\n' then gn n p p (ln + 1) name
-          else gn n p lo ln name
+          if c = '\n' then gn n p p (ln + 1)
+          else gn n p lo ln
         end
     in
     let to_eol n =
@@ -179,15 +178,15 @@ let pos_info
       seek_in n;
       fn n
     in
-    let (start_line_offset, start_line, file_name) =
-      let (p, lo, ln, file_name) = fn n0 !cache in
+    let (start_line_offset, start_line) =
+      let (p, lo, ln) = fn n0 !cache in
       seek_in p;
-      gn n0 p lo ln file_name
+      gn n0 p lo ln
     in
-    let (end_line_offset  , end_line, _) =
-      let (p, lo, ln, file_name) = fn n1 !cache in
+    let (end_line_offset  , end_line) =
+      let (p, lo, ln) = fn n1 !cache in
       seek_in p;
-      gn n1 p lo ln file_name
+      gn n1 p lo ln
     in
     let start_col = col_num utf8 start_line_offset n0 in
     let end_col   = col_num utf8 end_line_offset n1 in

@@ -25,8 +25,6 @@ type infos =
   { utf8         : Utf8.context (** Uses utf8 for positions                 *)
   ; stream_infos : stream_infos (** The name of the buffer (e.g. file name) *)
   ; uid          : int          (** Unique identifier                       *)
-  ; mutable directives : (int * int option * string option) list
-                                (** line number and file directives         *)
   }
 
 let stream_infos infos = infos.stream_infos
@@ -36,17 +34,6 @@ let filename infos = match infos.stream_infos with
   | _             -> ""
 
 let utf8 infos = infos.utf8
-
-let find_directives infos n ln name=
-  let rec fn = function
-    | (p, ln', name')::_ when p = n ->
-       let ln = match ln' with None -> ln | Some ln -> ln in
-       let name = match name' with None -> name | Some n -> n in
-       (ln, name)
-    | _::l -> fn l
-    | []   -> (ln, name)
-  in
-  fn infos.directives
 
 type buffer =
   { boff         : int    (* Offset to the line ( bytes )            *)
@@ -69,7 +56,7 @@ let phantom_infos =
   { utf8         = Utf8.ASCII
   ; stream_infos = Stream
   ; uid          = new_uid ()
-  ; directives   = []  }
+  }
 
 
 (** idx type and constant *)
@@ -150,11 +137,6 @@ let buffer_compare b1 b2 =
 (* Get the unique identifier of the buffer. *)
 let buffer_uid b = b.infos.uid
 
-module type MinimalInput =
-  sig
-    val from_fun : ('a -> unit) -> context -> stream_infos
-                   -> ('a -> string) -> 'a -> buffer
-  end
 
 exception NoLineNorColumnNumber
 
@@ -182,109 +164,54 @@ let fd_buffer fd =
   else
     Bytes.sub_string res 0 n
 
-module GenericInput(M : MinimalInput) =
-  struct
-    include M
+let from_fun finalise utf8 stream_infos get_line file =
+  let infos = { utf8; stream_infos; uid = new_uid () } in
+  let cont boff =
+    finalise file;
+    empty_buffer infos boff
+  in
+  let rec  fn boff =
+    begin
+      (* Tail rec exception trick to avoid stack overflow. *)
+      try
+        let data = get_line file in
+        let llen = String.length data in
+        fun () ->
+        { boff; data ; infos
+          ; next = lazy (fn (boff + llen))
+          ; ctnr = [||] }
+      with End_of_file ->
+        fun () -> cont boff
+    end ()
+  in
+  fn 0
 
-    let from_channel
-        : ?utf8:context -> ?filename:string -> in_channel -> buffer =
-      fun ?(utf8=Utf8.ASCII) ?(filename="") ch ->
-        let filename = stream_infos_of_ch filename ch in
-        from_fun ignore utf8 filename input_buffer ch
+let from_channel
+    : ?utf8:context -> ?filename:string -> in_channel -> buffer =
+  fun ?(utf8=Utf8.ASCII) ?(filename="") ch ->
+  let filename = stream_infos_of_ch filename ch in
+  from_fun ignore utf8 filename input_buffer ch
 
-    let from_fd
-        : ?utf8:context -> ?filename:string -> Unix.file_descr -> buffer =
-      fun ?(utf8=Utf8.ASCII) ?(filename="") fd ->
-        let filename = stream_infos_of_fd filename fd in
-        from_fun ignore utf8 filename fd_buffer fd
+let from_fd
+    : ?utf8:context -> ?filename:string -> Unix.file_descr -> buffer =
+  fun ?(utf8=Utf8.ASCII) ?(filename="") fd ->
+  let filename = stream_infos_of_fd filename fd in
+  from_fun ignore utf8 filename fd_buffer fd
 
-    let from_file : ?utf8:context -> string -> buffer =
-      fun ?(utf8=Utf8.ASCII) filename ->
-        let fd = Unix.(openfile filename [O_RDONLY] 0) in
-        let filename = stream_infos_of_fd filename fd in
-        from_fun Unix.close utf8 filename fd_buffer fd
+let from_file : ?utf8:context -> string -> buffer =
+  fun ?(utf8=Utf8.ASCII) filename ->
+  let fd = Unix.(openfile filename [O_RDONLY] 0) in
+  let filename = stream_infos_of_fd filename fd in
+  from_fun Unix.close utf8 filename fd_buffer fd
 
-
-    let from_string : ?utf8:context -> string -> buffer =
-      fun ?(utf8=Utf8.ASCII) str ->
-        let stream_infos = stream_infos_of_str str in
-        let b = ref true in
-        let string_buffer () =
-          if !b then (b := false; str) else raise End_of_file
-        in
-        from_fun ignore utf8 stream_infos string_buffer ()
-  end
-
-
-include GenericInput(
-  struct
-    let from_fun finalise utf8 stream_infos get_line file =
-      let infos = { utf8; stream_infos; uid = new_uid (); directives = [] } in
-      let cont boff =
-        finalise file;
-        empty_buffer infos boff
-      in
-      let rec  fn boff =
-        begin
-          (* Tail rec exception trick to avoid stack overflow. *)
-          try
-            let data = get_line file in
-            let llen = String.length data in
-            fun () ->
-              { boff; data ; infos
-              ; next = lazy (fn (boff + llen))
-              ; ctnr = [||] }
-          with End_of_file ->
-            fun () -> cont boff
-        end ()
-      in
-      fn 0
-  end)
-
-module type Preprocessor =
-  sig
-    type state
-    val initial_state : state
-    val update : state -> string ->
-                 state * (string option * int option * string) list
-    val check_final : state -> unit
-  end
-
-module Make(PP : Preprocessor) =
-  struct
-    let from_fun finalise utf8 stream_infos get_line file =
-      let infos = { utf8; stream_infos; uid = new_uid (); directives = [] } in
-      let cont boff st =
-        PP.check_final st;
-        finalise file;
-        empty_buffer infos boff
-      in
-      let rec fn boff st =
-        begin
-          (* Tail rec exception trick to avoid stack overflow. *)
-          try
-            let data = get_line file in
-            let (st, ls) = PP.update st data in
-            let rec gn boff = function
-              | [] -> fn boff st
-              | (name, lnum, data) :: ls ->
-                 infos.directives <- (boff, lnum, name) :: infos.directives;
-                 if data = "" then gn boff ls
-                 else
-                   let llen = String.length data in
-                   { boff; data ; infos
-                     ; next = lazy (gn (boff + llen) ls)
-                     ; ctnr = [||] }
-            in
-            fun () -> gn boff ls
-          with End_of_file ->
-            fun () -> cont boff st
-        end ()
-      in
-      fn 0 PP.initial_state
-  end
-
-module WithPP(PP : Preprocessor) = GenericInput(Make(PP))
+let from_string : ?utf8:context -> string -> buffer =
+  fun ?(utf8=Utf8.ASCII) str ->
+  let stream_infos = stream_infos_of_str str in
+  let b = ref true in
+  let string_buffer () =
+    if !b then (b := false; str) else raise End_of_file
+  in
+  from_fun ignore utf8 stream_infos string_buffer ()
 
 let leq_buf {boff = b1} i1 {boff = b2} i2 =
   b1 < b2 || (b1 = b2 && (i1 <= i2))
