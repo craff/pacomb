@@ -188,8 +188,9 @@ let record_pos env =
     env.max_pos := (pos, env.current_buf, env.current_idx, ref [])
 
 (** [next env] updates the current maximum position [env.max_pos] and
-   raise [Exit] to return to the scheduler. *)
-let next : env -> 'a  = fun env -> record_pos env; raise Exit
+   raise [Return] to return to the scheduler. *)
+exception Return
+let next : env -> 'a  = fun env -> record_pos env; raise Return
 
 (** same as abobe, but recording error messages *)
 let record_pos_msg msg env =
@@ -200,7 +201,7 @@ let record_pos_msg msg env =
   else if pos = pos_max then msgs := msg :: !msgs
 
 let next_msg : string -> env -> 'a  = fun msg env ->
-  record_pos_msg msg env; raise Exit
+  record_pos_msg msg env; raise Return
 
 (** {2 continuations and trans functions} *)
 
@@ -347,7 +348,7 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
     (** the final continuation evaluating and storing the result *)
     let k env x =
       res := (x,env)::!res; (** evaluation of x is done later *)
-      raise Exit
+      raise Return
     in
     try
       let queue = env.queue in
@@ -356,9 +357,9 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
         let r = g env (ink k) in
         (* initialize the queue *)
         queue := Heap.add cmp r !queue;
-      with Exit -> ());
+      with Return -> ());
       while true do
-        let (todo,t) = Heap.remove !queue in
+        let (todo,t) = try Heap.remove !queue with Not_found -> raise Return in
         queue := t;
         try
           let r =
@@ -375,10 +376,10 @@ let scheduler : env -> 'a t -> ('a * env) list = fun env g ->
           in
           queue := Heap.add cmp r !queue;
         with
-        | Exit -> ()
+        | Return -> ()
       done;
       assert false
-    with Not_found | Exit -> !res
+    with Return -> !res
        | Lex.NoParse | Lex.Give_up _ -> assert false
 
 (** {2 the combinators } *)
@@ -388,7 +389,7 @@ let fail : 'a t = fun env _ -> next env
 
 (** Fails and report an error *)
 let error : string list -> 'a t = fun msgs env _ ->
-  List.iter (fun x -> record_pos_msg x env) msgs; raise Exit
+  List.iter (fun x -> record_pos_msg x env) msgs; raise Return
 
 (** Combinator used as default field before compilation *)
 let assert_false : 'a t = fun _ _ -> assert false
@@ -737,7 +738,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
     assert (not !too_late);
     ptr := (k, env0.cache_order) :: !ptr;
     (** Nothing else to do nw, try the other branch of parsing *)
-    raise Exit
+    raise Return
   with Not_found ->
     (** This is the first time we parse with this grammar at this position,
        we add an entry in the cache *)
@@ -778,7 +779,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
              can be more if you are not using enough cache.  *)
         vptr := v :: !vptr;
         (** No need to continue parsing, we try other branches *)
-        raise Exit
+        raise Return
       with Not_found ->
         (** we merge all semantics if merge <> None *)
         let v = match merge with
@@ -815,7 +816,7 @@ let cache : type a. ?merge:(a -> a -> a) -> a t -> a t = fun ?merge g ->
               (** we pop cache_order to ensure this continuation
                   is called after all extensions of vptr *)
               (Merg(env,cache_order,k,v))) l0;
-        raise Exit
+        raise Return
     in
     (** safe to call g, env had cache pushed so it is a minimum *)
     g env (ink k0)

@@ -533,6 +533,7 @@ let float : ?name:string -> unit -> float t = fun ?name () ->
         (!sg *. !m *. (10.0 ** (-. !ve)) *. (10.0 ** (!sge *. !e)), s0, n0) }
 
 (** escaped char for string and char litteral below *)
+exception Escaped
 let escaped = fun c s n ->
   if c = '\\' then
     let (c,s,n) = Input.read s n in
@@ -586,7 +587,7 @@ let escaped = fun c s n ->
        in
       (Char.chr (x1 * 16 + x2), s, n)
     | _ -> raise NoParse
-  else raise Exit
+  else raise Escaped
 
 (** char literal *)
 let char_lit : ?name:string -> unit -> char t = fun ?name () ->
@@ -598,7 +599,7 @@ let char_lit : ?name:string -> unit -> char t = fun ?name () ->
         if c <> '\'' then raise NoParse;
         let (c,s,n as r) = Input.read s n in
         if c = '\'' || c = '\255' then raise NoParse;
-        let (cr,s,n) = try escaped c s n with Exit -> r in
+        let (cr,s,n) = try escaped c s n with Escaped -> r in
         let (c,s,n) = Input.read s n in
         if c <> '\'' then raise NoParse;
         (cr,s,n)
@@ -632,7 +633,7 @@ let string_lit : ?name:string -> unit -> string t = fun ?name () ->
           else if c = '\255' then raise NoParse
           else
             begin
-              let (cr,s,n) = try escaped c s n with Exit -> r in
+              let (cr,s,n) = try escaped c s n with Escaped -> r in
               Buffer.add_char b cr;
               fn s n
             end
