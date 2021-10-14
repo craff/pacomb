@@ -52,4 +52,4 @@ script:
 
 notifications:
   email:
-    - lepigre@mpi-sws.org
+    - christophe@raffalli.eu
