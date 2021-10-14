@@ -69,7 +69,7 @@ type quote =
   }
 
 (** default quote:
-```
+  {[
   let ulined : string -> string =
     fun s -> "\027[0m\027[4m" ^ s ^ "\027[0m"
 
@@ -79,7 +79,7 @@ type quote =
     ; header   = ""
     ; footer   = ""
     ; enlight  = ulined }
-'''
+   ]}
 *)
 val default_quote : quote
 

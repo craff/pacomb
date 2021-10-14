@@ -41,14 +41,14 @@ val length : t -> int
 val add_key : 'a -> t -> 'a key * t
 
 (** [find k l]  returns the latest inserted value with key [k]  in list [l]. The
-    exception {!exception:Not_found} is raised if there is none. *)
+    exception [Not_found] is raised if there is none. *)
 val find : 'a key -> t -> 'a
 
 (** [mem k l] tells whether an element is mapped to [k] in the list [l]. *)
 val mem : 'a key -> t -> bool
 
 (** [remove k l]  removes the latest inserted binding of the key  [k] in [l]. If
-    there is no such binding, then {!exception:Not_found} is raised. *)
+    there is no such binding, then [Not_found] is raised. *)
 val remove : 'a key -> t -> t
 
 (** [replace  k l] replaces  a previous binding if  it exists.  If  two bindings

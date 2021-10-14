@@ -23,9 +23,14 @@ clean:
 	find -name \*.csv -exec rm {} \;
 
 .PHONY: install
-install:
+install: all
 	dune install
 
 .PHONY: doc
 doc:
 	dune build @doc
+
+.PHONY: install_doc
+install_doc: doc
+	rsync -r _build/default/_doc/_html/pacomb   ${HOME}/WWW/
+	rsync -r _build/default/_doc/_html/odoc.css ${HOME}/WWW/
