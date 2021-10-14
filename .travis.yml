@@ -1,5 +1,5 @@
+dist: trusty
 language: c
-sudo: required
 
 cache:
   directories:
@@ -9,6 +9,7 @@ env:
   global:
   - OPAMJOBS="2"
   - OPAMYES="true"
+  - OPAMVERBOSE="true"
   matrix:
   - OCAML_VERSION=4.04.1
   - OCAML_VERSION=4.04.2
@@ -20,9 +21,16 @@ env:
   - OCAML_VERSION=4.08.0
   - OCAML_VERSION=4.08.1
   - OCAML_VERSION=4.09.0
-
-os:
-  - linux
+  - OCAML_VERSION=4.09.1
+  - OCAML_VERSION=4.10.0
+  - OCAML_VERSION=4.10.1
+  - OCAML_VERSION=4.10.2
+  - OCAML_VERSION=4.11.0
+  - OCAML_VERSION=4.11.1
+  - OCAML_VERSION=4.11.2
+  - OCAML_VERSION=4.12.0
+  - OCAML_VERSION=4.13.0
+  - OCAML_VERSION=4.13.1
 
 before_install:
   # Obtain and install opam locally.
@@ -33,7 +41,7 @@ before_install:
   - opam update
   - opam switch "$OCAML_VERSION"
   - eval $(opam env)
-  - opam install dune>=1.9.0 stdlib-shims ppxlib
+  - opam install dune>=1.9.0 ppxlib>=0.10.0 stdlib-shims
 
 install:
   - make
@@ -41,3 +49,7 @@ install:
 
 script:
   - make tests
+
+notifications:
+  email:
+    - lepigre@mpi-sws.org
