@@ -140,7 +140,8 @@ let pos_info
          let seek_in n = pos := n in
          let input_char () =
            if !pos >= String.length str then raise End_of_file;
-           str.[!pos]
+           let x = !pos in incr pos;
+           str.[x]
          in
          ("", cache, seek_in, input_char, str_col_num str, String.sub str)
       | Stream ->
