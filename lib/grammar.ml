@@ -1620,46 +1620,45 @@ let add_eof g = seq g (appl (term (eof ())) (fun _ x -> x))
 
 (* NOTE: cs with blank_after = false makes no sense ? *)
 let partial_parse_buffer
-    : type a. a t -> Blank.t -> ?blank_after:bool
-                  -> Lex.buf -> Lex.idx -> a * Lex.buf * Lex.idx =
-  fun g blank_fun ?(blank_after=false) buf0 col0 ->
+    : type a. a t -> Blank.t -> ?blank_after:bool ->
+                  ?offset:Lex.idx -> Lex.buf -> a * Lex.buf * Lex.idx =
+  fun g blank_fun ?(blank_after=false) ?(offset=Input.init_idx) buf0 ->
     let g = compile g in
-    Comb.partial_parse_buffer g blank_fun ~blank_after buf0 col0
+    Comb.partial_parse_buffer g blank_fun ~blank_after buf0 offset
 
 let parse_buffer
-    : type a. a t -> Blank.t -> Lex.buf -> Lex.idx -> a =
-  fun g blank_fun buf col ->
+    : type a. a t -> Blank.t -> ?offset:Lex.idx -> Lex.buf -> a =
+  fun g blank_fun ?(offset=Input.init_idx) buf ->
     let g = add_eof g in
-    let (v,_,_) = partial_parse_buffer g blank_fun buf col in v
+    let (v,_,_) = partial_parse_buffer g blank_fun ~offset buf in v
 
 let parse_all_buffer
-    : type a. a t -> Blank.t -> Lex.buf -> Lex.idx -> a list =
-  fun g blank_fun buf0 col0 ->
+    : type a. a t -> Blank.t -> ?offset:Lex.idx -> Lex.buf -> a list =
+  fun g blank_fun ?(offset=Input.init_idx) buf ->
     let g = compile (add_eof g) in
-    Comb.parse_all_buffer g blank_fun buf0 col0
+    Comb.parse_all_buffer g blank_fun buf offset
 
 let parse_string
     : type a. ?utf8:Utf8.context -> a t -> Blank.t -> string -> a =
   fun ?(utf8=Utf8.ASCII) g b s ->
-    parse_buffer g b (Input.from_string ~utf8 s) Input.init_idx
+    parse_buffer g b (Input.from_string ~utf8 s)
 
 let parse_channel
     : type a. ?utf8:Utf8.context -> ?filename:string ->
               a t -> Blank.t -> in_channel -> a =
   fun ?(utf8=Utf8.ASCII) ?filename g b ic ->
     parse_buffer g b (Input.from_channel ~utf8 ?filename ic)
-      Input.init_idx
 
 let parse_fd
     : type a. ?utf8:Utf8.context -> ?filename:string ->
               a t -> Blank.t -> Unix.file_descr -> a =
   fun ?(utf8=Utf8.ASCII) ?filename g b ic ->
     let buf = Input.from_fd ~utf8 ?filename ic in
-    parse_buffer g b buf Input.init_idx
+    parse_buffer g b buf
 
 let parse_file ?(utf8=Utf8.ASCII) g b filename =
     let buf = Input.from_file ~utf8 filename in
-    parse_buffer g b buf Input.init_idx
+    parse_buffer g b buf
 
 let lpos ?name g = lpos ?name ?pk:None g
 let appl ?name = appl ?name:(created name)

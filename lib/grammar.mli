@@ -179,19 +179,19 @@ val give_name : string -> 'a grammar -> 'a grammar
 
 (** Parse a whole input buffer. the eof combinator is added at
     the end of the given combinator *)
-val parse_buffer : 'a grammar -> Blank.t -> Lex.buf -> Lex.idx -> 'a
+val parse_buffer : 'a grammar -> Blank.t -> ?offset:Lex.idx -> Lex.buf -> 'a
 
 (** Partial parsing.  Beware, the returned  position is not the maximum position
-    that can  be reached  by the grammar  it the grammar  is ambiguous.  In this
+    that can  be reached  by the grammar  if the grammar  is ambiguous.  In this
     case, a message is printed on  stderr. The charset is the character accepted
     at  the  end of  input.  Mainly  useful  with  'eof' when  [blank_after]  is
     [true]. *)
 val partial_parse_buffer : 'a grammar -> Blank.t -> ?blank_after:bool ->
-                           Lex.buf -> Lex.idx -> 'a * Lex.buf * Lex.idx
+                          ?offset:Lex.idx -> Lex.buf -> 'a * Lex.buf * Lex.idx
 
 (** Returns all possible parse trees.  Usefull for natural languages but also to
     debug ambiguity in a supposed non ambiguous grammar. *)
-val parse_all_buffer : 'a grammar -> Blank.t -> Lex.buf -> Lex.idx -> 'a list
+val parse_all_buffer : 'a grammar -> Blank.t -> ?offset:Lex.idx -> Lex.buf -> 'a list
 
 (**  Parse a  whole string,  reporting position  according to  utf8 if  optional
     argument [utf8] is given and [Utf8.UTF8 or Utf8.CJK_UTF8] *)
