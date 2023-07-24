@@ -32,7 +32,7 @@ val error : ?name:string -> string list -> 'a grammar
 (** [empty a] accepts the empty input and returns [a] *)
 val empty : ?name:string -> 'a -> 'a grammar
 
-(** [test  b] is  [if b then  empty ()  else fail ()].  Very usefull  in grammar
+(** [cond  b] is  [if b then  empty ()  else fail ()].  Very usefull  in grammar
     family at the beginning of a rule. The test is done at grammar construction,
     not at parsing time (except if it is used in a dependant grammar). *)
 val cond : ?name:string -> bool -> unit grammar
