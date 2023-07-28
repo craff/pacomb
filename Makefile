@@ -32,4 +32,4 @@ doc:
 
 .PHONY: install_doc
 install_doc: doc
-	rsync -r --delete _build/default/_doc/_html/   ${HOME}/WWW2/main/pacomb
+	rsync -r --delete _build/default/_doc/_html/   ${HOME}/WWW2/Raffalli/pacomb/
