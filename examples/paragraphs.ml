@@ -30,8 +30,8 @@ let%parser text = (~? sep) (t:: ~* [sep] paragraph) (~? sep) => t
 (* we call the parser *)
 let _ =
   let t = Pos.handle_exception (Grammar.parse_channel text blank2) stdin in
-  Printf.printf "%d paragraphs\n%!" (List.length t);
-  List.iteri (fun i (p,pos) -> Printf.printf "  paragraph %d at %a: %d word(s)\n%!"
+  Format.printf "%d paragraphs\n%!" (List.length t);
+  List.iteri (fun i (p,pos) -> Format.printf "  paragraph %d at %a: %d word(s)\n%!"
                                  i
                                  (Pos.print_pos ~style:Short ())
                                  pos

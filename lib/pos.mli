@@ -90,7 +90,7 @@ type style = OCaml (** like OCaml *)
 (** printing for the three kind of positions, and the current position
     of a buffer.  *)
 val print_pos_info   : ?style:style -> ?quote:quote -> unit
-                       -> out_channel -> pos_info -> unit
+                       -> Format.formatter -> pos_info -> unit
 (** The three functions below will print only the byte_pos if the file
     cannot be reopenned. The exception File_changed is raised if the file
     changed since last openning.
@@ -98,11 +98,11 @@ val print_pos_info   : ?style:style -> ?quote:quote -> unit
     If quote is given, the file is quoted.
 *)
 val print_pos     : ?style:style -> ?quote:quote -> unit
-                    -> out_channel -> pos -> unit
+                    -> Format.formatter -> pos -> unit
 val print_spos    : ?style:style -> ?quote:quote -> unit
-                    -> out_channel -> spos -> unit
+                    -> Format.formatter -> spos -> unit
 val print_buf_pos : ?style:style -> ?quote:quote -> unit
-                    -> out_channel -> (Input.buffer * Input.idx) -> unit
+                    -> Format.formatter -> (Input.buffer * Input.idx) -> unit
 
 (** Exception raised when parsing fails *)
 exception Parse_error of Input.buffer * Input.idx * string list

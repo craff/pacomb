@@ -17,7 +17,7 @@ let%parser rec
                                                        when show_sub is false *)
              ; (show_sub=true) '(' (e::expr) ')' =>(* idem with show_sub true *)
 
-                 (Printf.printf "%a: %f\n"
+                 (Format.printf "%a: %f\n"
                     (Pos.print_pos ()) _pos e;
                                           (* ^^^^^^ to access position of l   *)
                   e)
@@ -54,7 +54,7 @@ let config =
    printing the result and the next prompt. *)
 let%parser rec exprs =
     () => ()
-  ; exprs (e::expr) '\n' => Printf.printf "%f\n=> %!" e
+  ; exprs (e::expr) '\n' => Format.printf "%f\n=> %!" e
 
 (* we define the characters to be ignored, here space only *)
 let blank = Blank.from_charset (Charset.singleton ' ')
@@ -63,7 +63,7 @@ let _ =
   try
     while true do
       let f () =
-        Printf.printf "=> %!"; (* initial prompt *)
+        Format.printf "=> %!"; (* initial prompt *)
         parse_channel ~utf8:Utf8.UTF8 exprs blank stdin;
         print_grammar ~def:false stdout exprs;
         raise End_of_file

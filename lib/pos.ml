@@ -233,9 +233,9 @@ let default_quote =
   ; footer   = ""
   ; enlight  = ulined }
 
-let quote_text : quote -> out_channel -> pos_info -> unit =
+let quote_text : quote -> Format.formatter -> pos_info -> unit =
   fun quote ch pos ->
-    let open Printf in
+    let open Format in
     if pos.text = "" then () else
     let lines = String.split_on_char '\n' pos.text in
     let start = pos.start_line in
@@ -288,7 +288,7 @@ let quote_text : quote -> out_channel -> pos_info -> unit =
       fprintf ch "%s%s" quote.prefix quote.footer
 
 let print_spos ?(style=OCaml) () ch ((infos,n):spos) =
-  let open Printf in
+  let open Format in
   if n = Input.phantom_byte_pos then
     fprintf ch "NO POSITION"
   else
@@ -308,7 +308,7 @@ let print_spos ?(style=OCaml) () ch ((infos,n):spos) =
     fprintf ch format name n
 
 let print_pos ?(style=OCaml) () ch pos =
-  let open Printf in
+  let open Format in
   let n1 = pos.offset_start  in
   let n2 = pos.offset_end in
   if n1 = -1 || n2 = -1 then
@@ -329,7 +329,7 @@ let print_pos ?(style=OCaml) () ch pos =
     fprintf ch format name n1 n2
 
 let print_pos_info ?(style=OCaml) ?quote () ch (pos:pos_info) =
-  let open Printf in
+  let open Format in
   let str_pos =
     if pos.file_name = "" then
       if pos.start_line = pos.end_line then
@@ -406,7 +406,7 @@ let fail_no_parse (_:exn) = exit 1
 let handle_exception ?(error=fail_no_parse) ?(style=OCaml) f a =
   try f a with Parse_error(buf, pos, msgs) as e ->
     let red fmt = "\027[31m" ^^ fmt ^^ "\027[0m%!" in
-    Printf.eprintf (red "Parse error: %a.\n%!")
+    Format.eprintf (red "Parse error: %a.\n%!")
       (print_buf_pos ~style ()) (buf, pos);
     if msgs <> [] then
       begin

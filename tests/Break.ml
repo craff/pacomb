@@ -27,7 +27,7 @@ let test pos l0 =
     let s = Utf8.of_list chars in
     let rec fn = function
       | [] -> []
-      | []::_ -> Printf.eprintf "unexpected empty at %a\n%!"
+      | []::_ -> Format.eprintf "unexpected empty at %a\n%!"
                    (Pos.print_pos ()) pos;
                  good := false;
                  raise Exit
@@ -39,11 +39,11 @@ let test pos l0 =
     let l = fn l in
     if l <> l0 then
       begin
-        Printf.eprintf "break fail at %a\n%!" (Pos.print_pos ()) pos;
+        Format.eprintf "break fail at %a\n%!" (Pos.print_pos ()) pos;
         List.iter (fun (l,b) -> Printf.eprintf "%x %b " (Uchar.to_int l) b) l;
-        Printf.eprintf " <> ";
+        Format.eprintf " <> ";
         List.iter (fun (l,b) -> Printf.eprintf "%x %b " (Uchar.to_int l) b) l0;
-        Printf.eprintf "\n%!";
+        Format.eprintf "\n%!";
         good := false;
         raise Exit
       end
