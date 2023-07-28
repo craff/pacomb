@@ -157,7 +157,6 @@ item ::= CHAR                                           Grammar.term(Lex.any ())
        | FLOAT                                        Grammar.term(Lex.float ())
        | STRING_LIT                              Grammar.term(Lex.string_lit ())
        | CHAR_LIT                                  Grammar.term(Lex.char_lit ())
-       | RE(expr)             Grammar.term(Lex.regexp (Regexp.from_string expr))
        | ~? expr                                             Grammar.option expr
        | ~? [expr] expr                         Grammar.option_default expr expr
        | ~* expr                                               Grammar.star expr
