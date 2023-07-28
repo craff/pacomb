@@ -353,7 +353,7 @@ let _ = assert (parse_string test18 "a" = ())
 
 let parse_all_string g s =
   let s = Input.from_string s in
-  parse_all_buffer g Blank.none s Input.init_idx
+  parse_all_buffer g Blank.none s ~offset:Input.init_idx
 
 let nas p =
   let rec fn p =
