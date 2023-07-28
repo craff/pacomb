@@ -46,6 +46,7 @@ type _ ast =
   | Appl : 'a t * ('a -> 'b) * 'b Assoc.key -> 'b ast
   | Star : 'a t * (unit -> 'b) * ('b -> 'a -> 'b) * 'b Assoc.key -> 'b ast
   | Plus : 'a t * (unit -> 'b) * ('b -> 'a -> 'b) * 'b Assoc.key -> 'b ast
+  | Sub : 'a t * ('a -> bool) * 'a Assoc.key -> 'a ast
   | Keyword : string * int -> unit ast
   | Custom : 'a lexeme * 'a Assoc.key -> 'a ast
 
@@ -106,6 +107,11 @@ val not_test : ?name:string -> (char -> bool) -> unit t
     in the charset. Does  not read the character if not  in the charset.
     [name] default as in [not_test] *)
 val not_charset : ?name:string -> Charset.t -> unit t
+
+(** Does a test on the result of a given lexer and reject if it returns
+    false. You may provide a restricted charset for the set of charaters
+    accepted in the initial position. *)
+val sub : ?name:string -> ?charset:Charset.t -> 'a t -> ('a -> bool) -> 'a t
 
 (** Compose  two terminals in sequence.  [name] default is the  concatenation of
     the two names. *)

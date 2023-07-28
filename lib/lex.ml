@@ -40,6 +40,7 @@ type _ ast =
   | Appl : 'a t * ('a -> 'b) * 'b Assoc.key -> 'b ast
   | Star : 'a t * (unit -> 'b) * ('b -> 'a -> 'b) * 'b Assoc.key -> 'b ast
   | Plus : 'a t * (unit -> 'b) * ('b -> 'a -> 'b) * 'b Assoc.key -> 'b ast
+  | Sub : 'a t * ('a -> bool) * 'a Assoc.key -> 'a ast
   | Keyword : string * int -> unit ast
   | Custom : 'a lexeme * 'a Assoc.key -> 'a ast
 
@@ -90,6 +91,7 @@ let rec eq : type a b.a t -> b t -> (a,b) Assoc.eq =
     | Appl(_,_,ak), Appl(_,_,bk) -> ak.eq bk.tok
     | Star(_,_,_,ak), Star(_,_,_,bk) -> ak.eq bk.tok
     | Plus(_,_,_,ak), Plus(_,_,_,bk) -> ak.eq bk.tok
+    | Sub(_,_,ak), Sub(_,_,bk) -> ak.eq bk.tok
     | Keyword(s1,uid1), Keyword(s2,uid2) ->
        if s1 = s2 && uid1 = uid2 then Eq else NEq
     | Custom(af,ak), Custom(bf,bk) ->
@@ -295,6 +297,18 @@ let not_test : ?name:string -> (char -> bool) -> unit t =
     is in the charset. Does not read the character if not in the charset. *)
 let not_charset : ?name:string -> Charset.t -> unit t =
   fun ?name cs -> not_test ?name (Charset.mem cs)
+
+(** does a test on the result of a given lexer and reject if it returns
+    false.*)
+let sub : ?name:string -> ?charset:Charset.t -> 'a t -> ('a -> bool) -> 'a t =
+  fun ?name ?charset t test ->
+  { n = default (sp "sub(%s)" t.n) name
+  ; c = default t.c charset
+  ; a = Sub(t, test, Assoc.new_key ())
+  ; f = fun s n ->
+        let (c,_,_) as r = t.f s n in
+        if test c then r else raise NoParse }
+
 
 (** Compose two terminals in sequence *)
 let seq : ?name:string -> 'a t -> 'b t -> ('a -> 'b -> 'c) -> 'c t =
