@@ -32,5 +32,4 @@ doc:
 
 .PHONY: install_doc
 install_doc: doc
-	rsync -r _build/default/_doc/_html/pacomb   ${HOME}/WWW/
-	rsync -r _build/default/_doc/_html/odoc.css ${HOME}/WWW/
+	rsync -r --delete _build/default/_doc/_html/   ${HOME}/WWW2/main/pacomb
