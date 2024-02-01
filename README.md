@@ -25,7 +25,7 @@ A complete documentation is available via ocamldoc (make doc)
 Pacomb also support: self extensible grammars, ambiguous grammars (with merge),
 late rejection of rule via raising exception from action code, priority and others.
 
-A complete [documentation is available]{https://raffalli.eu/opam}
+A complete [documentation is available](https://raffalli.eu/pacomb/pacomb)
 
 As teaser, the usual calculator example:
 
