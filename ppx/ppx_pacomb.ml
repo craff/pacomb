@@ -25,6 +25,13 @@ let merge_att =
                Ast_pattern.(single_expr_payload __)
                (fun x -> x))
 
+let merge_with_pos_att =
+  let open Ppxlib in
+  Attribute.(declare "merge_with_pos"
+               Context.Value_binding
+               Ast_pattern.(single_expr_payload __)
+               (fun x -> x))
+
 let layout_att =
   let open Ppxlib in
   Attribute.(declare "layout"
@@ -524,7 +531,13 @@ let vb_to_parser rec_ vb =
     let rules =
       match Ppxlib.Attribute.get merge_att vb with
       | Some e ->
-        [%expr Pacomb.Grammar.cache ~merge:[%e e] [%e rules]]
+        [%expr Pacomb.Grammar.cache ~merge:(Merge [%e e]) [%e rules]]
+      | None   -> rules
+    in
+    let rules =
+      match Ppxlib.Attribute.get merge_with_pos_att vb with
+      | Some e ->
+        [%expr Pacomb.Grammar.cache ~merge:(MergeWithPos [%e e]) [%e rules]]
       | None   -> rules
     in
     let rules =

@@ -92,12 +92,17 @@ val seq_pos : ?name:string -> 'a grammar -> (Pos.pos * 'a -> 'b) grammar
 val dseq_pos  : ?name:string -> ('a * 'b) grammar
                -> ('a -> (Pos.pos * 'b -> 'c) grammar) -> 'c grammar
 
+type 'a merge =
+  NoMerge
+| Merge : ('a -> 'a -> 'a) -> 'a merge
+| MergeWithPos : (start:Input.byte_pos -> end_:Input.byte_pos -> 'a -> 'a -> 'a) -> 'a merge
+
 (** [cache  g] avoids to parse twice  the same input  with [g] by  memoizing the
     result of  the first parsing. The  optional [merge] parameter is  applied to
     group semantics corresponding  to the same part of the  input. Using [cache]
     with [merge] allows to recover a polynomial time complexity (cubic at worst)
     and a quadratic space (in the size of the input) *)
-val cache : ?name:string -> ?merge:('a -> 'a -> 'a) -> 'a grammar -> 'a grammar
+val cache : ?name:string -> ?merge:'a merge -> 'a grammar -> 'a grammar
 
 (** allows to perform a test, the test function receive the position before
     and after the blanks *)

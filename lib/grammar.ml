@@ -4,9 +4,14 @@ module Uf = UnionFind
 let _ = Printexc.record_backtrace true
 let _ = Sys.catch_break true
 
+type 'a merge =
+  NoMerge
+| Merge : ('a -> 'a -> 'a) -> 'a merge
+| MergeWithPos : (start:Input.byte_pos -> end_:Input.byte_pos -> 'a -> 'a -> 'a) -> 'a merge
+
 type 'a cache =
   NoCache : 'a cache
-| Cache   : ('a -> 'a -> 'a) option -> 'a cache
+| Cache   : 'a merge -> 'a cache
 
 type name_kind = Created | Inherited | Given
 
@@ -247,7 +252,7 @@ let mkg : ?name:name -> ?recursive:bool -> ?cached:'a cache ->
 
 (** cache is added as information in the grammar record because when
     a grammar is cached, elimination of left recursion is useless *)
-let cache ?name ?merge g =
+let cache ?name  ?(merge=NoMerge) g =
   let name = gen_name (created name) in
   { g with cached = Cache merge; n = name }
 
@@ -1587,7 +1592,9 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
          let cne =
            match g.cached with
            | NoCache -> cne
-           | Cache m -> Comb.cache ?merge:m cne
+           | Cache NoMerge -> Comb.cache cne
+           | Cache (Merge m) -> Comb.cache ~merge:(fun ~start:_ ~end_:_ -> m) cne
+           | Cache (MergeWithPos m) -> Comb.cache ~merge:m cne
          in
          g.compiled := cne;
          get g
