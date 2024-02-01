@@ -722,9 +722,11 @@ let change_layout : ?config:Blank.layout_config -> Blank.t -> 'a t -> 'a t =
       if moved then Cont(env,k,v) else call k env v))
 
 (** {2 The cache/merge combinator } *)
+type 'a merge = infos:Input.infos -> start:Input.byte_pos -> end_:Input.byte_pos
+                -> 'a -> 'a -> 'a
 
 (** Combinator for caching a grammar, to avoid exponential behavior. *)
-let cache : type a. ?merge:(start:Input.byte_pos -> end_:Input.byte_pos -> a -> a -> a) -> a t -> a t = fun ?merge g ->
+let cache : type a. ?merge:a merge -> a t -> a t = fun ?merge g ->
   (** creation of a table for the cache *)
   let cache = Input.Tbl.create () in
   fun env0 k ->
@@ -799,9 +801,11 @@ let cache : type a. ?merge:(start:Input.byte_pos -> end_:Input.byte_pos -> a -> 
                  (** do not forget to deal with give_up *)
                  let start = fst cache_order in
                  let end_ = Input.byte_pos buf idx in
+                 let infos = Input.infos buf in
                  let merge x y =
-                   try match x with None -> Some y
-                                  | Some x -> Some (merge ~start ~end_ x y)
+                   try match x with
+                       | None -> Some y
+                       | Some x -> Some (merge ~infos ~start ~end_ x y)
                    with Lex.NoParse -> x
                       | Lex.Give_up m -> msg := Some m; x
                  in

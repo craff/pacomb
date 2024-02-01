@@ -92,10 +92,9 @@ val seq_pos : ?name:string -> 'a grammar -> (Pos.pos * 'a -> 'b) grammar
 val dseq_pos  : ?name:string -> ('a * 'b) grammar
                -> ('a -> (Pos.pos * 'b -> 'c) grammar) -> 'c grammar
 
-type 'a merge =
-  NoMerge
-| Merge : ('a -> 'a -> 'a) -> 'a merge
-| MergeWithPos : (start:Input.byte_pos -> end_:Input.byte_pos -> 'a -> 'a -> 'a) -> 'a merge
+(** type for a merge function *)
+type 'a merge = infos:Input.infos -> start:Input.byte_pos -> end_:Input.byte_pos
+                -> 'a -> 'a -> 'a
 
 (** [cache  g] avoids to parse twice  the same input  with [g] by  memoizing the
     result of  the first parsing. The  optional [merge] parameter is  applied to
@@ -103,6 +102,11 @@ type 'a merge =
     with [merge] allows to recover a polynomial time complexity (cubic at worst)
     and a quadratic space (in the size of the input) *)
 val cache : ?name:string -> ?merge:'a merge -> 'a grammar -> 'a grammar
+
+(** [set_debug_merge fmt] Will produce a debugging message for all ambiguities
+    including the possition. *)
+val set_debug_merge : Format.formatter -> unit
+val unset_debug_merge : unit -> unit
 
 (** allows to perform a test, the test function receive the position before
     and after the blanks *)
@@ -196,7 +200,8 @@ val partial_parse_buffer : 'a grammar -> Blank.t -> ?blank_after:bool ->
 
 (** Returns all possible parse trees.  Usefull for natural languages but also to
     debug ambiguity in a supposed non ambiguous grammar. *)
-val parse_all_buffer : 'a grammar -> Blank.t -> ?offset:Lex.idx -> Lex.buf -> 'a list
+val parse_all_buffer : 'a grammar -> Blank.t ->
+                       ?offset:Lex.idx -> Lex.buf -> 'a list
 
 (**  Parse a  whole string,  reporting position  according to  utf8 if  optional
     argument [utf8] is given and [Utf8.UTF8 or Utf8.CJK_UTF8] *)

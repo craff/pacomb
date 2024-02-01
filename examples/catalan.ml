@@ -9,7 +9,6 @@ open Pacomb
 
 *)
 
-
 (* A parser parsing arbitrary sequence of charaters 'a' as a set of binary
    trees. We use merge in case of ambiguity and, as [@merge ...] implies
    [@cache] pacomb parses only once each part of the input. We just return the
@@ -18,24 +17,16 @@ let%parser [@merge (+.)] rec bin_seq =
     ()                              => 1.0
   ; (t1::bin_seq) 'a' (t2::bin_seq) => t1 *. t2
 
-let plus ~start ~end_ x y =
-  let pos = Pos.mk_pos start end_ Input.phantom_infos in
-  Format.printf "merge at %a\n" (fun fmt p -> Pos.print_pos () fmt p) pos;
-  x +. y
-
-let%parser [@merge_with_pos plus] rec bin_seq =
-    ()                              => 1.0
-  ; (t1::bin_seq) 'a' (t2::bin_seq) => t1 *. t2
-
 let _ = Grammar.print_grammar stdout ~def:false bin_seq; print_newline ()
 
 (* Idem for ternary tree, we need an internal cache to achieve polynomial
    complexity. *)
 let%parser [@merge (+.)] rec ter_seq =
-    ()                             => 1.0
-  ; (t1::ter_seq) 'a' (t2t3::Grammar.cache ~merge:(Merge (+.))
-                           ((t2::ter_seq) (t3::ter_seq) => t2 *. t3))
-    => t1 *. t2t3
+    ()                                    => 1.0
+  ; (t1::ter_seq) 'a' (t2t3::ter_seq_aux) => t1 *. t2t3
+
+and [@merge (+.)] ter_seq_aux =
+    (t2::ter_seq) (t3::ter_seq) => t2 *. t3
 
 let _ = Grammar.print_grammar stdout ~def:false ter_seq; print_newline ()
 

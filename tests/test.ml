@@ -183,7 +183,7 @@ let size t =
       end
   in fn t
 
-let merge = Merge (fun x y -> Alt(x,y))
+let merge ~infos:_ ~start:_ ~end_:_ x y = Alt(x,y)
 let test13c =
   fixpoint (fun r -> cache ~merge
                        (alt [empty Nil; seq r (seq char_a r (fun _ x -> x))

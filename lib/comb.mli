@@ -162,6 +162,7 @@ val change_layout : ?config:Blank.layout_config -> Blank.t -> 'a t -> 'a t
 (** Combinator  that caches  a grammar to  avoid exponential  behavior.  parsing
     with the grammar  from each position is memoized to  avoid parsing twice the
     same sequence with the same grammar. *)
-val cache :
-  ?merge:(start:Input.byte_pos -> end_:Input.byte_pos -> 'a -> 'a -> 'a)
-  -> 'a t -> 'a t
+type 'a merge = infos:Input.infos -> start:Input.byte_pos -> end_:Input.byte_pos
+                -> 'a -> 'a -> 'a
+
+val cache : ?merge:'a merge -> 'a t -> 'a t

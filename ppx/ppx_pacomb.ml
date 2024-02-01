@@ -531,13 +531,15 @@ let vb_to_parser rec_ vb =
     let rules =
       match Ppxlib.Attribute.get merge_att vb with
       | Some e ->
-        [%expr Pacomb.Grammar.cache ~merge:(Merge [%e e]) [%e rules]]
+         [%expr Pacomb.Grammar.cache
+             ~merge:(fun ~infos:_ ~start:_ ~end_:_ -> [%e e])
+             [%e rules]]
       | None   -> rules
     in
     let rules =
       match Ppxlib.Attribute.get merge_with_pos_att vb with
       | Some e ->
-        [%expr Pacomb.Grammar.cache ~merge:(MergeWithPos [%e e]) [%e rules]]
+        [%expr Pacomb.Grammar.cache ~merge:[%e e] [%e rules]]
       | None   -> rules
     in
     let rules =

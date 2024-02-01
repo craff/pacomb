@@ -4,14 +4,21 @@ module Uf = UnionFind
 let _ = Printexc.record_backtrace true
 let _ = Sys.catch_break true
 
-type 'a merge =
-  NoMerge
-| Merge : ('a -> 'a -> 'a) -> 'a merge
-| MergeWithPos : (start:Input.byte_pos -> end_:Input.byte_pos -> 'a -> 'a -> 'a) -> 'a merge
+let debug_merge = ref None
+
+let set_debug_merge fmt = debug_merge := Some fmt
+let unset_debug_merge () = debug_merge := None
+
+let debug_merge_func ~fmt ~infos ~start ~end_ x _ =
+  let pos = Pos.mk_pos start end_ infos in
+  Format.fprintf fmt "merge at %a\n" (fun fmt p -> Pos.print_pos () fmt p) pos;
+  x
+
+type 'a merge = 'a Comb.merge
 
 type 'a cache =
   NoCache : 'a cache
-| Cache   : 'a merge -> 'a cache
+| Cache   : 'a merge option -> 'a cache
 
 type name_kind = Created | Inherited | Given
 
@@ -252,7 +259,7 @@ let mkg : ?name:name -> ?recursive:bool -> ?cached:'a cache ->
 
 (** cache is added as information in the grammar record because when
     a grammar is cached, elimination of left recursion is useless *)
-let cache ?name  ?(merge=NoMerge) g =
+let cache ?name  ?merge g =
   let name = gen_name (created name) in
   { g with cached = Cache merge; n = name }
 
@@ -1589,12 +1596,17 @@ let rec compile_ne : type a. a grne -> a Comb.t = fun g ->
          g.phase <- Compiling;
          let cne = compile_ne g.ne in
          g.phase <- Compiled;
+         let cached =
+           match (!debug_merge, g.cached) with
+           | (Some fmt, (NoCache | Cache None)) ->
+              Cache (Some (debug_merge_func ~fmt))
+           | _ -> g.cached
+         in
          let cne =
-           match g.cached with
+           match cached with
            | NoCache -> cne
-           | Cache NoMerge -> Comb.cache cne
-           | Cache (Merge m) -> Comb.cache ~merge:(fun ~start:_ ~end_:_ -> m) cne
-           | Cache (MergeWithPos m) -> Comb.cache ~merge:m cne
+           | Cache None -> Comb.cache cne
+           | Cache (Some m) -> Comb.cache ~merge:m cne
          in
          g.compiled := cne;
          get g
