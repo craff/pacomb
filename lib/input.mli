@@ -8,6 +8,7 @@ type stream_infos =
   | File of { name               : string
             ; length             : int
             ; date               : float
+            ; close              : unit -> unit
             }
   (* string *)
   | String of string
@@ -99,6 +100,9 @@ val from_channel : ?utf8:context -> ?filename:string
 (** Same as above for file descriptor *)
 val from_fd : ?utf8:context -> ?filename:string
               -> Unix.file_descr -> buffer
+
+(** For buffer represented by file, this will close the file *)
+val close: buffer -> unit
 
 (** [from_string  ~filename str] returns  a buffer constructed using  the string
     [str]. The optional [filename] is only used as a reference to the channel in

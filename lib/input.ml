@@ -4,19 +4,22 @@ type stream_infos =
   | File of { name               : string
             ; length             : int
             ; date               : float
+            ; close              : unit -> unit
             }
   | String of string
   | Stream
 
-let stream_infos_of_fd file_name fd =
+let stream_infos_of_fd file_name fd close_file =
   let open Unix in
   let s = fstat fd in
   File { name       = file_name
        ; length     = s.st_size
-       ; date       = s.st_mtime }
+       ; date       = s.st_mtime
+       ; close      = close_file }
 
 let stream_infos_of_ch file_name ch =
   stream_infos_of_fd file_name (Unix.descr_of_in_channel ch)
+    (fun () -> close_in ch)
 
 let stream_infos_of_str str =
   String str
@@ -43,6 +46,12 @@ type buffer =
                           (* for map table, initialized if used      *)
   ; infos        : infos  (* infos common to the whole file          *)
   }
+
+let close buffer =
+  match buffer.infos.stream_infos with
+  | File f -> f.close ()
+  | _ -> ()
+
 
 (* Generate a unique identifier. *)
 let new_uid =
@@ -164,10 +173,9 @@ let fd_buffer fd =
   else
     Bytes.sub_string res 0 n
 
-let from_fun finalise utf8 stream_infos get_line file =
+let from_fun utf8 stream_infos get_line file =
   let infos = { utf8; stream_infos; uid = new_uid () } in
   let cont boff =
-    finalise file;
     empty_buffer infos boff
   in
   let rec  fn boff =
@@ -190,19 +198,19 @@ let from_channel
     : ?utf8:context -> ?filename:string -> in_channel -> buffer =
   fun ?(utf8=Utf8.ASCII) ?(filename="") ch ->
   let filename = stream_infos_of_ch filename ch in
-  from_fun ignore utf8 filename input_buffer ch
+  from_fun utf8 filename input_buffer ch
 
 let from_fd
     : ?utf8:context -> ?filename:string -> Unix.file_descr -> buffer =
   fun ?(utf8=Utf8.ASCII) ?(filename="") fd ->
-  let filename = stream_infos_of_fd filename fd in
-  from_fun ignore utf8 filename fd_buffer fd
+  let filename = stream_infos_of_fd filename fd (fun () -> Unix.close fd) in
+  from_fun utf8 filename fd_buffer fd
 
 let from_file : ?utf8:context -> string -> buffer =
   fun ?(utf8=Utf8.ASCII) filename ->
   let fd = Unix.(openfile filename [O_RDONLY] 0) in
-  let filename = stream_infos_of_fd filename fd in
-  from_fun Unix.close utf8 filename fd_buffer fd
+  let filename = stream_infos_of_fd filename fd (fun () -> Unix.close fd) in
+  from_fun utf8 filename fd_buffer fd
 
 let from_string : ?utf8:context -> string -> buffer =
   fun ?(utf8=Utf8.ASCII) str ->
@@ -211,7 +219,7 @@ let from_string : ?utf8:context -> string -> buffer =
   let string_buffer () =
     if !b then (b := false; str) else raise End_of_file
   in
-  from_fun ignore utf8 stream_infos string_buffer ()
+  from_fun utf8 stream_infos string_buffer ()
 
 let leq_buf {boff = b1} i1 {boff = b2} i2 =
   b1 < b2 || (b1 = b2 && (i1 <= i2))
