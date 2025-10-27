@@ -48,6 +48,9 @@ let del cs c =
 let union cs1 cs2 =
   Array.mapi (fun i x -> x lor cs2.(i)) cs1
 
+let inter cs1 cs2 =
+  Array.mapi (fun i x -> x land cs2.(i)) cs1
+
 let singleton =
   let tbl = Array.init 256 (fun i -> add empty (Char.chr i)) in
   fun c -> tbl.(Char.code c)

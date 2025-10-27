@@ -35,6 +35,10 @@ val from_string : string -> charset
     characters of [cs1] and [cs2]. *)
 val union : charset -> charset -> charset
 
+(** [inter cs1 cs2] builds a new charset that contins the  intersection
+    of the characters of [cs1] and [cs2]. *)
+val inter : charset -> charset -> charset
+
 (** [complement cs] returns a new charset containing exactly  characters
     that are not in [cs]. *)
 val complement : charset -> charset

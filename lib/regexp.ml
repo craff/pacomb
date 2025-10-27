@@ -2,6 +2,7 @@
 type regexp =
   | Chr of char        (** Single character.              *)
   | Set of Charset.t   (** Any character in a charset.    *)
+  | Not of Charset.t   (** fail if character is in charset*)
   | Seq of regexp list (** Sequence of regexps.           *)
   | Alt of regexp list (** Alternative between regexps.   *)
   | Opt of regexp      (** Optional regexp.               *)
@@ -19,6 +20,7 @@ let rec pp : Format.formatter -> t -> unit = fun ff re ->
   match re with
   | Chr(c) ->Format.fprintf ff "Chr(%C)" c
   | Set(s) ->Format.fprintf ff "Set(%a)" Charset.pp s
+  | Not(s) ->Format.fprintf ff "Not(%a)" Charset.pp s
   | Seq(l) ->Format.fprintf ff "Seq([%a])" pp_list l
   | Alt(l) ->Format.fprintf ff "Alt([%a])" pp_list l
   | Opt(r) ->Format.fprintf ff "Opt(%a)" pp r
@@ -31,6 +33,7 @@ let rec accepts_empty : regexp -> bool = fun re ->
   match re with
   | Chr(_) -> false
   | Set(s) -> Charset.equal s Charset.empty
+  | Not(_) -> true
   | Seq(l) -> List.for_all accepts_empty l
   | Alt(l) -> List.exists accepts_empty l
   | Opt(_) -> true
@@ -44,12 +47,14 @@ let rec accepted_first_chars : regexp -> Charset.t = fun re ->
   let rec aux_seq l =
     match l with
     | []   -> Charset.empty
+    | Not(s)::l -> Charset.inter (Charset.complement s) (aux_seq l)
     | r::l -> let cs = accepted_first_chars r in
               if accepts_empty r then Charset.union cs (aux_seq l) else cs
   in
   match re with
   | Chr(c) -> Charset.singleton c
   | Set(s) -> s
+  | Not(s) -> Charset.complement (Charset.add s '\255')
   | Seq(l) -> aux_seq l
   | Alt(l) -> let fn cs r = Charset.union cs (accepted_first_chars r) in
               List.fold_left fn Charset.empty l
@@ -63,29 +68,30 @@ module Pacomb = struct
   module Grammar = Grammar
 end
 
-let%parser atom_charset first =
-    (c1::CHAR) '-' (c2::CHAR) => (if c1 = '-' || (not first && c1 = ']') ||
-                                       (first && c1 = '^') ||
-                                         c2 = '-' then Lex.give_up ();
-                                  Charset.range c1 c2)
-  ; (c1::CHAR)                => (if (not first && (c1 = '-' || c1 = ']')) ||
-                                       (first && c1 = '^') then Lex.give_up ();
-                                  Charset.singleton c1)
+let%parser atom_charset cpl first =
+    (c1::CHAR) '-' (c2::CHAR) =>
+      (if c1 = '-' || (not first && c1 = ']') ||
+            (first && not cpl && (c1 = '^' || c1 = '!')) ||
+              c2 = '-' then Lex.give_up ();
+       Charset.range c1 c2)
+  ; (c1::CHAR)                =>
+      (if (not first && (c1 = '-' || c1 = ']')) ||
+            (first && not cpl && (c1 = '^' || c1 = '!'))
+       then Lex.give_up ();
+       Charset.singleton c1)
 
-let%parser p_charset =
-  (cs1::atom_charset true) (cs2:: ~* (atom_charset false)) =>
+let%parser p_charset cpl =
+  (cs1::atom_charset cpl true) (cs2:: ~* (atom_charset cpl false)) =>
     List.fold_left Charset.union cs1 cs2
 
 let is_spe c = List.mem c ['\\';'.';'*';'+';'?';'[';']']
 
 let%parser rec atom_regexp =
-    '[' (cpl:: ~? '^') (cs::p_charset) ']' =>
-      begin
-        let cs = if cpl <> None then Charset.complement (Charset.add cs '\255')
-                 else cs
-        in
-        Set cs
-      end
+    '[' (cs::p_charset false) ']' => Set cs
+  ; '[' '^' (cs::p_charset true) ']' =>
+      Set (Charset.complement (Charset.add cs '\255'))
+  ; '[' '!' (cs::p_charset true) ']' =>
+      Not cs
   ; (c::CHAR) =>
       begin
         if is_spe c then Lex.give_up () else Chr c
@@ -131,6 +137,7 @@ let from_regexp_grps : ?grps:int list -> regexp -> string list Lex.t =
     let rec fn = function
       | Chr c -> appl (fun _ -> []) (char c)
       | Set s -> appl (fun _ -> []) (charset s)
+      | Not s -> appl (fun _ -> []) (not_charset s)
       | Alt l -> alts (List.map fn l)
       | Seq l -> seqs (List.map fn l) (@)
       | Opt r -> option [] (fn r)

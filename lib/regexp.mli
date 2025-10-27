@@ -2,14 +2,15 @@
 
 (** Type of a regular expression. *)
 type regexp =
-  | Chr of char        (* Single character.                *)
-  | Set of Charset.t   (* Any character in a charset.      *)
-  | Seq of regexp list (* Sequence of regular expressions. *)
-  | Alt of regexp list (* Alternative between regexps.     *)
-  | Opt of regexp      (* Optional regexp.                 *)
-  | Str of regexp      (* Zero or more times the regexp.   *)
-  | Pls of regexp      (* One  or more times the regexp.   *)
-  | Sav of regexp      (* Save the matching string.        *)
+  | Chr of char        (** Single character.                *)
+  | Set of Charset.t   (** Any character in a charset.      *)
+  | Not of Charset.t   (** fail if character is in charset  *)
+  | Seq of regexp list (** Sequence of regular expressions. *)
+  | Alt of regexp list (** Alternative between regexps.     *)
+  | Opt of regexp      (** Optional regexp.                 *)
+  | Str of regexp      (** Zero or more times the regexp.   *)
+  | Pls of regexp      (** One  or more times the regexp.   *)
+  | Sav of regexp      (** Save the matching string.        *)
 
 (** Short synonym of {!type:regexp}. *)
 type t = regexp

@@ -34,6 +34,25 @@ let _ = test g "42.42E-42" 42.42E-42
 
 let%parser g : string grammar = (x::RE "\\([a-zA-Z_][a-zA-Z_0-9]*\\)") => x
 let _ = test g "toto_x3" "toto_x3"
+let%parser g : string grammar = (x::RE "a[!b]") (__:: RE "[a-z]") => x
+let _ = test g "av" "a"
+let _ = test_fail g "ab"
+let raw_re tag =
+  Printf.eprintf "RE <= %s\n%!" tag;
+  let r = ref {|\([^<{]\|\({[!`]\)\|\(<[!/]\)|} in
+  for i = 0 to String.length tag - 1 do
+    r := !r ^ Printf.sprintf {|\|\(</%s[!%c]\)|} (String.sub tag 0 i) tag.[i]
+  done;
+  let res = !r ^ Printf.sprintf {|\|\(</%s[! \n\t\r\f>]\)\)|} tag in
+  Printf.eprintf "RE => %s\n%!" res;
+  res
+let%parser g : string grammar =
+  (x::RE (raw_re "s")) (__:: ~?  (RE "." => ())) => x
+let _ = test g "</a" "</"
+let cre =
+  {|\([^-<]\|\(-[!-]\)\|\(--[!!]\)\|\(--![!>]\)\|\(<[!!]\)\|\(<![!-]\)\|\(<!-[!-]\)\)+|}
+let%parser _g : string grammar =
+  (x::RE cre) (__:: ~?  (RE "." => ())) => x
 let%parser g : 'a -> 'a -> float grammar =
   fun x y -> (x=y) (z::INT) => float_of_int z
            ; (x<>y) (z::FLOAT) => z
