@@ -3,7 +3,7 @@
 {1:overview Overview}
 
 PaComb is a parsing libraries that compiles grammars with
-semantic actions to combintators that can be used for parsing.  Languages
+semantic actions to combinators that can be used for parsing.  Languages
 are defined with the {!Pacomb.Grammar} module or preferably through our PPX
 extension. The library offers {e scanner less} parsing, but the {!Pacomb.Lex}
 module provides a notion of {e terminals} and the {!Pacomb.Blank} module allows
@@ -39,7 +39,7 @@ grammar ... that you can not in general write with ocamlyacc anyway.
 + {!Pacomb.Blank} blanks and layout record
 + {!Pacomb.Pos} positions in file and handling of exceptions
 + {!Pacomb.Keywords} Some function to parse and reserve keywords
-+ {!Pacomb.Word_list} An efficient extensible dictionnary to parse words
++ {!Pacomb.Word_list} An efficient extensible dictionary to parse words
 + {!Pacomb.Regexp} Regexp implementation above {!Pacomb.Lex}
 + {!Pacomb.Input} build input buffer from string, channel, ...
 + {!Pacomb.Charset} an efficient representation of character sets
@@ -70,7 +70,7 @@ included in expression at [Prod] level which are themselves included in expressi
 at [Sum] level.
 
 Action are given after the infix symbol [ => ].
-Rules are separated by semicolumn and here, they all start with a guard indicated
+Rules are separated by semicolon and here, they all start with a guard indicated
 at which priority level the rule applies. The terminals in the grammar are [(x::FLOAT)],
 which is a predefined grammar for floating point numbers, binding the variable [x] for use in action code.
 and ['('], [')'], ['*'], ... which parse a single character (string are allowed too).
@@ -79,10 +79,10 @@ the same grammar at the given priority level. Parentheses are mandatory as we us
 priority for [_ :: _].
 
 To use the above parser, you need to define a toplevel rule,
-say which characteres to ignore and call the parser on a file or string. For
+say which characters to ignore and call the parser on a file or string. For
 instance the following will work and handle parse error without exiting the program:
 {[
-(* blanks, i.e. characteres to be ignored *)
+(* blanks, i.e. characters to be ignored *)
 let blank = Blank.from_charset (Charset.singleton ' ')
 
 let _ =
@@ -103,7 +103,7 @@ let _ =
 ]}
 
 The main function above is [Grammar.parse_string] which takes the grammar to be
-parsed, the definition of blanks (sequence of characteres to be ignored)
+parsed, the definition of blanks (sequence of characters to be ignored)
 and what to parse (here a [string]).
 
 The BNF above works using the ppx extensions [[%%parser ...]] for structures and
@@ -176,7 +176,7 @@ epat ::= lid
 [epat] correspond to an encoding of patterns in expressions. Beware that [_] is
 invalid, use [__] instead.
 
-Guard using (e =| epat) allows for rule garder by pattern matching. This
+Guard using (e =| epat) allows for rule guarded by pattern matching. This
 has also been tested with GADT (see examples/calc_ext2.ml).
 
 Action code needs parenthesis or [begin ... end] if it uses [if .. then],
@@ -213,8 +213,8 @@ Here is the meaning of let bindings for grammars through the ppx extension:
     by the ppx extension.
 
 For recursive grammar with exactly one parameter, a rule [p_1 < p_2 < ... < p_n]
-will automatically add rules to include the grammar parametrized by [p_i] in the
-grammar parametrized by [p_(i+1)]. This was used by the calculator example above.
+will automatically add rules to include the grammar parameterized by [p_i] in the
+grammar parameterized by [p_(i+1)]. This was used by the calculator example above.
 
 [let%parser] accepts the following attribute:
   - [[@cache]] to cache the grammar (that is call [Grammar.cache] on the grammar).
@@ -225,8 +225,49 @@ grammar parametrized by [p_(i+1)]. This was used by the calculator example above
     and change the blank characters for that grammar. see {!Pacomb.Blank}.
   - [[@print_param f]] to specify a printing function for the parameters of a
     recursive grammar. The feature is used in [examples/calc_prio.ml] to print
-    the grammar when provinding the [-help] option.
+    the grammar when providing the [-help] option.
 
+{1:regexp Regexp syntax}
+
+The regexp syntax is near to the syntax for ocaml's Str module.
+There is one notable addition: ["[!...]"] which is similar to ["[^...]"] but
+does not parse the characters. For instance, ["x[!y]"] and ["x[^y]"] will both
+a 'x' not followed by a 'y', but the first will not consume the character
+following the 'x'.
+
+Here is the general syntax of string representing regexp:
+
+- [c] where [c] is any character distinct for the following specials
+  ['\\';'.';'*';'+';'?';'[';']'] means accept only the character 'c'
+
+- [\\c] where [c] is one of the  specials
+  ['\\';'.';'*';'+';'?';'[';']'] means accept only the character 'c'
+
+- "." means accept any character
+
+- [[...]] is a character range. One can use [a-z] for short.
+  The first character car not be [^] nor [!] and [-] must be placed first.
+  For instance [[-a-c]] accepts [-abc]
+
+- [[^...]] is the complement of a character range. One can use [a-z] for short.
+  The first character car not be [^] nor [!] and [-] must be placed first.
+  The character is consumed.
+
+- [[!...]] is the complement of a character range. One can use [a-z] for short.
+  The first character car not be [^] nor [!] and [-] must be placed first.
+  Same as above, but the character is not consumed.
+
+- [RE?], [RE*], [RE+]: to accept respectively 0 or 1, 0 or more and 1 or more
+  repetition of sequences accepted by [RE]
+
+- [RE1RE2]: to accept a sequence accepted by RE1 followed by a sequence accepted by RE2.
+is preferred in case of ambiguity.  .
+
+- [RE1\|RE2]: to accept a sequence accepted by RE1 or RE2. The longest match
+is preferred in case of ambiguity.  .
+
+- [\(RE\)]: same as RE, for grouping. suffix operators have priority over
+  sequence which has priority over alternatives.
 
 {1:right-recursion Controling evaluation of action and right recursion}
 
@@ -234,7 +275,7 @@ Action are evaluated as soon as the rule is reduced. This may be a problem for
 grammar whose prefix are ambiguous, even if the grammar is not really ambiguous.
 This is notably true for right recursion (which as usual should be avoided). If
 nothing is done, right recursion will be quadratic in time, while linear in
-space and time is exptected (linear space is the reason to prefer left
+space and time is expected (linear space is the reason to prefer left
 recursion). To delay evaluation of action, you should use lazy action. For
 instance, the right recursive grammar for sexpr below:
 {[
@@ -270,9 +311,9 @@ Remark: there are some important optimisation for [lazy] so use the [lazy]
 keyword as above as much as possible and do not use [Lazy.from_fun] or [Lazy.force]
 if you can avoid it.
 
-A similar problem arises if you want to evaluate an action immediatly after
-a newline has been parsed. As [Pacomb] is trying to read the blank characteres
-after the newline, the evaluation of the action is retarted.
+A similar problem arises if you want to evaluate an action immediately after
+a newline has been parsed. As [Pacomb] is trying to read the blank characters
+after the newline, the evaluation of the action is restarted.
 
 Remark: right recursion for sequence not using any semantics is optimized and
 works in O(1) memory. For instance, the following to parse a list of command
@@ -311,10 +352,10 @@ action code. Therefore, it can not be used for selecting grammar rule.  For
 instance, [(p::prio) (x::g p) => x] will report [p] as unbounded. To solve this,
 you can use {e dependent sequences}, using [(x,y)>:item] will allow [x] (but not
 [y]) to be used both in the action and the rule. The separation with dependent
-(the par that can be used in the rest of the rume) and non dependent part (used
+(the part that can be used in the rest of the rule) and non dependent part (used
 only in the action) is crucial for efficiency. Indeed, dependent grammar are
-compiled to combinators at runtime and memoised and you don't want "noise" in
-the memoisation. This means you should really use values in a set as small as
+compiled to combinators at runtime and memorised and you don't want "noise" in
+the memorisation. This means you should really use values in a set as small as
 possible in dependent parts. Here is an example of grammar using this to
 implement an extensible calculator allowing to add extra infix operators with a
 given priority (see [tests/calc_ext.ml]):
@@ -335,7 +376,7 @@ combinator are composed at tun time are OCaml's inliner can not optimise them.
 In principle, you can write a grammar [bnf] to parse your favorite syntax for
 BNF and use a rule [(g,__)>:bnf (x::parse_my_bnf g) => x] to parse any BNF! The
 function [parse_my_bnf] should call function in the {!Pacomb.Grammar} module to
-build the usable grammar and as dependent grammar are memoised, each bnf will be
+build the usable grammar and as dependent grammar are memorised, each bnf will be
 only compiled once. This really gives the power to write self extensible
 language easily.  This is illustrated in the example [tests/calc_ext2.ml] which
 accept the following input:
@@ -362,7 +403,7 @@ remove rule "pre"
 
 Note: one can fairly well control when action are evaluated and therefore the
 parsing may depends upon global references that are modified by your parser
-itsel. However, purely functional code should be prefered, even for extensible
+itself. However, purely functional code should be preferred, even for extensible
 grammars, because if for instance you have unwanted ambiguities, you will
 have a behavior hard to predict and a bug hard to diagnose.
 
@@ -401,7 +442,7 @@ with a call to {!Pacomb.Grammar.cache}.
 
 When your grammar is ambiguous, you can give an optional merge function to
 {!Pacomb.Grammar.cache}. This function will be called to merge all results
-conrresponding to exactly the same portion of the input buffer with the cached
+corresponding to exactly the same portion of the input buffer with the cached
 grammar.
 
 Here is a toy example (see example/catalan.ml):
@@ -459,8 +500,8 @@ utf8.
 
 When parsing a stream that is not a regular file, the whole buffer is
 kept to allow rescanning. If your stream is very large, this is not
-reasonnable. Two solutions: restart parsing at regular interval, or
-use the ~rescan:false optionnal parameters and use only position in bytes.
+reasonable. Two solutions: restart parsing at regular interval, or
+use the ~rescan:false optional parameters and use only position in bytes.
 
 Another problem with rescanning: if you use [Grammar.parse_channel] or
 [Grammar.parse_fd], you can not get line and column number after closing the
@@ -491,7 +532,7 @@ Parse error: Line 1, character 7.
 expecting: ) id (
 ]}
 
-Banchmarks seems to show that adding error cost more or less 15% on the
+Benchmarks seems to show that adding error cost more or less 15% on the
 above example.
 
 {1:limitations Limitations}
