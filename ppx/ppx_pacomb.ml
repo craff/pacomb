@@ -493,10 +493,19 @@ let vb_to_parser rec_ vb =
     let (params,exp) =
       let rec fn exp =
         match exp.pexp_desc with
-        | Pexp_function ([{pparam_desc = Pparam_val(lbl, def, param); _}],
+        | Pexp_function (({pparam_desc = Pparam_val(lbl, def, param); _}::ls),
                          None, Pfunction_body exp) when rec_ = Recursive ->
+(*
+  | Pexp_fun (lbl, def, param, exp) when rec_ = Recursive ->*)
+           let exp =
+             match ls with
+             | [] -> exp
+             | _ -> {exp with
+                     pexp_desc = Pexp_function (ls, None, Pfunction_body exp)}
+           in
            let (params, exp) = fn exp in
            ((lbl,def,param)::params, exp)
+
         | _ -> ([], exp)
       in
       fn vb.pvb_expr
