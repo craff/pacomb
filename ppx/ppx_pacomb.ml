@@ -493,26 +493,39 @@ let vb_to_parser rec_ vb =
     let (params,exp) =
       let rec fn exp =
         match exp.pexp_desc with
-        | Pexp_function (({pparam_desc = Pparam_val(lbl, def, param); _}::ls),
+        | Pexp_function (ls,
                          None, Pfunction_body exp) when rec_ = Recursive ->
-(*
-  | Pexp_fun (lbl, def, param, exp) when rec_ = Recursive ->*)
-           let exp =
-             match ls with
-             | [] -> exp
-             | _ -> {exp with
-                     pexp_desc = Pexp_function (ls, None, Pfunction_body exp)}
-           in
            let (params, exp) = fn exp in
-           ((lbl,def,param)::params, exp)
+           (ls @ params, exp)
 
         | _ -> ([], exp)
       in
       fn vb.pvb_expr
     in
+    let poly, exp = match vb.pvb_constraint with
+      | Some (Pvc_constraint _) -> true, vb.pvb_expr
+      | None | Some (Pvc_coercion _) -> false, exp
+    in
+    let params, types = List.partition (function
+                            | { pparam_desc = Pparam_val(_); _} -> true
+                            | { pparam_desc = Pparam_newtype(_); _} -> false)
+                          params
+    in
+    let types = List.map (function
+                     | { pparam_desc = Pparam_newtype(a); _ } -> a
+                     | _ -> assert false) types
+    in
+    let params = List.map (function
+                     | { pparam_desc = Pparam_val(a,b,c); _ } -> (a,b,c)
+                     | _ -> assert false) params
+    in
     let (name, param) = match params with
         []  -> (name, None)
-      | [(Nolabel,None,p)] -> (name, Some (p,None))
+      | _ when poly -> (name, None)
+      | [(Nolabel,None,p)] when not poly -> (name, Some (p,None))
+      | [(_,_,p)] ->
+         ( mkloc (name.txt^"@uncurry") name.loc
+         , Some(p, None))
       | ps  ->
          let curry = List.map (fun (lbl,def,_) -> (lbl,def)) ps in
          let ps = List.map (fun (_,_,p) -> p) ps in
@@ -564,18 +577,18 @@ let vb_to_parser rec_ vb =
             [%e rules]]
       else rules
     in
-    (loc,changed,name,vb,name_param,rules)
+    (loc,changed,name,vb,name_param,types,rules)
   in
   let ls = List.map gn vb in
-  if not (List.exists (fun (_,changed,_,_,_,_) -> changed) ls)
+  if not (List.exists (fun (_,changed,_,_,_,_,_) -> changed) ls)
   then raise Exit;
   let (gr,orig) = List.partition
-                    (fun (_,changed,_,_,_,_) -> changed && rec_ = Recursive)
+                    (fun (_,changed,_,_,_,_,_) -> changed && rec_ = Recursive)
                     ls
   in
   let set name = "set__grammar__" ^ name.txt in
   let declarations =
-    let gn (loc,changed,(name:string loc),vb,param,_) =
+    let gn (loc,changed,(name:string loc),vb,param,_,_) =
       assert changed;
       match param with
       | None ->
@@ -605,7 +618,7 @@ let vb_to_parser rec_ vb =
            expr]
 
     in
-    let hn (loc,_,(name:string loc),vb,param,_) =
+    let hn (loc,_,(name:string loc),vb,param,types,_) =
       match param with
       | Some(_,_,_,Some lbls) ->
          let args =
@@ -626,7 +639,10 @@ let vb_to_parser rec_ vb =
          let exp =
            List.fold_right (fun (lbl,def,v) exp ->
                let pat = Pat.var v in
-               Exp.fun_ lbl def pat exp) args exp
+               let exp = Exp.fun_ lbl def pat exp in
+               List.fold_right (fun tyid exp ->
+                   Exp.newtype tyid exp) types exp
+             ) args exp
          in
          [Vb.mk  ~loc vb.pvb_pat exp]
       | _ -> []
@@ -634,13 +650,14 @@ let vb_to_parser rec_ vb =
     List.map gn gr @ List.map hn gr
   in
   let orig =
-    let gn (_,_,_,vb,_,_) =
+    let gn (_,_,_,vb,_,_,_) =
         vb
     in
     List.map gn orig
   in
   let definitions =
-    let fn (loc,changed,name,_,param, rules) =
+    let fn (loc,changed,name,_,param, types, rules) =
+      Printf.eprintf "types: %d\n%!" (List.length types);
       assert changed;
       let exp =
         match param with
@@ -650,9 +667,12 @@ let vb_to_parser rec_ vb =
              [%e rules]]
         | Some (_,pn,pat,_) ->
            let pat = Pat.alias pat (mknoloc pn) in
+           let exp = [%expr  (fun [%p pat] -> [%e rules])] in
+           let exp = List.fold_right (fun tyid exp ->
+                   Exp.newtype tyid exp) types exp in
            [%expr
              [%e Exp.ident (mkloc (Lident (set name)) name.loc)]
-             (fun [%p pat] -> [%e rules])]
+             [%e exp]]
       in
       [Vb.mk ~loc (Pat.any ()) exp]
     in

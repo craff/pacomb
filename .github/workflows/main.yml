@@ -1,0 +1,40 @@
+name: OCaml CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    name: OCaml ${{ matrix.ocaml-compiler }} on ${{ matrix.os }} ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04]
+        arch: [x64]
+        ocaml-compiler:
+          - "4.08"
+          - "4.09"
+          - "4.10"
+          - "4.11"
+          - "4.12"
+          - "4.13"
+          - "4.14"
+          - "5.0"
+          - "5.1"
+          - "5.2"
+          - "5.3"
+          - "5.4"
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: avsm/setup-ocaml@v3
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+          architecture: ${{ matrix.arch }}
+
+      - run: opam install . --deps-only --with-test -y
+      - run: opam exec -- dune build
+      - run: opam exec -- dune runtest
