@@ -657,7 +657,6 @@ let vb_to_parser rec_ vb =
   in
   let definitions =
     let fn (loc,changed,name,_,param, types, rules) =
-      Printf.eprintf "types: %d\n%!" (List.length types);
       assert changed;
       let exp =
         match param with

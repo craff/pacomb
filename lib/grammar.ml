@@ -55,7 +55,7 @@ type 'a grammar =
   ; k : 'a Comb.key      (** a key used mainly to detect recursion *)
   ; recursive : bool      (** really means declared first and defined after,
                               using declare/set_grammar *)
-  ; mutable cached : 'a cache     (** is th grammar cached *)
+  ; mutable cached : 'a cache     (** is the grammar cached *)
   ; mutable phase : phase (** which transformation phase reached for that
                               grammar *)
   ; mutable e: 'a list    (** not []   if the grammar accepts Empty.
