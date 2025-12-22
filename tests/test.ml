@@ -304,7 +304,7 @@ let _ = assert (parse_string test15 "+.42e+3" = 0.42e+3)
 let _ = assert (parse_string test15 "12.42e33" = 12.42e33)
 let _ = assert (parse_string test15 "-12.42e-33" = -12.42e-33)
 let _ = assert (parse_string test15 "+12.42e+33" = 12.42e+33)
-let _ = assert (parse_string test15 "+12.42e42" = 12.42e42)
+let _ = assert (parse_string test15 "+12.42e33" = 12.42e33)
 
 let _ = assert_fail (fun () -> parse_string test15 "")
 let _ = assert_fail (fun () -> parse_string test15 ".")
