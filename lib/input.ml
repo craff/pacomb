@@ -173,7 +173,10 @@ let fd_buffer fd =
   else
     Bytes.sub_string res 0 n
 
-let from_fun utf8 stream_infos get_line file =
+let from_fun
+      ?(line_action=(fun () -> ()))
+      ?(utf8=Utf8.ASCII)
+      stream_infos get_line file =
   let infos = { utf8; stream_infos; uid = new_uid () } in
   let cont boff =
     empty_buffer infos boff
@@ -182,6 +185,7 @@ let from_fun utf8 stream_infos get_line file =
     begin
       (* Tail rec exception trick to avoid stack overflow. *)
       try
+        line_action ();
         let data = get_line file in
         let llen = String.length data in
         fun () ->
@@ -195,22 +199,23 @@ let from_fun utf8 stream_infos get_line file =
   fn 0
 
 let from_channel
-    : ?utf8:context -> ?filename:string -> in_channel -> buffer =
-  fun ?(utf8=Utf8.ASCII) ?(filename="") ch ->
+    : ?line_action:(unit->unit) ->
+        ?utf8:context -> ?filename:string -> in_channel -> buffer =
+  fun ?(line_action=(fun () -> ())) ?(utf8=Utf8.ASCII) ?(filename="") ch ->
   let filename = stream_infos_of_ch filename ch in
-  from_fun utf8 filename input_buffer ch
+  from_fun ~line_action ~utf8 filename input_buffer ch
 
 let from_fd
-    : ?utf8:context -> ?filename:string -> Unix.file_descr -> buffer =
-  fun ?(utf8=Utf8.ASCII) ?(filename="") fd ->
+    : ?line_action:(unit->unit) -> ?utf8:context -> ?filename:string -> Unix.file_descr -> buffer =
+  fun ?(line_action=(fun () -> ())) ?(utf8=Utf8.ASCII) ?(filename="") fd ->
   let filename = stream_infos_of_fd filename fd (fun () -> Unix.close fd) in
-  from_fun utf8 filename fd_buffer fd
+  from_fun ~line_action ~utf8 filename fd_buffer fd
 
-let from_file : ?utf8:context -> string -> buffer =
-  fun ?(utf8=Utf8.ASCII) filename ->
+let from_file : ?line_action:(unit->unit) -> ?utf8:context -> string -> buffer =
+  fun ?(line_action=(fun () -> ())) ?(utf8=Utf8.ASCII) filename ->
   let fd = Unix.(openfile filename [O_RDONLY] 0) in
   let filename = stream_infos_of_fd filename fd (fun () -> Unix.close fd) in
-  from_fun utf8 filename fd_buffer fd
+  from_fun ~line_action ~utf8 filename fd_buffer fd
 
 let from_string : ?utf8:context -> string -> buffer =
   fun ?(utf8=Utf8.ASCII) str ->
@@ -219,7 +224,7 @@ let from_string : ?utf8:context -> string -> buffer =
   let string_buffer () =
     if !b then (b := false; str) else raise End_of_file
   in
-  from_fun utf8 stream_infos string_buffer ()
+  from_fun ~utf8 stream_infos string_buffer ()
 
 let leq_buf {boff = b1} i1 {boff = b2} i2 =
   b1 < b2 || (b1 = b2 && (i1 <= i2))

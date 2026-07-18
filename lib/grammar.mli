@@ -210,16 +210,19 @@ val parse_string  : ?utf8:Utf8.context -> 'a grammar -> Blank.t -> string -> 'a
 (**  Parse a  whole  input  channel, reporting  postiion  according  to utf8.
      After closing the file position reporting by parsing cannot be transformed
      bash to line/column number. *)
-val parse_channel : ?utf8:Utf8.context -> ?filename:string ->
+val parse_channel : ?line_action:(unit->unit) ->
+                    ?utf8:Utf8.context -> ?filename:string ->
                     'a grammar -> Blank.t -> in_channel -> 'a
 
 (**  Parse a  whole  Unix.file_desc, reporting  postiion  according  to utf8.
      After closing the file position reporting by parsing cannot be transformed
      bash to line/column number. *)
-val parse_fd : ?utf8:Utf8.context -> ?filename:string ->
+val parse_fd : ?line_action:(unit->unit) ->
+               ?utf8:Utf8.context -> ?filename:string ->
                'a grammar -> Blank.t -> Unix.file_descr -> 'a
 
 (**  Parse a  whole  file, reporting  postiion  according  to utf8.
      File is reopen to read position. So the file should not change on disk *)
-val parse_file : ?utf8:Utf8.context ->
+val parse_file : ?line_action:(unit->unit) ->
+                 ?utf8:Utf8.context ->
                     'a grammar -> Blank.t -> string -> 'a

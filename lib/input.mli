@@ -87,18 +87,20 @@ type context = Utf8.context
     Getting line  number and column number  requires rescanning the file  and if
    the file  is not a regular  file, it is  kept in memory. Setting  [rescan] to
    false avoid this, but only byte position and file name will be available.  *)
-val from_file : ?utf8:context -> string -> buffer
+val from_file : ?line_action:(unit->unit) -> ?utf8:context -> string -> buffer
 
 (** [from_channel ~filename  ch] returns a buffer constructed  using the channel
     [ch]. The optional [filename] is only used  as a reference to the channel in
     error messages.
 
     [uft8] and [rescan] as in [from_file]. *)
-val from_channel : ?utf8:context -> ?filename:string
+val from_channel : ?line_action:(unit->unit) ->
+                   ?utf8:context -> ?filename:string
                    -> in_channel -> buffer
 
 (** Same as above for file descriptor *)
-val from_fd : ?utf8:context -> ?filename:string
+val from_fd : ?line_action:(unit->unit) ->
+              ?utf8:context -> ?filename:string
               -> Unix.file_descr -> buffer
 
 (** For buffer represented by file, this will close the file *)

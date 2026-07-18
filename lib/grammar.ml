@@ -1663,20 +1663,26 @@ let parse_string
     parse_buffer g b (Input.from_string ~utf8 s)
 
 let parse_channel
-    : type a. ?utf8:Utf8.context -> ?filename:string ->
+    : type a. ?line_action:(unit->unit) ->
+           ?utf8:Utf8.context -> ?filename:string ->
               a t -> Blank.t -> in_channel -> a =
-  fun ?(utf8=Utf8.ASCII) ?filename g b ic ->
-    parse_buffer g b (Input.from_channel ~utf8 ?filename ic)
+  fun ?(line_action=(fun () -> ()))
+      ?(utf8=Utf8.ASCII) ?filename g b ic ->
+    parse_buffer g b (Input.from_channel ~line_action ~utf8 ?filename ic)
 
 let parse_fd
-    : type a. ?utf8:Utf8.context -> ?filename:string ->
+    : type a. ?line_action:(unit->unit) ->
+           ?utf8:Utf8.context -> ?filename:string ->
               a t -> Blank.t -> Unix.file_descr -> a =
-  fun ?(utf8=Utf8.ASCII) ?filename g b ic ->
-    let buf = Input.from_fd ~utf8 ?filename ic in
+  fun ?(line_action=(fun () -> ()))
+      ?(utf8=Utf8.ASCII) ?filename g b ic ->
+    let buf = Input.from_fd ~line_action ~utf8 ?filename ic in
     parse_buffer g b buf
 
-let parse_file ?(utf8=Utf8.ASCII) g b filename =
-    let buf = Input.from_file ~utf8 filename in
+let parse_file
+    ?(line_action=(fun () -> ()))
+      ?(utf8=Utf8.ASCII) g b filename =
+    let buf = Input.from_file ~line_action ~utf8 filename in
     parse_buffer g b buf
 
 let lpos ?name g = lpos ?name ?pk:None g
