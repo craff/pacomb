@@ -1,4 +1,4 @@
-(lang dune 3.23)
+(lang dune 2.5)
 (name pacomb)
 
 (generate_opam_files true)
@@ -11,8 +11,6 @@
 (maintainers  "Christophe Raffalli <christophe@raffalli.eu>")
 
 (license MIT)
-
-(allow_approximate_merlin)
 
 (documentation https://raffalli.eu/pacomb)
 
