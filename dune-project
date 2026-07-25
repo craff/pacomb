@@ -18,6 +18,7 @@
 
 (package
  (name pacomb)
+ (version 1.4.4)
  (synopsis "Parsing library based on combinators and ppx extension to write languages")
  (description "Pacomb is a parsing library that compiles grammars to combinators prior to
 parsing together with a PPX extension to write parsers inside OCaml files.
