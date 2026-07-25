@@ -59,7 +59,7 @@ let%parser rec
 - Comes with documentation and various examples illustrating most possibilities.
 
 All this makes Pacomb a promising solution to write languages in OCaml.")
- (depends (ocaml (>= 4.08.0))
+ (depends (ocaml (>= 4.11.0))
    (dune (>= 2.0.0))
    (ppxlib (>= 0.36.0)))
  (tags
