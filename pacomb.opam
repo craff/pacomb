@@ -53,12 +53,13 @@ homepage: "https://github.com/craff/CamlSurf"
 doc: "https://raffalli.eu/pacomb"
 bug-reports: "https://github.com/craff/CamlSurf/issues"
 depends: [
-  "ocaml" {>= "4.08.0"}
-  "dune" {>= "2.0.0"}
+  "ocaml" {>= "4.11.0"}
+  "dune" {>= "2.7" & >= "2.0.0"}
   "ppxlib" {>= "0.36.0"}
+  "odoc" {with-doc}
 ]
 build: [
-  ["dune" "subst"] {pinned}
+  ["dune" "subst"] {dev}
   [
     "dune"
     "build"
